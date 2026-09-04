@@ -1,12 +1,12 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+// Claves públicas de Supabase para el cliente
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  "https://yqwkiugnpgeigntkwipi.supabase.co"
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "[Supabase] Falta configurar NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en .env.local"
-  )
-}
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxd2tpdWducGdlaWdudGt3aXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDUzMTksImV4cCI6MjEwMzU4MTMxOX0.wcihBXBImGmn47VMvMfZsV4nRmMDvuVl1rMF_PNy1q0"
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
