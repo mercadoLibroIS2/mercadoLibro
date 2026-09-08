@@ -21,9 +21,6 @@ import java.util.UUID;
 @Setter
 public class Libro {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
     @Column(unique = true, nullable = false)
     private String isbn;
 
@@ -49,4 +46,6 @@ public class Libro {
     @JoinColumn(name = "propietario_id", nullable = false)
     private Usuario propietario;
 
+    @OneToMany(mappedBy = "libro")
+    private List<Compra> compras = new ArrayList<>();
 }

@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Entity;
 
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoIntercambio;
 import jakarta.persistence.*;
@@ -19,9 +20,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Intercambio {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @EmbeddedId
+    private IntercambioId id;
 
     private Integer puntosComprometidos;
 
@@ -32,20 +32,20 @@ public class Intercambio {
     private EstadoIntercambio estado;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "libro_deseado_id", nullable = false)
-    private Libro libroDeseado;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "libro_ofrecido_id")
+    @JoinColumn(name = "isbnOfrecida", nullable = false)
     private Libro libroOfrecido;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "prestador_id", nullable = false)
-    private Usuario prestador;
+    @JoinColumn(name = "isbnSolicitante")
+    private Libro libroSolicitante;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receptor_id", nullable = false)
-    private Usuario receptor;
+    @JoinColumn(name = "idSolicitante", nullable = false)
+    private Usuario solicitante;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "idOfrecida", nullable = false)
+    private Usuario ofrecido;
 
     @ManyToOne
     private CadenaIntercambio cadena;
@@ -55,6 +55,5 @@ public class Intercambio {
 
     @OneToMany(mappedBy = "intercambio", cascade = CascadeType.ALL)
     private List<Notificacion> notificaciones = new ArrayList<>();
-
 }
 
