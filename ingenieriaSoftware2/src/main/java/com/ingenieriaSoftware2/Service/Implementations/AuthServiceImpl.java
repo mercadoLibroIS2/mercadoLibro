@@ -51,11 +51,10 @@ public class AuthServiceImpl implements AuthService {
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
         String token = jwtService.generarToken((UserDetails) usuarioGuardado);
         return new AuthResponseDTO(
-                usuario.getId(),
+                usuario.getEmail(),
                 token,
                 usuarioGuardado.getNombre(),
-                usuarioGuardado.getEmail(),
-                usuarioGuardado.getRol().name(),
+                usuarioGuardado.getRol(),
                 usuarioGuardado.getSaldoTotal()
         );
     }
@@ -83,11 +82,10 @@ public class AuthServiceImpl implements AuthService {
             String token = jwtService.generarToken((UserDetails) usuario);
 
             return new AuthResponseDTO(
-                    usuario.getId(),
+                    usuario.getEmail(),
                     token,
                     usuario.getNombre(),
-                    usuario.getEmail(),
-                    usuario.getRol().name(),
+                    usuario.getRol(),
                     usuario.getSaldoTotal()
             );
 
@@ -127,11 +125,10 @@ public class AuthServiceImpl implements AuthService {
         String nuevoToken = jwtService.refrescarToken(token);
 
         return new AuthResponseDTO(
-                usuario.getId(),
+                usuario.getEmail(),
                 nuevoToken,
                 usuario.getNombre(),
-                usuario.getEmail(),
-                usuario.getRol().name(),
+                usuario.getRol(),
                 usuario.getSaldoTotal()
         );
     }

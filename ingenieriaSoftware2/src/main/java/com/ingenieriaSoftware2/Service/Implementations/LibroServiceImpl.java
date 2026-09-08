@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Request.LibroRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
@@ -30,8 +31,8 @@ public class LibroServiceImpl implements LibroService {
 
     @Override
     @Transactional
-    public LibroResponseDTO publicarLibro(LibroRequestDTO request, UUID usuarioId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
+    public LibroResponseDTO publicarLibro(LibroRequestDTO request, String email) {
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseThrow(()-> new UsuarioNoEncontrado());
         Libro libro = new Libro();
         libro.setIsbn(request.isbn());
         libro.setCategoria(request.categoria());
@@ -47,17 +48,17 @@ public class LibroServiceImpl implements LibroService {
     }
 
     @Override
-    public LibroResponseDTO actualizarLibro(UUID libroId, LibroRequestDTO request, UUID usuarioId) {
+    public LibroResponseDTO actualizarLibro(String isbn, LibroRequestDTO request, String email) {
         return null;
     }
 
     @Override
-    public void eliminarLibro(UUID libroId, UUID usuarioId) {
+    public void eliminarLibro(String isbn, String email) {
 
     }
 
     @Override
-    public LibroResponseDTO obtenerLibroPorId(UUID libroId) {
+    public LibroResponseDTO obtenerLibroPorId(String isbn) {
         return null;
     }
 
@@ -72,27 +73,27 @@ public class LibroServiceImpl implements LibroService {
     }
 
     @Override
-    public boolean estaLibroDisponible(UUID libroId) {
+    public boolean estaLibroDisponible(String isbn) {
         return false;
     }
 
     @Override
-    public void bloquearLibro(UUID libroId, UUID intercambioId) {
+    public void bloquearLibro(String isbn, IntercambioId intercambioId) {
 
     }
 
     @Override
-    public void liberarLibro(UUID libroId) {
+    public void liberarLibro(String isbn) {
 
     }
 
     @Override
-    public void marcarComoIntercambiado(UUID libroId) {
+    public void marcarComoIntercambiado(String isbn) {
 
     }
 
     @Override
-    public List<LibroResponseDTO> obtenerLibrosDeUsuario(UUID usuarioId) {
+    public List<LibroResponseDTO> obtenerLibrosDeUsuario(String email) {
         return List.of();
     }
 

@@ -1,6 +1,7 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
 import com.ingenieriaSoftware2.Entity.MovimientoPuntos;
 import com.ingenieriaSoftware2.Entity.Resenia;
@@ -20,7 +21,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 @Service
 public class ReseniaServiceImpl implements ReseniaService {
@@ -43,18 +43,18 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Transactional
     @Override
-    public ReseniaResponseDTO crearResenia(UUID autorId, UUID calificadoId, UUID intercambioId, float calificacion, String comentario, LocalDate fecha) {
+    public ReseniaResponseDTO crearResenia(String autorEmail, String calificadoEmail, IntercambioId intercambioId, float calificacion, String comentario, LocalDate fecha) {
 
         if (calificacion>5||calificacion<0||comentario.length()>500){
             throw new AtributoFueraDeRangoException();
         }
 
-        Usuario autor = usuarioRepository.findById(autorId).orElseThrow(() -> new UsuarioNoEncontrado());
-        Usuario calificado = usuarioRepository.findById(calificadoId).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario autor = usuarioRepository.findById(autorEmail).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario calificado = usuarioRepository.findById(calificadoEmail).orElseThrow(() -> new UsuarioNoEncontrado());
         Intercambio intercambio = intercambioRepository.findById(intercambioId).orElseThrow(() -> new IntercambioNoExiste());
         boolean esValido =
-                (intercambio.getPrestador().equals(autor) && intercambio.getReceptor().equals(calificado)) ||
-                        (intercambio.getPrestador().equals(calificado) && intercambio.getReceptor().equals(autor));
+                (intercambio.getSolicitante().equals(autor) && intercambio.getOfrecido().equals(calificado)) ||
+                        (intercambio.getSolicitante().equals(calificado) && intercambio.getOfrecido().equals(autor));
 
         if (esValido) {
             Resenia resenia = new Resenia();
