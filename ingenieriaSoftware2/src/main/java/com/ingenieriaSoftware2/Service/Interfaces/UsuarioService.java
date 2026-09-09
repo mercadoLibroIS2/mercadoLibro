@@ -22,5 +22,5 @@ public interface UsuarioService extends UserDetailsService {
 
     List<Usuario> findAll();
 
-    Usuario actualizarPerfil(Long userId, UsuarioRequestDTO request);
+    Usuario actualizarPerfil(String userEmail, UsuarioRequestDTO request);
 }

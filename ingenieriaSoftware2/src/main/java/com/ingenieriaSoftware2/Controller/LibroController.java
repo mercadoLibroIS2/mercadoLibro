@@ -24,8 +24,8 @@ public class LibroController {
 
     @PostMapping("/publicar")
     public ResponseEntity<LibroResponseDTO> publicarLibro(@Valid @RequestBody LibroRequestDTO request) {
-        UUID usuarioId = securityUtils.obtenerUsuarioAutenticado().getId();
-        LibroResponseDTO response = libroService.publicarLibro(request, usuarioId);
+        String email = securityUtils.obtenerUsuarioAutenticado().getEmail();
+        LibroResponseDTO response = libroService.publicarLibro(request, email);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

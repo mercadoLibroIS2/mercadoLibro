@@ -21,8 +21,8 @@ import java.util.*;
 @AllArgsConstructor
 public class Usuario implements UserDetails {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @Column(unique = true, nullable = false)
+    private String email;
 
     @Column(unique = true, nullable = false)
     private String nombre;
@@ -30,8 +30,6 @@ public class Usuario implements UserDetails {
     @Column(nullable = false)
     private String contrasenia;
 
-    @Column(unique = true, nullable = false)
-    private String email;
     private Integer saldoTotal;
     private Integer saldoReservado;
     private float reputacionPromedio;
@@ -66,6 +64,9 @@ public class Usuario implements UserDetails {
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Notificacion> notificaciones = new ArrayList<>();
+
+    @OneToMany(mappedBy = "comprador")
+    private List<Compra> comprasRealizadas = new ArrayList<>();
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

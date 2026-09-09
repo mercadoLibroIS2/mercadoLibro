@@ -1,10 +1,10 @@
 package com.ingenieriaSoftware2.DTO.Request;
 
-import java.util.UUID;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 
 public record ReseniaControllerDTO(
-        UUID intercambioId,
-        UUID calificado,
+        IntercambioId intercambioId,
+        String calificadoEmail,
         float calificacion,
         String comentario
 ) {

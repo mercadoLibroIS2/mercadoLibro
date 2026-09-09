@@ -14,6 +14,6 @@ public record LibroRequestDTO(
         EstadoFisico estadoFisico,
         Integer valorReferencia,
         Boolean disponible,
-        UUID propietario
+        String propietario
 ) {
 }

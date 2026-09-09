@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.DTO.Request;
 
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import jakarta.persistence.Column;
@@ -11,9 +12,9 @@ import jakarta.validation.constraints.Min;
 import java.util.UUID;
 
 public record ReseniaRequestDTO(
-        UUID intercambioId,
-        UUID autorId,
-        UUID calificado,
+        IntercambioId intercambioId,
+        String autorEmail,
+        String calificado,
         float calificacion,
         String comentario
 ) {

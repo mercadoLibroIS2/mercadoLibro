@@ -17,7 +17,7 @@ public class OfertaIntercambioServiceImpl implements OfertaIntercambioService {
     }
 
     @Override
-    public Intercambio solicitarDirecto(String solicitanteId, String libroSolicitadoId, String libroOfrecidoId) {
+    public Intercambio solicitarDirecto(String solicitanteId, String libroSolicitadoIsbn, String libroOfrecidoId) {
         return null;
     }
 }

@@ -7,8 +7,6 @@ import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -56,7 +54,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
-    public Usuario actualizarPerfil(Long userId, UsuarioRequestDTO request) {
+    public Usuario actualizarPerfil(String userEmail, UsuarioRequestDTO request) {
         return null;
     }
 

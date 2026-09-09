@@ -36,7 +36,6 @@ public class LibroMapper {
         }
 
         LibroResponseDTO dto = new LibroResponseDTO(
-        libro.getId(),
         libro.getIsbn(),
         libro.getTitulo(),
         libro.getAutor(),
@@ -44,7 +43,7 @@ public class LibroMapper {
         libro.getEstadoFisico(),
         libro.getValorReferencia(),
         libro.getDisponible(),
-        libro.getPropietario().getId()
+        libro.getPropietario().getEmail()
         );
         return dto;
     }
