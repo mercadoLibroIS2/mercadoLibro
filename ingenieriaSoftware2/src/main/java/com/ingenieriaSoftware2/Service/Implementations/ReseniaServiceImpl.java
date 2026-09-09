@@ -49,8 +49,8 @@ public class ReseniaServiceImpl implements ReseniaService {
             throw new AtributoFueraDeRangoException();
         }
 
-        Usuario autor = usuarioRepository.findById(autorEmail).orElseThrow(() -> new UsuarioNoEncontrado());
-        Usuario calificado = usuarioRepository.findById(calificadoEmail).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario autor = usuarioRepository.findByEmail(autorEmail).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario calificado = usuarioRepository.findByEmail(calificadoEmail).orElseThrow(() -> new UsuarioNoEncontrado());
         Intercambio intercambio = intercambioRepository.findById(intercambioId).orElseThrow(() -> new IntercambioNoExiste());
         boolean esValido =
                 (intercambio.getSolicitante().equals(autor) && intercambio.getOfrecido().equals(calificado)) ||

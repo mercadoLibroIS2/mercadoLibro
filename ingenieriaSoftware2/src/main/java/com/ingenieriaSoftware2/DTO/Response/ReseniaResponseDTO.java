@@ -7,7 +7,7 @@ import java.util.UUID;
 public record ReseniaResponseDTO(
         UUID id,
         IntercambioId intercambioId,
-        UUID autorId,
+        String autorId,
         String calificadoId, // calificado es usuario asumo
         float calificacion,
         String comentario

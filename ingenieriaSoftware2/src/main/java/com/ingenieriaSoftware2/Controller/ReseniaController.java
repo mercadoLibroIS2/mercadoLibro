@@ -39,8 +39,8 @@ public class ReseniaController {
         Usuario autor = usuarioRepository.findByNombre(nombre).orElseThrow(() -> new UsuarioNoEncontrado());
 
         ReseniaResponseDTO response = reseniaService.crearResenia(
-                autor.getId(),
-                createDTO.calificado(),
+                autor.getEmail(),
+                createDTO.calificadoEmail(),
                 createDTO.intercambioId(),
                 createDTO.calificacion(),
                 createDTO.comentario(),

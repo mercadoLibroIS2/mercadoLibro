@@ -19,7 +19,7 @@ public class Compra {
     private CompraId id;
 
     @ManyToOne
-    @MapsId("compradorId")
+    @MapsId("compradorEmail")
     @JoinColumn(name = "comprador_id")
     private Usuario comprador;
 
@@ -29,7 +29,7 @@ public class Compra {
     private Libro libro;
 
     @ManyToOne
-    @MapsId("propietarioId")
+    @MapsId("propietarioEmail")
     @JoinColumn(name = "propietario_id")
     private Usuario propietario;
 

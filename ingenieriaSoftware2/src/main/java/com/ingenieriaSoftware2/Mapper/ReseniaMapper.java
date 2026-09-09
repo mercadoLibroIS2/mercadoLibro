@@ -28,7 +28,7 @@ public class ReseniaMapper {
             return null;
         }
         Resenia resenia = new Resenia();
-        resenia.setAutor(usuarioRepository.findById(dto.autorId()).orElseThrow(()-> new UsuarioNoEncontrado()));
+        resenia.setAutor(usuarioRepository.findById(dto.autorEmail()).orElseThrow(()-> new UsuarioNoEncontrado()));
         resenia.setCalificado(usuarioRepository.findById(dto.calificado()).orElseThrow(()-> new UsuarioNoEncontrado()));
         resenia.setIntercambio(intercambioRepository.findById(dto.intercambioId()).orElseThrow(()->new IntercambioNoExiste()));
         resenia.setCalificacion(dto.calificacion());
@@ -43,8 +43,8 @@ public class ReseniaMapper {
         ReseniaResponseDTO dto = new ReseniaResponseDTO(
                 resenia.getId(),
                 resenia.getIntercambio().getId(),
-                resenia.getAutor().getId(),
-                resenia.getCalificado().getId(),
+                resenia.getAutor().getEmail(),
+                resenia.getCalificado().getEmail(),
                 resenia.getCalificacion(),
                 resenia.getComentario()
         );
