@@ -23,3 +23,7 @@ pnpm-debug.log*
 
 # Vercel
 .vercel/
+
+# Test artifacts
+test-screenshots/
+
