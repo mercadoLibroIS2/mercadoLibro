@@ -34,6 +34,18 @@ import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluato
 import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import {
+  authService,
+  bookService,
+  reviewService,
+  authResponseToUser,
+  libroResponseToBook,
+  conditionToBackend,
+  categoryToBackend,
+  setAuthToken,
+  getAuthToken,
+  ApiError,
+} from "@/lib/api"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -72,6 +84,8 @@ interface StoreContextValue extends AppState {
   login: (user: User) => void
   register: (name: string, username: string, email: string) => void
   logout: () => void
+  signInWithBackend: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signUpWithBackend: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
   switchUser: (userId: string) => void
@@ -315,6 +329,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [syncSupabaseUser])
 
+  // Intentar cargar libros disponibles desde el backend Spring Boot al iniciar
+  useEffect(() => {
+    bookService.obtenerLibrosDisponibles().then((backendBooks) => {
+      if (backendBooks && backendBooks.length > 0) {
+        const mapped = backendBooks.map((dto) => libroResponseToBook(dto))
+        setState((prev) => {
+          const existingIds = new Set(prev.books.map((b) => b.id))
+          const newBooks = mapped.filter((b) => !existingIds.has(b.id))
+          if (newBooks.length === 0) return prev
+          return { ...prev, books: [...newBooks, ...prev.books] }
+        })
+      }
+    })
+  }, [])
+
   // --- Auth & User Switching ---
   const switchUser = useCallback(
     (userId: string) => {
@@ -337,6 +366,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Directs to Welcome / Onboarding screen after login
       setScreen("bienvenida")
       showToast(`¡Bienvenido/a de nuevo, ${user.name}!`)
+    },
+    [showToast]
+  )
+
+  const signInWithBackend = useCallback(
+    async (nombreOEmail: string, contrasenia: string) => {
+      try {
+        const authData = await authService.login({
+          nombreOEmail: nombreOEmail.trim(),
+          contrasenia,
+        })
+        const appUser = authResponseToUser(authData)
+
+        setState((prev) => {
+          const exists = prev.users.some(
+            (u) => u.id === appUser.id || (u.email && u.email.toLowerCase() === appUser.email.toLowerCase())
+          )
+          const users = exists
+            ? prev.users.map((u) => (u.id === appUser.id || u.email.toLowerCase() === appUser.email.toLowerCase() ? appUser : u))
+            : [...prev.users, appUser]
+          return { ...prev, users, currentUser: appUser }
+        })
+
+        setScreen("bienvenida")
+        showToast(`¡Bienvenido/a de nuevo, ${appUser.name}!`)
+        return { success: true }
+      } catch (err: unknown) {
+        let message = "No se pudo iniciar sesión. Verificá tus credenciales."
+        if (err instanceof ApiError) {
+          message = err.message
+        } else if (err instanceof Error) {
+          message = err.message
+        }
+        return { success: false, error: message }
+      }
     },
     [showToast]
   )
@@ -479,12 +543,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [syncSupabaseUser, showToast]
   )
 
+  const signUpWithBackend = useCallback(
+    async (name: string, email: string, contrasenia: string) => {
+      try {
+        const authData = await authService.registrar({
+          nombre: name.trim(),
+          email: email.trim().toLowerCase(),
+          contrasenia,
+        })
+        const newUser = authResponseToUser(authData)
+
+        const initialMovement: PointMovement = {
+          id: "pm-" + Date.now(),
+          userId: newUser.id,
+          type: "INICIAL",
+          amount: 100,
+          balanceAfter: 100,
+          description: "Bienvenida a Mercado Libro — Asignación de 100 puntos iniciales (RF14)",
+          date: new Date().toISOString(),
+        }
+
+        setState((prev) => ({
+          ...prev,
+          users: [...prev.users, newUser],
+          currentUser: newUser,
+          pointMovements: [initialMovement, ...prev.pointMovements],
+        }))
+
+        setScreen("bienvenida")
+        showToast("¡Cuenta creada con éxito en el servidor! Recibiste 100 puntos de bienvenida.")
+        return { success: true }
+      } catch (err: unknown) {
+        let message = "No se pudo registrar el usuario."
+        if (err instanceof ApiError) {
+          message = err.message
+        } else if (err instanceof Error) {
+          message = err.message
+        }
+        return { success: false, error: message }
+      }
+    },
+    [showToast]
+  )
+
   const logout = useCallback(async () => {
+    try {
+      await authService.logout()
+    } catch {
+      // ignore
+    }
     try {
       await supabase.auth.signOut()
     } catch {
       // ignore
     }
+    setAuthToken(null)
     setState((prev) => ({ ...prev, currentUser: null }))
     setScreen("login")
     showToast("Sesión cerrada.")
@@ -513,15 +626,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // --- Books CRUD & Matching (RF01-RF04, RF35) ---
   const publishBook = useCallback(
-    (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
+    async (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
       if (!state.currentUser) return
 
-      const id = "book-" + Date.now()
+      let assignedId = "book-" + Date.now()
+
+      // Conexión real con Spring Boot (POST /api/libro/publicar)
+      try {
+        const backendPayload = {
+          isbn: data.isbn || `ISBN-${Date.now()}`,
+          titulo: data.title,
+          autor: data.author,
+          categoria: [categoryToBackend(data.category)],
+          estadoFisico: conditionToBackend(data.condition),
+          valorReferencia: Math.round(data.points),
+          disponible: true,
+          propietario: state.currentUser.id,
+        }
+        const res = await bookService.publicarLibro(backendPayload)
+        if (res?.id) {
+          assignedId = res.id
+        }
+      } catch (err) {
+        console.warn("[Spring Boot] No se pudo persistir en backend (o backend offline), guardando localmente:", err)
+      }
+
       const refPrice = calculateReferencePrice(data.category, data.condition, data.externalRating || 4.5)
 
       const newBook: Book = {
         ...data,
-        id,
+        id: assignedId,
         ownerId: state.currentUser.id,
         ownerName: state.currentUser.name,
         ownerRating: state.currentUser.rating,
@@ -1085,6 +1219,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         tradeId,
       }
 
+      // Persistencia en Spring Boot si hay sesión JWT activa (POST /api/resenia/auto)
+      if (getAuthToken()) {
+        reviewService
+          .crearReseniaAuto({
+            calificado: toUserId,
+            intercambioId: tradeId,
+            calificacion: rating,
+            comentario: comment,
+          })
+          .catch((err) => {
+            console.warn("[Spring Boot] No se pudo persistir reseña en el servidor:", err)
+          })
+      }
+
       setState((prev) => {
         const targetReviews = prev.reviews.filter((r) => r.toUserId === toUserId)
         const allTargetRatings = [...targetReviews.map((r) => r.rating), rating]
@@ -1246,6 +1394,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        signInWithBackend,
+        signUpWithBackend,
         signInWithSupabase,
         signUpWithSupabase,
         switchUser,

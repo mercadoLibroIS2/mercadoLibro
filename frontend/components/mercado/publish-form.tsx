@@ -7,6 +7,7 @@ import {
   Info,
   ArrowLeft,
   Image as ImageIcon,
+  Loader2,
 } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
@@ -46,6 +47,7 @@ export function PublishForm() {
   const { currentUser, publishBook, setScreen } = useStore()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   if (!currentUser) {
     return null
@@ -61,7 +63,7 @@ export function PublishForm() {
     ? evaluatePriceDeal(pointsNum, form.category, form.condition, 4.5)
     : null
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const next: Partial<Record<keyof FormState, string>> = {}
     if (!form.title.trim()) next.title = "El título del libro es obligatorio"
@@ -74,18 +76,23 @@ export function PublishForm() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    publishBook({
-      title: form.title.trim(),
-      author: form.author.trim(),
-      isbn: form.isbn.trim(),
-      category: form.category,
-      condition: form.condition,
-      edition: form.edition.trim() || undefined,
-      points: pointsNum,
-      description: form.description.trim() || undefined,
-      coverUrl: form.coverUrl.trim() || undefined,
-      externalRating: 4.5,
-    })
+    setSubmitting(true)
+    try {
+      await publishBook({
+        title: form.title.trim(),
+        author: form.author.trim(),
+        isbn: form.isbn.trim() || `ISBN-${Date.now()}`,
+        category: form.category,
+        condition: form.condition,
+        edition: form.edition.trim() || undefined,
+        points: pointsNum,
+        description: form.description.trim() || undefined,
+        coverUrl: form.coverUrl.trim() || undefined,
+        externalRating: 4.5,
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -306,10 +313,20 @@ export function PublishForm() {
           </button>
           <button
             type="submit"
-            className="flex items-center gap-2 rounded-xl bg-amber-800 px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
+            disabled={submitting}
+            className="flex items-center gap-2 rounded-xl bg-amber-800 px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <BookPlus className="h-4.5 w-4.5" />
-            Publicar Libro
+            {submitting ? (
+              <>
+                <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                <span>Publicando...</span>
+              </>
+            ) : (
+              <>
+                <BookPlus className="h-4.5 w-4.5" />
+                <span>Publicar Libro</span>
+              </>
+            )}
           </button>
         </div>
       </form>

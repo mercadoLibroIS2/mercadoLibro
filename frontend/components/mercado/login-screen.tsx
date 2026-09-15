@@ -9,7 +9,7 @@ import type { User } from "@/lib/mercado-types"
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function LoginScreen() {
-  const { login, users, setScreen, showToast, signInWithSupabase } = useStore()
+  const { login, users, setScreen, showToast, signInWithBackend, signInWithSupabase } = useStore()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({})
@@ -32,31 +32,38 @@ export function LoginScreen() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    // Si el identificador ingresado coincide con un usuario demo local y la contraseña es simple, permitir demo
+    // Si es un usuario demo local con pass demo, permitir acceso rápido
     const demoUser = users.find(
       (u) =>
         u.email.toLowerCase() === identifier.toLowerCase() ||
         u.username.toLowerCase() === identifier.toLowerCase()
     )
-
-    // Determinar si es email directo o buscar email del usuario registrado
-    let targetEmail = identifier.trim()
-    if (!targetEmail.includes("@") && demoUser) {
-      targetEmail = demoUser.email
+    if (demoUser && password === "demo") {
+      login(demoUser)
+      return
     }
 
     setLoading(true)
     try {
-      // Intentar autenticación con Supabase
-      const res = await signInWithSupabase(targetEmail, password)
-      if (!res.success) {
-        // Si falló en Supabase pero es un usuario Demo local, permitir acceso como fallback
-        if (demoUser && password === "demo") {
-          login(demoUser)
+      // 1. Intentar autenticación con Spring Boot backend (POST /api/auth/login)
+      const res = await signInWithBackend(identifier.trim(), password)
+      if (res.success) {
+        return
+      }
+
+      // Si falló en backend, intentar fallback de Supabase si estuviera configurado
+      if (res.error?.includes("Failed to fetch") || res.error?.includes("NetworkError")) {
+        let targetEmail = identifier.trim()
+        if (!targetEmail.includes("@") && demoUser) {
+          targetEmail = demoUser.email
+        }
+        const sbRes = await signInWithSupabase(targetEmail, password)
+        if (sbRes.success) {
           return
         }
-        setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
       }
+
+      setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
     } catch {
       setServerError("Ocurrió un error inesperado al conectar con el servidor.")
     } finally {

@@ -18,7 +18,7 @@ interface FormState {
 const EMPTY: FormState = { name: "", username: "", email: "", password: "", confirm: "" }
 
 export function RegisterScreen() {
-  const { register, setScreen, signUpWithSupabase } = useStore()
+  const { register, setScreen, signUpWithBackend, signUpWithSupabase } = useStore()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<Partial<FormState>>({})
   const [serverError, setServerError] = useState<string | null>(null)
@@ -37,11 +37,12 @@ export function RegisterScreen() {
     const next: Partial<FormState> = {}
     if (!form.name.trim()) next.name = "Ingresá tu nombre completo"
     if (!form.username.trim()) next.username = "Elegí un nombre de usuario"
+    else if (form.username.trim().length < 3) next.username = "El nombre de usuario debe tener al menos 3 caracteres"
     else if (form.username.includes(" ")) next.username = "El usuario no puede tener espacios"
     if (!form.email.trim()) next.email = "Ingresá tu email"
     else if (!emailRe.test(form.email)) next.email = "El email no tiene un formato válido"
     if (!form.password) next.password = "Creá una contraseña"
-    else if (form.password.length < 6) next.password = "Mínimo 6 caracteres"
+    else if (form.password.length < 8) next.password = "Mínimo 8 caracteres (requerido por el servidor)"
     if (!form.confirm) next.confirm = "Repetí la contraseña"
     else if (form.confirm !== form.password) next.confirm = "Las contraseñas no coinciden"
 
@@ -50,22 +51,38 @@ export function RegisterScreen() {
 
     setLoading(true)
     try {
-      const res = await signUpWithSupabase(
-        form.name.trim(),
+      // 1. Intentar registro directo en el backend Spring Boot (POST /api/auth/registro)
+      const res = await signUpWithBackend(
         form.username.trim().toLowerCase(),
         form.email.trim(),
         form.password
       )
 
-      if (!res.success) {
-        setServerError(res.error || "No se pudo registrar la cuenta.")
-      } else if (res.requiresEmailConfirmation) {
-        setInfoMessage(
-          "¡Cuenta creada! Enviamos un correo de confirmación a " +
-            form.email +
-            ". Por favor, revisá tu casilla antes de iniciar sesión."
-        )
+      if (res.success) {
+        return
       }
+
+      // Si falla por red (servidor no levantado aún), intentar fallback
+      if (res.error?.includes("Failed to fetch") || res.error?.includes("NetworkError")) {
+        const sbRes = await signUpWithSupabase(
+          form.name.trim(),
+          form.username.trim().toLowerCase(),
+          form.email.trim(),
+          form.password
+        )
+        if (sbRes.success) {
+          if (sbRes.requiresEmailConfirmation) {
+            setInfoMessage(
+              "¡Cuenta creada! Enviamos un correo de confirmación a " +
+                form.email +
+                ". Por favor, revisá tu casilla antes de iniciar sesión."
+            )
+          }
+          return
+        }
+      }
+
+      setServerError(res.error || "No se pudo registrar la cuenta.")
     } catch {
       setServerError("Error de conexión al registrar. Intenta nuevamente.")
     } finally {
