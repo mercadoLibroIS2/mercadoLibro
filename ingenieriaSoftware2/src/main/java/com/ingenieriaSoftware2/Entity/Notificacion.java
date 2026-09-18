@@ -18,7 +18,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Notificacion {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne
