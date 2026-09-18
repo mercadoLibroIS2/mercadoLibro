@@ -19,12 +19,12 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ✅ Orígenes permitidos (frontend)
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:5173",  // Vite (React, Vue)
-                "http://localhost:3000",  // React Create-React-App
-                "http://localhost:4200",  // Angular
-                "http://localhost:8080"   // Otros
+        // ✅ Orígenes permitidos (frontend local y producción)
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:*",
+                "https://*.vercel.app",
+                "https://*.onrender.com",
+                "*"
         ));
 
         // ✅ Métodos HTTP permitidos
