@@ -36,6 +36,7 @@ public class Usuario implements UserDetails {
     private Integer saldoReservado;
     private float reputacionPromedio;
 
+    @Enumerated(EnumType.STRING)
     private Rol rol = Rol.USUARIO;
 
     private boolean esActivo;
