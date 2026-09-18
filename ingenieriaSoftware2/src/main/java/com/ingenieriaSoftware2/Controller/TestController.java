@@ -57,4 +57,43 @@ public class TestController {
         }
         return result;
     }
+
+    @PostMapping("/reset-and-init-schema")
+    public Map<String, Object> resetAndInitSchema() {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            // Drop old conflicting tables
+            jdbcTemplate.execute("DROP TABLE IF EXISTS cadena_participantes CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS oferta_libros_deseados CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS notificacion CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS resenia CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS resena CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS movimiento_puntos CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS intercambio CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS oferta_intercambio CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS libro_categoria CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS libro CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS cadena_intercambio CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS usuario CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS publicacion_historial_precio CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS publicacion CASCADE");
+            jdbcTemplate.execute("DROP TABLE IF EXISTS reporte CASCADE");
+
+            // Create schema cleanly
+            org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("schema.sql");
+            String sql = new String(resource.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            for (String statement : sql.split(";")) {
+                String trimmed = statement.trim();
+                if (!trimmed.isEmpty() && !trimmed.startsWith("--")) {
+                    jdbcTemplate.execute(trimmed);
+                }
+            }
+            res.put("success", true);
+            res.put("message", "Schema successfully recreated and aligned with Java entities");
+        } catch (Exception e) {
+            res.put("success", false);
+            res.put("error", e.getMessage());
+        }
+        return res;
+    }
 }
