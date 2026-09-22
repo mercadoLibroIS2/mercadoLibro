@@ -1,6 +1,5 @@
 package com.ingenieriaSoftware2.Entity;
 
-import com.ingenieriaSoftware2.Enums.CanalNotificacion;
 import com.ingenieriaSoftware2.Enums.EstadoNotificacion;
 import com.ingenieriaSoftware2.Enums.TipoNotificacion;
 import jakarta.persistence.*;
@@ -40,11 +39,6 @@ public class Notificacion {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TipoNotificacion tipo;
-
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private CanalNotificacion canal;
 
     @Column(nullable = false)
     private String asunto;
