@@ -42,7 +42,7 @@ public class ReseniaMapper {
     public ReseniaResponseDTO toDTO(Resenia resenia){
         ReseniaResponseDTO dto = new ReseniaResponseDTO(
                 resenia.getId(),
-                resenia.getIntercambio().getId(),
+                resenia.getIntercambio().getIntercambioId(),
                 resenia.getAutor().getId(),
                 resenia.getCalificado().getId(),
                 resenia.getCalificacion(),

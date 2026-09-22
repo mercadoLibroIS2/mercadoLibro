@@ -1,14 +1,11 @@
 package com.ingenieriaSoftware2.Entity;
 
-import com.ingenieriaSoftware2.Enums.CategoriaLibro;
-import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.CalidadLibro;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import com.ingenieriaSoftware2.Entity.Usuario;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +34,7 @@ public class Libro {
     private List<CategoriaLibro> categoria = new ArrayList<>();
 
     @Column(nullable = false)
-    private EstadoFisico estadoFisico;
+    private CalidadLibro calidadLibro;
 
     @Column(nullable = false)
     private Integer valorReferencia;

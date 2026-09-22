@@ -1,9 +1,9 @@
 package com.ingenieriaSoftware2.Enums;
 
-public enum EstadoFisico {
+public enum CalidadLibro {
     NUEVO,
     COMO_NUEVO,
-    BUEN_ESTADO,
+    BUENO,
     ACEPTABLE,
-    DETERIORADO
+    MALO
 }
