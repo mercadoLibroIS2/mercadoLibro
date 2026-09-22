@@ -2,7 +2,7 @@ package com.ingenieriaSoftware2.Service.Interfaces;
 
 import com.ingenieriaSoftware2.DTO.Request.LibroRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
-import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.CalidadLibro;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,7 +14,7 @@ public interface LibroService {
     LibroResponseDTO actualizarLibro(UUID libroId, LibroRequestDTO request, UUID usuarioId);
     void eliminarLibro(UUID libroId, UUID usuarioId);
     LibroResponseDTO obtenerLibroPorId(UUID libroId);
-    Page<LibroResponseDTO> buscarLibros(String busqueda, String categoria, EstadoFisico estado, Integer precioMin, Integer precioMax, Pageable pageable);
+    Page<LibroResponseDTO> buscarLibros(String busqueda, String categoria, CalidadLibro estado, Integer precioMin, Integer precioMax, Pageable pageable);
     List<String> obtenerSugerencias(String consulta, Integer limite);
     boolean estaLibroDisponible(UUID libroId);
     void bloquearLibro(UUID libroId, UUID intercambioId);

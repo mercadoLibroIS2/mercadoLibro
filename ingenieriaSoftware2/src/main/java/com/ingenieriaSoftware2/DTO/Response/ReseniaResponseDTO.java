@@ -4,7 +4,7 @@ import java.util.UUID;
 
 public record ReseniaResponseDTO(
         UUID id,
-        UUID intercambioId,
+        com.ingenieriaSoftware2.Entity.Ids.IntercambioId intercambioId,
         UUID autorId,
         UUID calificadoId,
         float calificacion,

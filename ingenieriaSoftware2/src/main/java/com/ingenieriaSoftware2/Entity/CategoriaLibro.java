@@ -1,5 +1,5 @@
-package com.ingenieriaSoftware2.Enums;
-
+package com.ingenieriaSoftware2.Entity;
+// "entidad autoreferencial. saludos"
 public enum CategoriaLibro {
     FICCION_GENERAL,
     CIENCIA_FICCION,

@@ -22,7 +22,7 @@ public class LibroMapper {
         libro.setAutor(request.autor());
         libro.setIsbn(request.isbn());
         libro.setCategoria(request.categoria());
-        libro.setEstadoFisico(request.estadoFisico());
+        libro.setCalidadLibro(request.calidadLibro());
         libro.setValorReferencia(request.valorReferencia());
         libro.setPropietario(propietario);
         libro.setDisponible(true);
@@ -41,7 +41,7 @@ public class LibroMapper {
         libro.getTitulo(),
         libro.getAutor(),
         libro.getCategoria(),
-        libro.getEstadoFisico(),
+        libro.getCalidadLibro(),
         libro.getValorReferencia(),
         libro.getDisponible(),
         libro.getPropietario().getId()
@@ -74,7 +74,7 @@ public class LibroMapper {
         libro.setAutor(request.autor());
         libro.setIsbn(request.isbn());
         libro.setCategoria(request.categoria());
-        libro.setEstadoFisico(request.estadoFisico());
+        libro.setCalidadLibro(request.calidadLibro());
         libro.setValorReferencia(request.valorReferencia());
     }
 }

@@ -2,17 +2,14 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
-import com.ingenieriaSoftware2.Enums.TipoIntercambio;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Getter
@@ -24,9 +21,6 @@ public class Intercambio {
     IntercambioId intercambioId;
 
     private Integer puntosComprometidos;
-
-    @Enumerated(EnumType.STRING)
-    private TipoIntercambio tipo;
 
     @Enumerated(EnumType.STRING)
     private EstadoIntercambio estado;

@@ -2,38 +2,35 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.CompraId;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.Instant;
-
 @Entity
+@Table(name = "compra")
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Compra {
+
     @EmbeddedId
     private CompraId id;
 
-    @ManyToOne
-    @MapsId("compradorId")
-    @JoinColumn(name = "comprador_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "comprador_id", insertable = false, updatable = false)
     private Usuario comprador;
 
-    @ManyToOne
-    @MapsId("isbn")
-    @JoinColumn(name = "isbn")
-    private Libro libro;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns({
+            @JoinColumn(name = "isbn", referencedColumnName = "isbn",
+                    insertable = false, updatable = false),
+            @JoinColumn(name = "propietario_id", referencedColumnName = "propietario_id",
+                    insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion", referencedColumnName = "hora_de_publicacion",
+                    insertable = false, updatable = false)
+    })
+    private Publicacion publicacion;
 
-    @ManyToOne
-    @MapsId("propietarioId")
-    @JoinColumn(name = "propietario_id")
-    private Usuario propietario;
-
-    private Integer puntos;
-
-    private Instant timestamp;
+    @Column(name = "puntos")
+    private int puntos;
 }

@@ -4,7 +4,7 @@ import com.ingenieriaSoftware2.DTO.Request.LibroRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
-import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.CalidadLibro;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.LibroMapper;
 import com.ingenieriaSoftware2.Repository.LibroRepository;
@@ -37,7 +37,7 @@ public class LibroServiceImpl implements LibroService {
         libro.setCategoria(request.categoria());
         libro.setTitulo(request.titulo());
         libro.setAutor(request.autor());
-        libro.setEstadoFisico(request.estadoFisico());
+        libro.setCalidadLibro(request.calidadLibro());
         libro.setValorReferencia(request.valorReferencia());
         libro.setDisponible(request.disponible());
         libro.setPropietario(usuario);
@@ -62,7 +62,7 @@ public class LibroServiceImpl implements LibroService {
     }
 
     @Override
-    public Page<LibroResponseDTO> buscarLibros(String busqueda, String categoria, EstadoFisico estado, Integer precioMin, Integer precioMax, Pageable pageable) {
+    public Page<LibroResponseDTO> buscarLibros(String busqueda, String categoria, CalidadLibro estado, Integer precioMin, Integer precioMax, Pageable pageable) {
         return null;
     }
 

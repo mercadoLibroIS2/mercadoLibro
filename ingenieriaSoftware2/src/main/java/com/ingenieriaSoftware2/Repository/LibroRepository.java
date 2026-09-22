@@ -2,7 +2,7 @@ package com.ingenieriaSoftware2.Repository;
 
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
-import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.CalidadLibro;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,7 +33,7 @@ public interface LibroRepository extends JpaRepository<Libro, UUID> {
     Page<Libro> buscarConFiltros(@Param("titulo") String titulo,
                                  @Param("autor") String autor,
                                  @Param("categoria") String categoria,
-                                 @Param("estado") EstadoFisico estado,
+                                 @Param("estado") CalidadLibro estado,
                                  @Param("precioMin") Integer precioMin,
                                  @Param("precioMax") Integer precioMax,
                                  Pageable pageable);

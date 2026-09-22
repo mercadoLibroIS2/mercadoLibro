@@ -70,8 +70,7 @@ public class ReseniaServiceImpl implements ReseniaService {
             calificado.getReseniasRecibidas().add(reseniaGuardada);
             MovimientoPuntos movimientoPuntos = new MovimientoPuntos();
             movimientoPuntos.setUsuario(autor);
-            movimientoPuntos.setTipo(TipoMovimiento.ENTRADA);
-            movimientoPuntos.setCantidad(puntosResenia);
+            // movimientoPuntos.setCantidad(puntosResenia); NO FUNCIONA XQ ESTÁ HARDCODEADO
             MovimientoPuntos movimientoPuntosGuardado = movimientoPuntosRepository.save(movimientoPuntos);
 
             autor.getMovimientosPuntos().add(movimientoPuntosGuardado);
