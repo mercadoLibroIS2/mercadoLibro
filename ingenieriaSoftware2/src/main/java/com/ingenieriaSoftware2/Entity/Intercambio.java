@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Entity;
 
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoIntercambio;
 import jakarta.persistence.*;
@@ -19,9 +20,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Intercambio {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @EmbeddedId
+    IntercambioId intercambioId;
 
     private Integer puntosComprometidos;
 
