@@ -12,12 +12,11 @@ import java.time.LocalDateTime;
 
 @Embeddable
 @Data
-@NoArgsConstructor   // JPA lo necesita
+@NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class PublicacionId implements Serializable {
-    private String isbn;
-    private String emailPropietario;
-    @Column(name = "hora_publicacion")
-    private LocalDateTime horaPublicacion;
+public class ReseniaId implements Serializable {
+    private IntercambioId intercambioId;
+    @Column(name = "solicitante_reviewer")
+    private Boolean solicitanteReviewer; //Si el solicitante es el que hace la reseña es True
 }

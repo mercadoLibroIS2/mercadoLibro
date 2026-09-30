@@ -1,32 +1,31 @@
 package com.ingenieriaSoftware2.Entity;
 
-import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
+import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosIntercambioId;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcType;
-import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
-
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @Entity
-@AllArgsConstructor
-@NoArgsConstructor
-@Setter
 @Getter
-public class Resenia {
-    @EmbeddedId
-    private ReseniaId id;
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class MovimientoPuntosIntercambio {
 
+    @EmbeddedId
+    private MovimientoPuntosIntercambioId movimientoPuntosIntercambioId;
+
+    @Positive
+    @Column(name = "monto", nullable = false, columnDefinition = "bigint check (monto > 0)")
+    private Long monto;
+
+    // FK compuesta a intercambio (parte 1 de la PK).
+    // Se tiene que llamar "intercambio": es el nombre que usa mappedBy en Intercambio.
     @MapsId("intercambioId")
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "isbn_solicitante",                referencedColumnName = "isbn_solicitante"),
             @JoinColumn(name = "propietario_id_solicitante",      referencedColumnName = "propietario_id_solicitante"),
@@ -37,14 +36,9 @@ public class Resenia {
     })
     private Intercambio intercambio;
 
-    @Min(value = 1, message = "La calificación mínima es 1")
-    @Max(value = 5, message = "La calificación máxima es 5")
-    @Column(nullable = false)
-    private short calificacion;
-
-    @Column
-    private String comentario;
-
-    @OneToMany(mappedBy = "resenia")
-    private List<MovimientoPuntosResenia> movimientosPuntos = new ArrayList<>();
+    // FK a usuario (parte 2 de la PK)
+    @MapsId("usuarioId")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario")
+    private Usuario usuario;
 }

@@ -8,7 +8,11 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -18,41 +22,36 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Notificacion {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne
-    @JoinColumn(name = "usuario_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "email_usuario", nullable = false)
     private Usuario usuario;
 
-    @ManyToOne
-    @JoinColumn(name = "intercambio_id", nullable = true)
-    private Intercambio intercambio;
-
-    @ManyToOne
-    @JoinColumn(name = "resenia_id", nullable = true)
-    private Resenia resenia;
-
-    @ManyToOne
-    @JoinColumn(name = "movimiento_puntos_id", nullable = true)
-    private MovimientoPuntos movimientoPuntos;
+    // FK compuesta a publicacion.
+    // name = columna en notificacion / referencedColumnName = columna en publicacion
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns({
+            @JoinColumn(name = "isbn",                 referencedColumnName = "isbn"),
+            @JoinColumn(name = "email_propietario_id", referencedColumnName = "email_propietario"),
+            @JoinColumn(name = "hora_de_publicacion",  referencedColumnName = "hora_publicacion")
+    })
+    private Publicacion publicacion;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "tipo", nullable = false, columnDefinition = "tipo_notificacion")
     private TipoNotificacion tipo;
 
+    @Column(name = "leida", nullable = false, columnDefinition = "boolean default false")
+    private Boolean leida = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private CanalNotificacion canal;
+    @Column(name = "archivada", nullable = false, columnDefinition = "boolean default false")
+    private Boolean archivada = false;
 
-    @Column(nullable = false)
-    private String asunto;
-
-    @Column(length = 1000, nullable = false)
-    private String mensaje;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private EstadoNotificacion estado = EstadoNotificacion.PENDIENTE;
+    @CreationTimestamp
+    @Column(name = "fecha_creacion", nullable = false, updatable = false,
+            columnDefinition = "timestamp default now()")
+    private LocalDateTime fechaCreacion;
 }

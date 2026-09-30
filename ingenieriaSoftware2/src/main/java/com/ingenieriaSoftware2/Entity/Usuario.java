@@ -22,6 +22,9 @@ import java.util.*;
 public class Usuario implements UserDetails {
     @Id
     @Column(unique = true, nullable = false)
+    private UUID id;
+
+    @Column(unique = true, nullable = false)
     private String email;
 
     @Column(unique = true, nullable = false)
@@ -34,18 +37,13 @@ public class Usuario implements UserDetails {
     private Integer saldoReservado;
     private float reputacionPromedio;
 
+    @Enumerated(EnumType.STRING)
     private Rol rol = Rol.USUARIO;
 
     private boolean esActivo;
 
     @OneToMany(mappedBy = "propietario")
-    private List<Libro> libros = new ArrayList<>();
-
-    @OneToMany(mappedBy = "prestador")
-    private List<Intercambio> intercambiosRealizados = new ArrayList<>();
-
-    @OneToMany(mappedBy = "receptor")
-    private List<Intercambio> intercambiosRecibidos = new ArrayList<>();
+    private List<Publicacion> publicaciones = new ArrayList<>();
 
     @OneToMany(mappedBy = "usuario")
     private List<OfertaIntercambio> ofertas = new ArrayList<>();
@@ -53,20 +51,31 @@ public class Usuario implements UserDetails {
     @ManyToMany(mappedBy = "participantes")
     private Set<CadenaIntercambio> cadenas = new HashSet<>();
 
-    @OneToMany(mappedBy = "autor")
-    private List<Resenia> reseniasEscritas = new ArrayList<>();
+    @OneToMany(mappedBy = "usuario")
+    private List<MovimientoPuntosCompra> movimientosCompra = new ArrayList<>();
 
-    @OneToMany(mappedBy = "calificado")
-    private List<Resenia> reseniasRecibidas = new ArrayList<>();
+    @OneToMany(mappedBy = "usuario")
+    private List<MovimientoPuntosIntercambio> movimientosIntercambio = new ArrayList<>();
 
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<MovimientoPuntos> movimientosPuntos = new ArrayList<>();
+    @OneToMany(mappedBy = "usuario")
+    private List<MovimientoPuntosResenia> movimientosResenia = new ArrayList<>();
+
+    @OneToMany(mappedBy = "usuario")
+    private List<MovimientoPuntosSistema> movimientosSistema = new ArrayList<>();
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Notificacion> notificaciones = new ArrayList<>();
 
     @OneToMany(mappedBy = "comprador")
     private List<Compra> comprasRealizadas = new ArrayList<>();
+
+    @ManyToMany
+    @JoinTable(
+            name = "seguimiento",
+            joinColumns = @JoinColumn(name = "email_usuario", referencedColumnName = "email"),
+            inverseJoinColumns = @JoinColumn(name = "isbn", referencedColumnName = "isbn")
+    )
+    private Set<Libro> librosSeguidos = new HashSet<>();
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

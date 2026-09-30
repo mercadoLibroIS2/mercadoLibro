@@ -4,10 +4,13 @@ import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoIntercambio;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -23,37 +26,37 @@ public class Intercambio {
     @EmbeddedId
     private IntercambioId id;
 
-    private Integer puntosComprometidos;
-
     @Enumerated(EnumType.STRING)
-    private TipoIntercambio tipo;
-
-    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "estado", columnDefinition = "estado_intercambio", nullable = false)
     private EstadoIntercambio estado;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "isbnOfrecida", nullable = false)
-    private Libro libroOfrecido;
+    @PositiveOrZero
+    @Column(name = "puntos_comprometidos", nullable = false,
+            columnDefinition = "numeric default 0 check (puntos_comprometidos >= 0)")
+    private Integer puntosComprometidos = 0;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "isbnSolicitante")
-    private Libro libroSolicitante;
+    @JoinColumns({
+            @JoinColumn(name = "isbn_solicitante",                referencedColumnName = "isbn",              insertable = false, updatable = false),
+            @JoinColumn(name = "propietario_id_solicitante",      referencedColumnName = "email_propietario", insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion_solicitante", referencedColumnName = "hora_publicacion",  insertable = false, updatable = false)
+    })
+    private Publicacion publicacionSolicitante;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "idSolicitante", nullable = false)
-    private Usuario solicitante;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "idOfrecida", nullable = false)
-    private Usuario ofrecido;
+    @JoinColumns({
+            @JoinColumn(name = "isbn_ofrecida",                referencedColumnName = "isbn",              insertable = false, updatable = false),
+            @JoinColumn(name = "propietario_id_ofrecida",      referencedColumnName = "email_propietario", insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion_ofrecida", referencedColumnName = "hora_publicacion",  insertable = false, updatable = false)
+    })
+    private Publicacion publicacionOfrecida;
 
     @ManyToOne
     private CadenaIntercambio cadena;
 
-    @OneToMany(mappedBy = "intercambio", cascade = CascadeType.ALL)
-    private List<MovimientoPuntos> movimientosPuntos = new ArrayList<>();
+    @OneToMany(mappedBy = "intercambio")
+    private List<MovimientoPuntosIntercambio> movimientosPuntos = new ArrayList<>();
 
-    @OneToMany(mappedBy = "intercambio", cascade = CascadeType.ALL)
-    private List<Notificacion> notificaciones = new ArrayList<>();
 }
 

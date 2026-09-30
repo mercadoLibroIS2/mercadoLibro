@@ -1,13 +1,13 @@
 package com.ingenieriaSoftware2.DTO.Response;
 
-import java.util.UUID;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 
 public record ReseniaResponseDTO(
-        UUID id,
-        UUID intercambioId,
-        UUID autorId,
-        UUID calificadoId,
-        float calificacion,
+        IntercambioId intercambioId,
+        boolean solicitanteReviewer,
+        String emailReviewer,
+        String emailReseniado,
+        @jakarta.validation.constraints.Min(value = 1, message = "La calificación mínima es 1") @jakarta.validation.constraints.Max(value = 5, message = "La calificación máxima es 5") short calificacion,
         String comentario
 ) {
 }
