@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -18,9 +20,9 @@ public class Compra {
     @EmbeddedId
     private CompraId id;
 
-    @ManyToOne
-    @MapsId("compradorId")
-    @JoinColumn(name = "comprador_id")
+    @MapsId("compradorEmail")        // antes: "compradorId"
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "comprador_email")
     private Usuario comprador;
 
     @ManyToOne
@@ -28,12 +30,15 @@ public class Compra {
     @JoinColumn(name = "isbn")
     private Libro libro;
 
-    @ManyToOne
-    @MapsId("propietarioId")
-    @JoinColumn(name = "propietario_id")
+    @MapsId("propietarioEmail")      // antes: "propietarioId"
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "propietario_email")
     private Usuario propietario;
 
     private Integer puntos;
 
     private Instant timestamp;
+
+    @OneToMany(mappedBy = "compra")
+    private List<MovimientoPuntosCompra> movimientosPuntos = new ArrayList<>();
 }

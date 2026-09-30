@@ -56,6 +56,10 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
+    public Usuario actualizarPerfil(String email, UsuarioRequestDTO request) {
+        return null;
+    }
+
     public Usuario actualizarPerfil(Long userId, UsuarioRequestDTO request) {
         return null;
     }

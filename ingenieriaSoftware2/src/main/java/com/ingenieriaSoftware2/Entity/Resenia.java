@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Entity;
 
+import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -7,6 +8,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcType;
+import org.hibernate.dialect.type.PostgreSQLEnumJdbcType;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -19,32 +22,29 @@ import java.util.UUID;
 @Setter
 @Getter
 public class Resenia {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @EmbeddedId
+    private ReseniaId id;
 
-    @ManyToOne
-    @JoinColumn(name = "intercambio_id", nullable = false)
+    @MapsId("intercambioId")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumns({
+            @JoinColumn(name = "isbn_solicitante",                referencedColumnName = "isbn_solicitante"),
+            @JoinColumn(name = "propietario_id_solicitante",      referencedColumnName = "propietario_id_solicitante"),
+            @JoinColumn(name = "hora_de_publicacion_solicitante", referencedColumnName = "hora_de_publicacion_solicitante"),
+            @JoinColumn(name = "isbn_ofrecida",                   referencedColumnName = "isbn_ofrecida"),
+            @JoinColumn(name = "propietario_id_ofrecida",         referencedColumnName = "propietario_id_ofrecida"),
+            @JoinColumn(name = "hora_de_publicacion_ofrecida",    referencedColumnName = "hora_de_publicacion_ofrecida")
+    })
     private Intercambio intercambio;
 
-    @ManyToOne
-    @JoinColumn(name = "autor", nullable = false)
-    private Usuario autor; // quien escribe la reseña
-
-    @ManyToOne
-    @JoinColumn(name = "calificado", nullable = false)
-    private Usuario calificado; // a quién se reseña
-
-    @Min(value = 0, message = "La calificación mínima es 0")
+    @Min(value = 1, message = "La calificación mínima es 1")
     @Max(value = 5, message = "La calificación máxima es 5")
     @Column(nullable = false)
-    private float calificacion;
+    private short calificacion;
 
-    @Column(length = 500)
+    @Column
     private String comentario;
 
-    private LocalDate fecha = LocalDate.now();
-
-    @OneToMany(mappedBy = "resenia", cascade = CascadeType.ALL)
-    private List<Notificacion> notificaciones = new ArrayList<>();
+    @OneToMany(mappedBy = "resenia")
+    private List<MovimientoPuntosResenia> movimientosPuntos = new ArrayList<>();
 }
