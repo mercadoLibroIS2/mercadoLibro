@@ -19,4 +19,6 @@ public class CompraId implements Serializable {
     private String propietarioEmail;
     @Column(name = "hora_publicacion")
     private LocalDateTime horaPublicacion;
+
+    //Comentario al pedo para forzar un cambio para poder pushear
 }
