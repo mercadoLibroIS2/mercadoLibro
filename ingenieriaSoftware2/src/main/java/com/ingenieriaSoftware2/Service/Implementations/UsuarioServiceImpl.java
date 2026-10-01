@@ -1,14 +1,21 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.DTO.Request.CambiarContraseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Request.UsuarioRequestDTO;
+import com.ingenieriaSoftware2.DTO.Response.PerfilResponseDTO;
 import com.ingenieriaSoftware2.Entity.Usuario;
+import com.ingenieriaSoftware2.Exception.Usuario.ContraseniaIncorrecta;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
+import com.ingenieriaSoftware2.Mapper.UsuarioMapper;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
+import com.ingenieriaSoftware2.Security.PasswordConfig;
 import com.ingenieriaSoftware2.Service.Interfaces.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,54 +26,39 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private PasswordConfig passwordConfig;
 
-    @Override
-    public Usuario findByNombre(String username) {
-        return null;
-    }
+    @Autowired
+    private UsuarioMapper usuarioMapper;
 
-    @Override
-    public Usuario findByEmail(String email) {
-        return null;
-    }
-
-    @Override
-    public Optional<Usuario> findByNombreOEmail(String usernameOrEmail) {
-        return Optional.empty();
-    }
-
-    @Override
-    public boolean existsByNombre(String username) {
-        return false;
-    }
-
-    @Override
-    public boolean existsByEmail(String email) {
-        return false;
-    }
-
-    @Override
-    public Usuario save(Usuario user) {
-        return null;
-    }
-
-    @Override
-    public List<Usuario> findAll() {
-        return List.of();
-    }
-
-    @Override
-    public Usuario actualizarPerfil(String email, UsuarioRequestDTO request) {
-        return null;
-    }
-
-    public Usuario actualizarPerfil(Long userId, UsuarioRequestDTO request) {
-        return null;
-    }
 
     @Override
     public UserDetails loadUserByUsername(String nombre){
         Usuario usuario = usuarioRepository.findByNombre(nombre).orElseThrow(() -> new UsuarioNoEncontrado());
         return usuario;
+    }
+
+    @Override
+    public Usuario getUsuarioActual() {
+        String nombre = SecurityContextHolder.getContext().getAuthentication().getName();
+        return usuarioRepository.findByNombre(nombre).orElseThrow(UsuarioNoEncontrado::new);
+    }
+
+    @Override
+    public PerfilResponseDTO verPerfilPropio() {
+        return usuarioMapper.toPerfilDTO(getUsuarioActual());
+    }
+
+    @Override
+    public void cambiarContrasenia(CambiarContraseniaRequestDTO dto) {
+        Usuario usuario = getUsuarioActual();
+
+        if (!passwordConfig.passwordEncoder().matches(dto.contraseniaActual(), usuario.getContrasenia())) {
+            throw new ContraseniaIncorrecta();
+        }
+
+        usuario.setContrasenia(passwordConfig.passwordEncoder().encode(dto.contraseniaNueva()));
+        usuarioRepository.save(usuario);
     }
 }
