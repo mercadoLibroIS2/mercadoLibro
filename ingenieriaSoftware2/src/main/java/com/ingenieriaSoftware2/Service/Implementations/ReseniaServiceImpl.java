@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosReseniaId;
 import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
@@ -12,6 +13,9 @@ import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+import com.ingenieriaSoftware2.Exception.Resenia.NoInvolucradoException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaExistenteException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaIntercambioIncompletoException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
 import com.ingenieriaSoftware2.Repository.*;
@@ -59,21 +63,16 @@ public class ReseniaServiceImpl implements ReseniaService {
         } else if (email.equals(intercambio.getId().getPropietarioIdOfrecida())) {
             solicitanteReviewer = false;
         } else {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Solo las partes del intercambio pueden reseñarlo");
+            throw new NoInvolucradoException();
         }
 
-        // 3. Solo se reseña un intercambio terminado
         if (intercambio.getEstado() != EstadoIntercambio.COMPLETADO) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Solo se puede reseñar un intercambio completado");
+            throw new ReseniaIntercambioIncompletoException();
         }
 
-        // 4. Una reseña por parte y por intercambio (la clave ya lo garantiza, pero así el error es claro)
         ReseniaId reseniaId = new ReseniaId(intercambio.getId(), solicitanteReviewer);
         if (reseniaRepository.existsById(reseniaId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Ya dejaste una reseña para este intercambio");
+            throw new ReseniaExistenteException();
         }
 
         Resenia resenia = new Resenia();
@@ -94,12 +93,26 @@ public class ReseniaServiceImpl implements ReseniaService {
         movimiento.setMonto(puntosResenia);
         movimientoPuntosReseniaRepository.save(movimiento);
 
-        // Si Usuario guarda el saldo en una columna, actualizalo acá, por ejemplo:
-        // reviewer.setSaldoTotal(reviewer.getSaldoTotal() + PUNTOS_POR_RESENIA);
+        reviewer.setSaldoTotal((int) (reviewer.getSaldoTotal() + puntosResenia));
+        usuarioRepository.save(reviewer);
 
-        // TODO (tarea 30.1): recalcular reputacionPromedio de la otra parte del intercambio.
+        calcularReputacion(intercambio,solicitanteReviewer);
 
         return reseniaMapper.toDTO(resenia);
 
+    }
+
+    private void calcularReputacion(Intercambio intercambio, boolean solicitanteReviewer){
+        String emailEvaluado = solicitanteReviewer
+                ? intercambio.getId().getPropietarioIdOfrecida()
+                : intercambio.getId().getPropietarioIdSolicitante();
+
+        Usuario evaluado = usuarioRepository.findById(emailEvaluado)
+                .orElseThrow(UsuarioNoEncontrado::new);
+
+        float promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
+
+        evaluado.setReputacionPromedio(promedio);
+        usuarioRepository.save(evaluado);
     }
 }
