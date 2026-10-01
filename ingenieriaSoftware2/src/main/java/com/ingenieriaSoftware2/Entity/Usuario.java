@@ -21,6 +21,7 @@ import java.util.*;
 @AllArgsConstructor
 public class Usuario implements UserDetails {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(unique = true, nullable = false)
     private UUID id;
 
