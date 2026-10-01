@@ -8,6 +8,7 @@ import com.ingenieriaSoftware2.Exception.Usuario.ContraseniaIncorrecta;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.UsuarioMapper;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
+import com.ingenieriaSoftware2.Security.PasswordConfig;
 import com.ingenieriaSoftware2.Service.Interfaces.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,7 +27,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     private UsuarioRepository usuarioRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private PasswordConfig passwordConfig;
 
     @Autowired
     private UsuarioMapper usuarioMapper;
@@ -53,11 +54,11 @@ public class UsuarioServiceImpl implements UsuarioService {
     public void cambiarContrasenia(CambiarContraseniaRequestDTO dto) {
         Usuario usuario = getUsuarioActual();
 
-        if (!passwordEncoder.matches(dto.contraseniaActual(), usuario.getContrasenia())) {
+        if (!passwordConfig.passwordEncoder().matches(dto.contraseniaActual(), usuario.getContrasenia())) {
             throw new ContraseniaIncorrecta();
         }
 
-        usuario.setContrasenia(passwordEncoder.encode(dto.contraseniaNueva()));
+        usuario.setContrasenia(passwordConfig.passwordEncoder().encode(dto.contraseniaNueva()));
         usuarioRepository.save(usuario);
     }
 }
