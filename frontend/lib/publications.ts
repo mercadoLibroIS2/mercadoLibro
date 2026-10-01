@@ -37,6 +37,12 @@ export interface PublicationChanges {
   comentario: string | null
 }
 
+export interface ManualBook {
+  isbn: string
+  titulo: string
+  autores: string
+}
+
 function requireEmail(email: string | undefined): string {
   if (!email) {
     throw new Error("No se pudo identificar al usuario autenticado.")
@@ -52,6 +58,33 @@ function validateChanges(changes: PublicationChanges): void {
   if (!Number.isSafeInteger(changes.valor_puntos_solicitado) || changes.valor_puntos_solicitado < 0) {
     throw new Error("El valor en puntos debe ser un entero mayor o igual a cero.")
   }
+}
+
+function normalizeIsbn(isbn: string): string {
+  const normalized = isbn.replace(/[\s-]/g, "").toUpperCase()
+  const isIsbn10 = /^\d{9}[\dX]$/.test(normalized)
+  const isIsbn13 = /^\d{13}$/.test(normalized)
+
+  if (!isIsbn10 && !isIsbn13) {
+    throw new Error("Ingresá un ISBN válido de 10 o 13 caracteres.")
+  }
+
+  if (isIsbn10) {
+    const sum = [...normalized].reduce((total, digit, index) => {
+      const value = digit === "X" ? 10 : Number(digit)
+      return total + value * (10 - index)
+    }, 0)
+    if (sum % 11 !== 0) throw new Error("El ISBN-10 no es válido.")
+  } else {
+    const sum = [...normalized.slice(0, 12)].reduce(
+      (total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3),
+      0
+    )
+    const checkDigit = (10 - (sum % 10)) % 10
+    if (checkDigit !== Number(normalized[12])) throw new Error("El ISBN-13 no es válido.")
+  }
+
+  return normalized
 }
 
 async function getAuthenticatedEmail(): Promise<string> {
@@ -141,6 +174,58 @@ export async function createPublication(
   })
 
   if (error) throw new Error(`No se pudo publicar el libro: ${error.message}`)
+}
+
+export async function createManualPublication(
+  book: ManualBook,
+  changes: PublicationChanges
+): Promise<CachedBook> {
+  validateChanges(changes)
+  const email = await getAuthenticatedEmail()
+  const isbn = normalizeIsbn(book.isbn)
+  const titulo = book.titulo.trim()
+  const autores = book.autores.trim()
+  if (!titulo) throw new Error("El título del libro es obligatorio.")
+  if (!autores) throw new Error("El autor del libro es obligatorio.")
+
+  const { data: existingBook, error: lookupError } = await supabase
+    .from("libro_metadata_cache")
+    .select("isbn, google_books_id, titulo, autores, puntuacion_externa")
+    .eq("isbn", isbn)
+    .maybeSingle()
+
+  if (lookupError) throw new Error(`No se pudo validar el ISBN: ${lookupError.message}`)
+
+  let cachedBook = existingBook
+  if (!cachedBook) {
+    const { data, error } = await supabase
+      .from("libro_metadata_cache")
+      .insert({
+        isbn,
+        google_books_id: `MANUAL:${isbn}`,
+        titulo,
+        autores,
+      })
+      .select("isbn, google_books_id, titulo, autores, puntuacion_externa")
+      .single()
+
+    if (error) throw new Error(`No se pudo guardar el libro manualmente: ${error.message}`)
+    cachedBook = data
+  }
+
+  const { error: publicationError } = await supabase.from("publicacion").insert({
+    isbn: cachedBook.isbn,
+    email_propietario_id: email,
+    estado_fisico: changes.estado_fisico,
+    valor_puntos_solicitado: changes.valor_puntos_solicitado,
+    comentario: changes.comentario,
+  })
+
+  if (publicationError) {
+    throw new Error(`No se pudo publicar el libro: ${publicationError.message}`)
+  }
+
+  return cachedBook
 }
 
 async function updateAvailablePublication(

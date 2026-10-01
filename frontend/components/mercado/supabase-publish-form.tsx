@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { ArrowLeft, BookPlus, Search } from "lucide-react"
-import { createPublication, searchCachedBooks, type BookCondition, type CachedBook } from "@/lib/publications"
+import {
+  createManualPublication,
+  createPublication,
+  searchCachedBooks,
+  type BookCondition,
+  type CachedBook,
+} from "@/lib/publications"
 import { useStore } from "./store"
 
 const CONDITIONS: { value: BookCondition; label: string }[] = [
@@ -15,9 +21,13 @@ const CONDITIONS: { value: BookCondition; label: string }[] = [
 
 export function SupabasePublishForm() {
   const { currentUser, setScreen, showToast } = useStore()
+  const [mode, setMode] = useState<"catalog" | "manual">("catalog")
   const [query, setQuery] = useState("")
   const [books, setBooks] = useState<CachedBook[]>([])
   const [selectedBook, setSelectedBook] = useState<CachedBook | null>(null)
+  const [manualIsbn, setManualIsbn] = useState("")
+  const [manualTitle, setManualTitle] = useState("")
+  const [manualAuthors, setManualAuthors] = useState("")
   const [condition, setCondition] = useState<BookCondition>("BUENO")
   const [points, setPoints] = useState("")
   const [comment, setComment] = useState("")
@@ -27,7 +37,7 @@ export function SupabasePublishForm() {
 
   useEffect(() => {
     const normalizedQuery = query.trim()
-    if (normalizedQuery.length < 2 || selectedBook) {
+    if (mode !== "catalog" || normalizedQuery.length < 2 || selectedBook) {
       setBooks([])
       setLoadingBooks(false)
       return
@@ -52,14 +62,14 @@ export function SupabasePublishForm() {
       active = false
       window.clearTimeout(timeout)
     }
-  }, [query, selectedBook])
+  }, [mode, query, selectedBook])
 
   if (!currentUser) return null
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const requestedPoints = Number(points)
-    if (!selectedBook) {
+    if (mode === "catalog" && !selectedBook) {
       setError("Seleccioná un libro de los resultados disponibles.")
       return
     }
@@ -71,12 +81,28 @@ export function SupabasePublishForm() {
     setSaving(true)
     setError(null)
     try {
-      await createPublication(selectedBook, {
+      const changes = {
         estado_fisico: condition,
         valor_puntos_solicitado: requestedPoints,
         comentario: comment.trim() || null,
-      })
-      showToast(`"${selectedBook.titulo}" se publicó con éxito.`)
+      }
+      let publishedTitle: string
+      if (mode === "manual") {
+        const publishedBook = await createManualPublication({
+            isbn: manualIsbn,
+            titulo: manualTitle,
+            autores: manualAuthors,
+          }, changes)
+        publishedTitle = publishedBook.titulo
+      } else {
+        if (!selectedBook) {
+          setError("Seleccioná un libro de los resultados disponibles.")
+          return
+        }
+        await createPublication(selectedBook, changes)
+        publishedTitle = selectedBook.titulo
+      }
+      showToast(`"${publishedTitle}" se publicó con éxito.`)
       setScreen("perfil")
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo publicar el libro.")
@@ -104,56 +130,132 @@ export function SupabasePublishForm() {
 
       <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-stone-200 bg-white p-4 shadow-xs sm:p-7">
         <div>
-          <label htmlFor="cached-book-search" className="mb-1.5 block text-sm font-bold text-stone-800">
-            Buscar libro *
-          </label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <input
-              id="cached-book-search"
-              type="search"
-              value={selectedBook ? selectedBook.titulo : query}
-              onChange={(event) => {
-                setSelectedBook(null)
-                setQuery(event.target.value)
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Método para elegir el libro">
+            <button
+              type="button"
+              aria-pressed={mode === "catalog"}
+              onClick={() => {
+                setMode("catalog")
                 setError(null)
               }}
-              placeholder="Escribí al menos 2 letras del título"
-              autoComplete="off"
-              className="w-full rounded-xl border border-stone-200 bg-white py-3 pl-10 pr-3 text-base text-stone-900 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100"
-            />
+              className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "catalog" ? "bg-amber-800 text-white" : "border border-stone-200 text-stone-700"}`}
+            >
+              Buscar en catálogo
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === "manual"}
+              onClick={() => {
+                setMode("manual")
+                setSelectedBook(null)
+                setError(null)
+              }}
+              className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "manual" ? "bg-rose-700 text-white" : "border border-stone-200 text-stone-700"}`}
+            >
+              Carga manual temporal
+            </button>
           </div>
-          <p className="mt-1 text-xs text-stone-500">
-            Solo podés seleccionar libros ya incorporados desde Google Books al catálogo.
-          </p>
-          {loadingBooks && <p className="mt-2 text-sm text-stone-500">Buscando…</p>}
-          {!loadingBooks && query.trim().length >= 2 && !selectedBook && books.length === 0 && (
-            <p className="mt-2 text-sm text-stone-500">No hay coincidencias disponibles. La carga manual no está habilitada.</p>
-          )}
-          {books.length > 0 && !selectedBook && (
-            <ul className="mt-2 max-h-64 divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200">
-              {books.map((book) => (
-                <li key={book.isbn}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedBook(book)
-                      setQuery(book.titulo)
-                      setBooks([])
-                    }}
-                    className="w-full px-3 py-2.5 text-left hover:bg-amber-50"
-                  >
-                    <span className="block font-semibold text-stone-900">{book.titulo}</span>
-                    <span className="block text-sm text-stone-600">{book.autores || "Autor no disponible"}</span>
-                    <span className="block text-xs text-stone-500">ISBN {book.isbn}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+
+          {mode === "manual" ? (
+            <div className="space-y-4">
+              <p role="note" className="rounded-xl border-2 border-red-600 bg-red-50 px-4 py-3 text-sm font-extrabold tracking-wide text-red-700">
+                TEMPORAL HASTA IMPLEMENTAR GOOGLE BOOKS
+              </p>
+              <p className="text-sm text-stone-600">
+                Los datos manuales se guardan en el catálogo bibliográfico local para poder vincular la publicación.
+              </p>
+              <label htmlFor="manual-isbn" className="block text-sm font-bold text-stone-800">
+                ISBN *
+                <input
+                  id="manual-isbn"
+                  type="text"
+                  required={mode === "manual"}
+                  value={manualIsbn}
+                  onChange={(event) => setManualIsbn(event.target.value)}
+                  placeholder="9780306406157"
+                  autoComplete="off"
+                  className="mt-1.5 w-full rounded-xl border border-stone-200 bg-white p-3 text-base font-normal"
+                />
+              </label>
+              <label htmlFor="manual-title" className="block text-sm font-bold text-stone-800">
+                Título *
+                <input
+                  id="manual-title"
+                  type="text"
+                  required={mode === "manual"}
+                  maxLength={255}
+                  value={manualTitle}
+                  onChange={(event) => setManualTitle(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-stone-200 bg-white p-3 text-base font-normal"
+                />
+              </label>
+              <label htmlFor="manual-authors" className="block text-sm font-bold text-stone-800">
+                Autor *
+                <input
+                  id="manual-authors"
+                  type="text"
+                  required={mode === "manual"}
+                  maxLength={255}
+                  value={manualAuthors}
+                  onChange={(event) => setManualAuthors(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-stone-200 bg-white p-3 text-base font-normal"
+                />
+              </label>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="cached-book-search" className="mb-1.5 block text-sm font-bold text-stone-800">
+                Buscar libro *
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                <input
+                  id="cached-book-search"
+                  type="search"
+                  value={selectedBook ? selectedBook.titulo : query}
+                  onChange={(event) => {
+                    setSelectedBook(null)
+                    setQuery(event.target.value)
+                    setError(null)
+                  }}
+                  placeholder="Escribí al menos 2 letras del título"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-stone-200 bg-white py-3 pl-10 pr-3 text-base text-stone-900 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100"
+                />
+              </div>
+              <p className="mt-1 text-xs text-stone-500">
+                Solo podés seleccionar libros ya incorporados al catálogo.
+              </p>
+              {loadingBooks && <p className="mt-2 text-sm text-stone-500">Buscando…</p>}
+              {!loadingBooks && query.trim().length >= 2 && !selectedBook && books.length === 0 && (
+                <p className="mt-2 text-sm text-stone-500">No se encontraron libros en el catálogo.</p>
+              )}
+              {books.length > 0 && !selectedBook && (
+                <ul className="mt-2 max-h-64 divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200">
+                  {books.map((book) => (
+                    <li key={book.isbn}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBook(book)
+                          setQuery(book.titulo)
+                          setBooks([])
+                        }}
+                        className="w-full px-3 py-2.5 text-left hover:bg-amber-50"
+                      >
+                        <span className="block font-semibold text-stone-900">{book.titulo}</span>
+                        <span className="block text-sm text-stone-600">{book.autores || "Autor no disponible"}</span>
+                        <span className="block text-xs text-stone-500">ISBN {book.isbn}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
 
-        {selectedBook && (
+        {mode === "catalog" && selectedBook && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             Libro seleccionado: <strong>{selectedBook.titulo}</strong>
             {selectedBook.autores ? ` — ${selectedBook.autores}` : ""}
@@ -209,7 +311,7 @@ export function SupabasePublishForm() {
         <div className="flex justify-end border-t border-stone-100 pt-4">
           <button
             type="submit"
-            disabled={saving || !selectedBook}
+            disabled={saving || (mode === "catalog" && !selectedBook)}
             className="flex items-center gap-2 rounded-xl bg-amber-800 px-5 py-2.5 font-bold text-white hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <BookPlus className="h-4 w-4" />
