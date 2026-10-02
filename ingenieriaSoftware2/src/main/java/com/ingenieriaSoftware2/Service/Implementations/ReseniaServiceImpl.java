@@ -11,6 +11,7 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Eventos.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
 import com.ingenieriaSoftware2.Exception.Resenia.NoInvolucradoException;
@@ -22,6 +23,7 @@ import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +47,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Autowired
     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     private Long puntosResenia = 50L;
 
@@ -97,6 +102,11 @@ public class ReseniaServiceImpl implements ReseniaService {
         usuarioRepository.save(reviewer);
 
         calcularReputacion(intercambio,solicitanteReviewer);
+
+        String emailEvaluado = solicitanteReviewer
+                ? intercambio.getId().getPropietarioIdOfrecida()
+                : intercambio.getId().getPropietarioIdSolicitante();
+        eventPublisher.publishEvent(new ReseniaCreadaEvent(emailEvaluado, dto.calificacion()));
 
         return reseniaMapper.toDTO(resenia);
 
