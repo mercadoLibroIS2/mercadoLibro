@@ -13,9 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -36,10 +34,10 @@ public class ReseniaController {
     private SecurityUtils securityUtils;
 
     @PostMapping
-    public ResponseEntity<ReseniaResponseDTO> crearResenia(
-            @RequestBody ReseniaRequestDTO dto,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        ReseniaResponseDTO response = reseniaService.crearResenia(dto, UUID.fromString(userDetails.getUsername()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<ReseniaResponseDTO> crearResenia(@Valid @RequestBody ReseniaRequestDTO dto) {
+        // El usuario sale del token, nunca del body ni de la URL
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado(); // ajustá al nombre real del método
+        ReseniaResponseDTO creada = reseniaService.crearResenia(dto, usuarioId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
     }
 }
