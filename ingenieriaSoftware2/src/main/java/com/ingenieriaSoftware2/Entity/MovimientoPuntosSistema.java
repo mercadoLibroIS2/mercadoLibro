@@ -19,21 +19,35 @@ public class MovimientoPuntosSistema {
     private MovimientoPuntosSistemaId movimientoPuntosSistemaId;
 
     @Positive
-    @Column(name = "monto", nullable = false, columnDefinition = "bigint check (monto > 0)")
+    @Column(
+            name = "monto",
+            nullable = false,
+            columnDefinition = "bigint check (monto > 0)"
+    )
     private Long monto;
 
-    // FK compuesta a evento_sistema (parte 1 de la PK)
-    @MapsId("eventoSistemaId")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
-            @JoinColumn(name = "tipo_evento",  referencedColumnName = "tipo_evento_sistema"),
-            @JoinColumn(name = "fecha_evento", referencedColumnName = "fecha_evento")
+            @JoinColumn(
+                    name = "tipo_evento",
+                    referencedColumnName = "tipo_evento_sistema",
+                    insertable = false,
+                    updatable = false
+            ),
+            @JoinColumn(
+                    name = "fecha_evento",
+                    referencedColumnName = "fecha_evento",
+                    insertable = false,
+                    updatable = false
+            )
     })
     private EventoSistema eventoSistema;
 
-    // FK a usuario (parte 2 de la PK)
-    @MapsId("usuarioId")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_usuario")
+    @JoinColumn(
+            name = "id_usuario",
+            insertable = false,
+            updatable = false
+    )
     private Usuario usuario;
 }
