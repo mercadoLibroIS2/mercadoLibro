@@ -25,6 +25,8 @@ public class Notificacion {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    private String mensaje;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "email_usuario", nullable = false)
     private Usuario usuario;

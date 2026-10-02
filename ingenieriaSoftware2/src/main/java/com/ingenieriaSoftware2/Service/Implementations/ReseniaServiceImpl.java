@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosReseniaId;
 import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
@@ -10,14 +11,19 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Eventos.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+import com.ingenieriaSoftware2.Exception.Resenia.NoInvolucradoException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaExistenteException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaIntercambioIncompletoException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
 import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -41,6 +47,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Autowired
     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     private Long puntosResenia = 50L;
 
@@ -78,30 +87,16 @@ public class ReseniaServiceImpl implements ReseniaService {
             solicitanteReviewer = false;
 
         } else {
-
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Solo las partes del intercambio pueden reseñarlo"
-            );
+            throw new NoInvolucradoException();
         }
 
         if (intercambio.getEstado() != EstadoIntercambio.COMPLETADO) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Solo se puede reseñar un intercambio completado"
-            );
+            throw new ReseniaIntercambioIncompletoException();
         }
 
-        ReseniaId reseniaId =
-                new ReseniaId(intercambio.getId(), solicitanteReviewer);
-
+        ReseniaId reseniaId = new ReseniaId(intercambio.getId(), solicitanteReviewer);
         if (reseniaRepository.existsById(reseniaId)) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Ya dejaste una reseña para este intercambio"
-            );
+            throw new ReseniaExistenteException();
         }
 
         Resenia resenia = new Resenia();
@@ -136,10 +131,31 @@ public class ReseniaServiceImpl implements ReseniaService {
 
         movimientoPuntosReseniaRepository.save(movimiento);
 
-        // P3 será responsable de modificar saldoTotal/saldoReservado.
+        reviewer.setSaldoTotal((int) (reviewer.getSaldoTotal() + puntosResenia));
+        usuarioRepository.save(reviewer);
 
-        // TODO: recalcular reputacionPromedio de la otra parte del intercambio.
+        calcularReputacion(intercambio,solicitanteReviewer);
+
+        String emailEvaluado = solicitanteReviewer
+                ? intercambio.getId().getPropietarioIdOfrecida()
+                : intercambio.getId().getPropietarioIdSolicitante();
+        eventPublisher.publishEvent(new ReseniaCreadaEvent(emailEvaluado, dto.calificacion()));
 
         return reseniaMapper.toDTO(resenia);
+
+    }
+
+    private void calcularReputacion(Intercambio intercambio, boolean solicitanteReviewer){
+        String emailEvaluado = solicitanteReviewer
+                ? intercambio.getId().getPropietarioIdOfrecida()
+                : intercambio.getId().getPropietarioIdSolicitante();
+
+        Usuario evaluado = usuarioRepository.findById(UUID.fromString(emailEvaluado))
+                .orElseThrow(UsuarioNoEncontrado::new);
+
+        float promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
+
+        evaluado.setReputacionPromedio(promedio);
+        usuarioRepository.save(evaluado);
     }
 }
