@@ -1,5 +1,8 @@
 package com.ingenieriaSoftware2.Mapper;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
 import com.ingenieriaSoftware2.Entity.Resenia;
@@ -8,8 +11,6 @@ import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Repository.IntercambioRepository;
 import com.ingenieriaSoftware2.Repository.ReseniaRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 @Component
 public class ReseniaMapper {
@@ -42,7 +43,7 @@ public class ReseniaMapper {
     public ReseniaResponseDTO toDTO(Resenia resenia){
         ReseniaResponseDTO dto = new ReseniaResponseDTO(
                 resenia.getId(),
-                resenia.getIntercambio().getId(),
+                resenia.getIntercambio().getIntercambioId(),
                 resenia.getAutor().getId(),
                 resenia.getCalificado().getId(),
                 resenia.getCalificacion(),

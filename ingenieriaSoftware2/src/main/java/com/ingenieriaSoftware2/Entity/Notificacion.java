@@ -1,15 +1,25 @@
 package com.ingenieriaSoftware2.Entity;
 
+import java.util.UUID;
+
 import com.ingenieriaSoftware2.Enums.CanalNotificacion;
 import com.ingenieriaSoftware2.Enums.EstadoNotificacion;
 import com.ingenieriaSoftware2.Enums.TipoNotificacion;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
+import jakarta.persistence.ManyToOne;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.UUID;
 
 @Entity
 @Getter
@@ -25,8 +35,13 @@ public class Notificacion {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @ManyToOne
-    @JoinColumn(name = "intercambio_id", nullable = true)
+        @ManyToOne
+        @JoinColumns({
+            @JoinColumn(name = "isbn_solicitante", referencedColumnName = "isbn_solicitante"),
+            @JoinColumn(name = "isbn_ofrecida", referencedColumnName = "isbn_ofrecida"),
+            @JoinColumn(name = "id_solicitante", referencedColumnName = "id_solicitante"),
+            @JoinColumn(name = "id_ofrecido", referencedColumnName = "id_ofrecido")
+        })
     private Intercambio intercambio;
 
     @ManyToOne

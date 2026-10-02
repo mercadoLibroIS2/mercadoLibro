@@ -1,15 +1,13 @@
 package com.ingenieriaSoftware2.DTO.Request;
 
-import com.ingenieriaSoftware2.Entity.Intercambio;
-import com.ingenieriaSoftware2.Entity.Usuario;
-import com.ingenieriaSoftware2.Enums.TipoMovimiento;
-import jakarta.persistence.*;
-
 import java.util.UUID;
+
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
+import com.ingenieriaSoftware2.Enums.TipoMovimiento;
 
 public record MovimientoPuntosRequestDTO(
         UUID usuarioID,
-        UUID intercambioID,
+        IntercambioId intercambioID,
         TipoMovimiento tipo,
         Integer cantidad
 ) {

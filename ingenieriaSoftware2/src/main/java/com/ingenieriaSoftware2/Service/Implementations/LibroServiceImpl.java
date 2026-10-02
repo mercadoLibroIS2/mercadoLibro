@@ -1,7 +1,16 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
 import com.ingenieriaSoftware2.DTO.Request.LibroRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
@@ -10,14 +19,8 @@ import com.ingenieriaSoftware2.Mapper.LibroMapper;
 import com.ingenieriaSoftware2.Repository.LibroRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.LibroService;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.UUID;
+import jakarta.transaction.Transactional;
 
 @Service
 public class LibroServiceImpl implements LibroService {
@@ -77,7 +80,7 @@ public class LibroServiceImpl implements LibroService {
     }
 
     @Override
-    public void bloquearLibro(UUID libroId, UUID intercambioId) {
+    public void bloquearLibro(UUID libroId, IntercambioId intercambioId) {
 
     }
 

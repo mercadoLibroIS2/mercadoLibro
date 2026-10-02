@@ -1,10 +1,11 @@
 package com.ingenieriaSoftware2.DTO.Response;
 
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import java.util.UUID;
 
 public record ReseniaResponseDTO(
         UUID id,
-        UUID intercambioId,
+        IntercambioId intercambioId,
         UUID autorId,
         UUID calificadoId,
         float calificacion,

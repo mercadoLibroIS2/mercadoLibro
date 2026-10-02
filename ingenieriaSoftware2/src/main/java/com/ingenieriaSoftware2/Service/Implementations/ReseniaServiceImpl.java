@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
 import com.ingenieriaSoftware2.Entity.Intercambio;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.MovimientoPuntos;
 import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
@@ -43,7 +44,7 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Transactional
     @Override
-    public ReseniaResponseDTO crearResenia(UUID autorId, UUID calificadoId, UUID intercambioId, float calificacion, String comentario, LocalDate fecha) {
+    public ReseniaResponseDTO crearResenia(UUID autorId, UUID calificadoId, IntercambioId intercambioId, float calificacion, String comentario, LocalDate fecha) {
 
         if (calificacion>5||calificacion<0||comentario.length()>500){
             throw new AtributoFueraDeRangoException();

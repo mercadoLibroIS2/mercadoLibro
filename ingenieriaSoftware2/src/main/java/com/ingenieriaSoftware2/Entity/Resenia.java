@@ -23,8 +23,13 @@ public class Resenia {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne
-    @JoinColumn(name = "intercambio_id", nullable = false)
+        @ManyToOne
+        @JoinColumns({
+            @JoinColumn(name = "isbn_solicitante", referencedColumnName = "isbn_solicitante", nullable = false),
+            @JoinColumn(name = "isbn_ofrecida", referencedColumnName = "isbn_ofrecida", nullable = false),
+            @JoinColumn(name = "id_solicitante", referencedColumnName = "id_solicitante", nullable = false),
+            @JoinColumn(name = "id_ofrecido", referencedColumnName = "id_ofrecido", nullable = false)
+        })
     private Intercambio intercambio;
 
     @ManyToOne

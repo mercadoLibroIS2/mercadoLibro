@@ -60,7 +60,10 @@ CREATE TABLE IF NOT EXISTS cadena_participantes (
 
 -- TABLA: intercambio
 CREATE TABLE IF NOT EXISTS intercambio (
-    id UUID PRIMARY KEY,
+    isbn_solicitante VARCHAR(255) NOT NULL REFERENCES libro(isbn),
+    isbn_ofrecida VARCHAR(255) NOT NULL REFERENCES libro(isbn),
+    id_solicitante UUID NOT NULL REFERENCES usuario(id),
+    id_ofrecido UUID NOT NULL REFERENCES usuario(id),
     puntos_comprometidos INTEGER,
     tipo VARCHAR(50),
     estado VARCHAR(50),
@@ -68,41 +71,58 @@ CREATE TABLE IF NOT EXISTS intercambio (
     libro_ofrecido_id UUID REFERENCES libro(id),
     prestador_id UUID NOT NULL REFERENCES usuario(id),
     receptor_id UUID NOT NULL REFERENCES usuario(id),
-    cadena_id UUID REFERENCES cadena_intercambio(id)
+    cadena_id UUID REFERENCES cadena_intercambio(id),
+    PRIMARY KEY (isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
 );
 
 -- TABLA: movimiento_puntos
 CREATE TABLE IF NOT EXISTS movimiento_puntos (
     id UUID PRIMARY KEY,
     usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-    intercambio_id UUID NOT NULL REFERENCES intercambio(id) ON DELETE CASCADE,
+    isbn_solicitante VARCHAR(255) NOT NULL,
+    isbn_ofrecida VARCHAR(255) NOT NULL,
+    id_solicitante UUID NOT NULL,
+    id_ofrecido UUID NOT NULL,
     tipo VARCHAR(50) NOT NULL,
-    cantidad INTEGER NOT NULL
+    cantidad INTEGER NOT NULL,
+    FOREIGN KEY (isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
+        REFERENCES intercambio(isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
+        ON DELETE CASCADE
 );
 
 -- TABLA: resenia
 CREATE TABLE IF NOT EXISTS resenia (
     id UUID PRIMARY KEY,
-    intercambio_id UUID NOT NULL REFERENCES intercambio(id),
+    isbn_solicitante VARCHAR(255) NOT NULL,
+    isbn_ofrecida VARCHAR(255) NOT NULL,
+    id_solicitante UUID NOT NULL,
+    id_ofrecido UUID NOT NULL,
     autor UUID NOT NULL REFERENCES usuario(id),
     calificado UUID NOT NULL REFERENCES usuario(id),
     calificacion REAL NOT NULL,
     comentario VARCHAR(500),
-    fecha DATE DEFAULT CURRENT_DATE
+    fecha DATE DEFAULT CURRENT_DATE,
+    FOREIGN KEY (isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
+        REFERENCES intercambio(isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
 );
 
 -- TABLA: notificacion
 CREATE TABLE IF NOT EXISTS notificacion (
     id UUID PRIMARY KEY,
     usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-    intercambio_id UUID REFERENCES intercambio(id),
+    isbn_solicitante VARCHAR(255),
+    isbn_ofrecida VARCHAR(255),
+    id_solicitante UUID,
+    id_ofrecido UUID,
     resenia_id UUID REFERENCES resenia(id),
     movimiento_puntos_id UUID REFERENCES movimiento_puntos(id),
     tipo VARCHAR(50) NOT NULL,
     canal VARCHAR(50) NOT NULL,
     asunto VARCHAR(255) NOT NULL,
     mensaje VARCHAR(1000) NOT NULL,
-    estado VARCHAR(50) NOT NULL DEFAULT 'PENDIENTE'
+    estado VARCHAR(50) NOT NULL DEFAULT 'PENDIENTE',
+    FOREIGN KEY (isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
+        REFERENCES intercambio(isbn_solicitante, isbn_ofrecida, id_solicitante, id_ofrecido)
 );
 
 -- TABLA: oferta_intercambio

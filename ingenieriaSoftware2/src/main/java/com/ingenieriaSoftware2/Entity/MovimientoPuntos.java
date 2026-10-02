@@ -1,15 +1,27 @@
 package com.ingenieriaSoftware2.Entity;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
-import jakarta.persistence.*;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 @Entity
 @NoArgsConstructor
@@ -25,8 +37,13 @@ public class MovimientoPuntos {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @ManyToOne
-    @JoinColumn(name = "intercambio_id", nullable = false)
+        @ManyToOne
+        @JoinColumns({
+            @JoinColumn(name = "isbn_solicitante", referencedColumnName = "isbn_solicitante", nullable = false),
+            @JoinColumn(name = "isbn_ofrecida", referencedColumnName = "isbn_ofrecida", nullable = false),
+            @JoinColumn(name = "id_solicitante", referencedColumnName = "id_solicitante", nullable = false),
+            @JoinColumn(name = "id_ofrecido", referencedColumnName = "id_ofrecido", nullable = false)
+        })
     private Intercambio intercambio;
 
     @Enumerated(EnumType.STRING)
