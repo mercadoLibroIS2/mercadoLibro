@@ -2,7 +2,6 @@ package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
-import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosReseniaId;
 import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
@@ -11,19 +10,14 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
-import com.ingenieriaSoftware2.Eventos.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
-import com.ingenieriaSoftware2.Exception.Resenia.NoInvolucradoException;
-import com.ingenieriaSoftware2.Exception.Resenia.ReseniaExistenteException;
-import com.ingenieriaSoftware2.Exception.Resenia.ReseniaIntercambioIncompletoException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
 import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,9 +41,6 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Autowired
     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
 
     private Long puntosResenia = 50L;
 
