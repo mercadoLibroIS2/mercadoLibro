@@ -12,6 +12,7 @@ import {
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
+import { MyPublications } from "./my-publications"
 import type { PointMovementType } from "@/lib/mercado-types"
 
 type ProfileTab = "publicaciones" | "resenas" | "movimientos"
@@ -41,6 +42,7 @@ export function ProfileScreen() {
 
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
   const [editing, setEditing] = useState(false)
+  const [publicationCount, setPublicationCount] = useState(0)
 
   const isOwnProfile = screen === "perfil" || selectedProfileUserId === currentUser?.id
   const targetUser = isOwnProfile
@@ -179,7 +181,7 @@ export function ProfileScreen() {
           }`}
         >
           <BookOpen className="h-3.5 w-3.5" />
-          <span>Publicaciones ({userBooks.length})</span>
+          <span>Publicaciones ({isOwnProfile ? publicationCount : userBooks.length})</span>
         </button>
 
         <button
@@ -213,7 +215,9 @@ export function ProfileScreen() {
       <div className="mt-3 sm:mt-6">
         {tab === "publicaciones" && (
           <div>
-            {userBooks.length > 0 ? (
+            {isOwnProfile ? (
+              <MyPublications onCountChange={setPublicationCount} />
+            ) : userBooks.length > 0 ? (
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {userBooks.map((book) => (
                   <BookCard key={book.id} book={book} />
@@ -226,19 +230,8 @@ export function ProfileScreen() {
                   Sin libros publicados todavía
                 </p>
                 <p className="mt-1 text-sm md:text-base text-stone-500 max-w-sm">
-                  {isOwnProfile
-                    ? "Publicá tu primer libro para comenzar a recibir solicitudes."
-                    : "Este usuario aún no tiene publicaciones activas."}
+                  Este usuario aún no tiene publicaciones activas.
                 </p>
-                {isOwnProfile && (
-                  <button
-                    onClick={() => setScreen("publicar")}
-                    className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-800 px-3.5 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Publicar libro
-                  </button>
-                )}
               </div>
             )}
           </div>

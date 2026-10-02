@@ -11,7 +11,7 @@ import { RegisterScreen } from "./register-screen"
 import { WelcomeScreen } from "./welcome-screen"
 import { FeedScreen } from "./feed-screen"
 import { ProfileScreen } from "./profile-screen"
-import { PublishForm } from "./publish-form"
+import { SupabasePublishForm } from "./supabase-publish-form"
 import { TradesScreen } from "./trades-screen"
 import { TrackerScreen } from "./tracker-screen"
 import { ChainsView } from "./chains-view"
@@ -53,7 +53,7 @@ function AuthedRouter() {
     case "perfil_publico":
       return <ProfileScreen />
     case "publicar":
-      return <PublishForm />
+      return <SupabasePublishForm />
     default:
       return <FeedScreen />
   }
