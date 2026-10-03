@@ -59,7 +59,7 @@ public class ReseniaServiceImpl implements ReseniaService {
             throw new AtributoFueraDeRangoException();
         }
 
-        Usuario usuario = usuarioRepository.findById(String.valueOf(usuarioId)).orElseThrow(()-> new UsuarioNoEncontrado());
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
         String email = usuario.getEmail();
         Intercambio intercambio = intercambioRepository.findById(dto.intercambioId()).orElseThrow(()-> new IntercambioNoExiste());
         boolean solicitanteReviewer;
@@ -88,7 +88,7 @@ public class ReseniaServiceImpl implements ReseniaService {
         reseniaRepository.save(resenia);
 
         // 6. Recompensa en puntos para quien reseña
-        Usuario reviewer = usuarioRepository.findById(email).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario reviewer = usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
 
         MovimientoPuntosResenia movimiento = new MovimientoPuntosResenia();
         movimiento.setMovimientoPuntosReseniaId(
@@ -117,7 +117,7 @@ public class ReseniaServiceImpl implements ReseniaService {
                 ? intercambio.getId().getPropietarioIdOfrecida()
                 : intercambio.getId().getPropietarioIdSolicitante();
 
-        Usuario evaluado = usuarioRepository.findById(emailEvaluado)
+        Usuario evaluado = usuarioRepository.findByEmail(emailEvaluado)
                 .orElseThrow(UsuarioNoEncontrado::new);
 
         float promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);

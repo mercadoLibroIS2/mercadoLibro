@@ -28,7 +28,7 @@ public class NotificacionServiceImpl implements NotificacionService {
     @Override
     @Transactional
     public void crear(String emailDestinatario, TipoNotificacion tipo, String mensaje) {
-        Usuario usuario = usuarioRepository.findById(emailDestinatario).orElseThrow(()-> new UsuarioNoEncontrado());
+        Usuario usuario = usuarioRepository.findByEmail(emailDestinatario).orElseThrow(()-> new UsuarioNoEncontrado());
 
         Notificacion notificacion = new Notificacion();
         notificacion.setUsuario(usuario);
@@ -68,6 +68,6 @@ public class NotificacionServiceImpl implements NotificacionService {
     }
 
     private String obtenerEmail(UUID usuarioId) {
-        return usuarioRepository.findById(String.valueOf(usuarioId)).orElseThrow(()-> new UsuarioNoEncontrado()).getEmail();
+        return usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado()).getEmail();
     }
 }
