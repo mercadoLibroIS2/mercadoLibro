@@ -1,21 +1,9 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
-import com.ingenieriaSoftware2.DTO.Response.NotificacionResponseDTO;
-import com.ingenieriaSoftware2.Entity.Notificacion;
-import com.ingenieriaSoftware2.Entity.Usuario;
-import com.ingenieriaSoftware2.Enums.TipoNotificacion;
-import com.ingenieriaSoftware2.Exception.Notificacion.NotificacionNoEncontradaException;
-import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Repository.NotificacionRepository;
-import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-
-import java.util.UUID;
 
 @Service
 public class NotificacionServiceImpl implements NotificacionService {
