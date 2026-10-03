@@ -1,14 +1,11 @@
 package com.ingenieriaSoftware2.DTO.Response;
 
-import com.ingenieriaSoftware2.Enums.TipoMovimiento;
-
-import java.util.UUID;
+import java.time.LocalDateTime;
 
 public record MovimientoPuntosResponseDTO(
-        UUID id,
-        UUID usuarioID,
-        UUID intercambioID,
-        TipoMovimiento tipo,
-        Integer cantidad
+        String tipo,
+        Long monto,
+        String origen,
+        LocalDateTime fecha
 ) {
 }

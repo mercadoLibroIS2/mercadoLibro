@@ -121,3 +121,135 @@ CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
     libro_id UUID NOT NULL REFERENCES libro(id) ON DELETE CASCADE,
     PRIMARY KEY (oferta_id, libro_id)
 );
+
+
+-- =======================================================
+-- P3 - EVENTO SISTEMA
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS evento_sistema (
+    tipo_evento_sistema VARCHAR(50) NOT NULL,
+    fecha_evento TIMESTAMP NOT NULL,
+    descripcion VARCHAR(255),
+
+    PRIMARY KEY (
+        tipo_evento_sistema,
+        fecha_evento
+    )
+);
+
+-- =======================================================
+-- P3 - MOVIMIENTO PUNTOS SISTEMA
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS movimiento_puntos_sistema (
+    tipo_evento VARCHAR(50) NOT NULL,
+    fecha_evento TIMESTAMP NOT NULL,
+    id_usuario UUID NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    monto BIGINT NOT NULL CHECK (monto > 0),
+
+    PRIMARY KEY (
+        tipo_evento,
+        fecha_evento,
+        id_usuario,
+        tipo
+    ),
+
+    CONSTRAINT fk_movimiento_evento
+        FOREIGN KEY (tipo_evento, fecha_evento)
+        REFERENCES evento_sistema (
+            tipo_evento_sistema,
+            fecha_evento
+        ),
+
+    CONSTRAINT fk_movimiento_usuario
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id)
+);
+
+-- =====================================================
+-- MOVIMIENTOS DE PUNTOS - COMPRA
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS movimiento_puntos_compra (
+    comprador_id VARCHAR(255) NOT NULL,
+    isbn VARCHAR(255) NOT NULL,
+    propietario_id VARCHAR(255) NOT NULL,
+    hora_de_publicacion TIMESTAMP NOT NULL,
+    id_usuario UUID NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    monto BIGINT NOT NULL CHECK (monto > 0),
+
+    PRIMARY KEY (
+        comprador_id,
+        isbn,
+        propietario_id,
+        hora_de_publicacion,
+        id_usuario,
+        tipo
+    )
+);
+
+
+-- =====================================================
+-- MOVIMIENTOS DE PUNTOS - INTERCAMBIO
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
+    isbn_solicitante VARCHAR(255) NOT NULL,
+    propietario_id_solicitante VARCHAR(255) NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
+
+    isbn_ofrecida VARCHAR(255) NOT NULL,
+    propietario_id_ofrecida VARCHAR(255) NOT NULL,
+    hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
+
+    id_usuario UUID NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    monto BIGINT NOT NULL CHECK (monto > 0),
+
+    PRIMARY KEY (
+        isbn_solicitante,
+        propietario_id_solicitante,
+        hora_de_publicacion_solicitante,
+        isbn_ofrecida,
+        propietario_id_ofrecida,
+        hora_de_publicacion_ofrecida,
+        id_usuario,
+        tipo
+    )
+);
+
+
+-- =====================================================
+-- MOVIMIENTOS DE PUNTOS - RESEÑA
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS movimiento_puntos_resenia (
+    isbn_solicitante VARCHAR(255) NOT NULL,
+    propietario_id_solicitante VARCHAR(255) NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
+
+    isbn_ofrecida VARCHAR(255) NOT NULL,
+    propietario_id_ofrecida VARCHAR(255) NOT NULL,
+    hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
+
+    solicitante_reviewer BOOLEAN NOT NULL,
+
+    id_usuario UUID NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    monto BIGINT NOT NULL CHECK (monto > 0),
+
+    PRIMARY KEY (
+        isbn_solicitante,
+        propietario_id_solicitante,
+        hora_de_publicacion_solicitante,
+        isbn_ofrecida,
+        propietario_id_ofrecida,
+        hora_de_publicacion_ofrecida,
+        solicitante_reviewer,
+        id_usuario,
+        tipo
+    )
+);
