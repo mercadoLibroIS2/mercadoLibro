@@ -1,22 +1,19 @@
 package com.ingenieriaSoftware2.DTO.Response;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import com.ingenieriaSoftware2.Entity.Ids.CompraId;
+import com.ingenieriaSoftware2.Enums.EstadoCompra;
+
+import java.time.Instant;
+import java.util.UUID;
 
 public record CompraResponseDTO(
-        Long id,
-
-        Long libroId,
-        String tituloLibro,
-
-        Long compradorId,
-        String nombreComprador,
-
-        Long vendedorId,
-        String nombreVendedor,
-
-        BigDecimal precioUnitario,
-        int cantidad,
-        BigDecimal total
+        CompraId id,
+        UUID compradorId,
+        UUID propietarioId,
+        UUID libroId,
+        String isbn,
+        Integer puntos,
+        Instant timestamp,
+        EstadoCompra estado
 ) {
 }

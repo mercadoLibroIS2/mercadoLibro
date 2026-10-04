@@ -1,7 +1,17 @@
 package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.CompraId;
-import jakarta.persistence.*;
+import com.ingenieriaSoftware2.Enums.EstadoCompra;
+import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapsId;
+import jakarta.persistence.OneToMany;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -20,17 +30,17 @@ public class Compra {
     @EmbeddedId
     private CompraId id;
 
-    @MapsId("compradorEmail")        // antes: "compradorId"
+    @MapsId("compradorEmail")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "comprador_email")
     private Usuario comprador;
 
-    @ManyToOne
     @MapsId("isbn")
-    @JoinColumn(name = "isbn")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "isbn", referencedColumnName = "isbn")
     private Libro libro;
 
-    @MapsId("propietarioEmail")      // antes: "propietarioId"
+    @MapsId("propietarioEmail")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "propietario_email")
     private Usuario propietario;
@@ -38,6 +48,10 @@ public class Compra {
     private Integer puntos;
 
     private Instant timestamp;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EstadoCompra estado;
 
     @OneToMany(mappedBy = "compra")
     private List<MovimientoPuntosCompra> movimientosPuntos = new ArrayList<>();
