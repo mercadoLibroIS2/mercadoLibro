@@ -1,7 +1,6 @@
 package com.ingenieriaSoftware2.Exception;
 
 import com.ingenieriaSoftware2.Exception.Compra.CompraOperacionException;
-import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioOperacionException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioYaExiste;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,11 +29,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CompraOperacionException.class)
     public ResponseEntity<Map<String, Object>> handleCompraOperacion(CompraOperacionException e) {
         return response(HttpStatus.BAD_REQUEST, "CompraOperacionInvalida", e.getMessage());
-    }
-
-    @ExceptionHandler(IntercambioOperacionException.class)
-    public ResponseEntity<Map<String, Object>> handleIntercambioOperacion(IntercambioOperacionException e) {
-        return response(HttpStatus.BAD_REQUEST, "IntercambioOperacionInvalida", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

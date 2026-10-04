@@ -77,12 +77,6 @@ public class Usuario implements UserDetails {
     @OneToMany(mappedBy = "propietario")
     private List<Publicacion> publicaciones = new ArrayList<>();
 
-    @Transient
-    private List<OfertaIntercambio> ofertas = new ArrayList<>();
-
-    @Transient
-    private Set<CadenaIntercambio> cadenas = new HashSet<>();
-
     @OneToMany(mappedBy = "usuario")
     private List<MovimientoPuntosCompra> movimientosCompra = new ArrayList<>();
 
@@ -101,8 +95,8 @@ public class Usuario implements UserDetails {
     @OneToMany(mappedBy = "comprador")
     private List<Compra> comprasRealizadas = new ArrayList<>();
 
-        @Transient
-        private Set<Libro> librosSeguidos = new HashSet<>();
+    @Transient
+    private Set<Libro> librosSeguidos = new HashSet<>();
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

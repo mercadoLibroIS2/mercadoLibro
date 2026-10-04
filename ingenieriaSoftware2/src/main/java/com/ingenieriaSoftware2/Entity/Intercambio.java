@@ -49,9 +49,6 @@ public class Intercambio {
     })
     private Publicacion publicacionOfrecida;
 
-        @Transient
-    private CadenaIntercambio cadena;
-
     @OneToMany(mappedBy = "intercambio")
     private List<MovimientoPuntosIntercambio> movimientosPuntos = new ArrayList<>();
 
