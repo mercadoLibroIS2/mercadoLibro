@@ -31,9 +31,9 @@ CREATE TYPE tipo_evento_sistema AS ENUM ('ALTA_INICIAL', 'PROMOCION', 'AJUSTE_AD
 CREATE TYPE estado_compra AS ENUM ('PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'CANCELADA', 'COMPLETADA');
 
 CREATE TABLE usuario (
-    email VARCHAR NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
     id_usuario UUID PRIMARY KEY,
-    nombre_usuario VARCHAR NOT NULL,
+    nombre_usuario VARCHAR(255) NOT NULL,
     rol rol_usuario NOT NULL,
     saldo_total NUMERIC NOT NULL DEFAULT 0 CHECK (saldo_total >= 0),
     saldo_reservado NUMERIC NOT NULL DEFAULT 0 CHECK (saldo_reservado >= 0 AND saldo_reservado <= saldo_total),
@@ -46,29 +46,29 @@ CREATE TABLE usuario (
 );
 
 CREATE TABLE libro_metadata_cache (
-    isbn VARCHAR PRIMARY KEY,
-    google_books_id VARCHAR NOT NULL UNIQUE,
-    titulo VARCHAR NOT NULL,
-    autores VARCHAR,
+    isbn VARCHAR(13) PRIMARY KEY,
+    google_books_id VARCHAR(255) NOT NULL UNIQUE,
+    titulo VARCHAR(255) NOT NULL,
+    autores VARCHAR(255),
     puntuacion_externa NUMERIC CHECK (puntuacion_externa IS NULL OR puntuacion_externa BETWEEN 0 AND 5),
     fecha_cache_bibliografico TIMESTAMP,
     fecha_cache_puntuacion TIMESTAMP
 );
 
 CREATE TABLE categoria (
-    nombre VARCHAR PRIMARY KEY,
-    categoria_padre_id VARCHAR REFERENCES categoria(nombre),
+    nombre VARCHAR(255) PRIMARY KEY,
+    categoria_padre_id VARCHAR(255) REFERENCES categoria(nombre),
     CONSTRAINT categoria_no_autopadre_check CHECK (categoria_padre_id IS NULL OR categoria_padre_id <> nombre)
 );
 
 CREATE TABLE publicacion (
-    isbn VARCHAR NOT NULL REFERENCES libro_metadata_cache(isbn),
+    isbn VARCHAR(13) NOT NULL REFERENCES libro_metadata_cache(isbn),
     propietario_id UUID NOT NULL REFERENCES usuario(id_usuario),
     hora_de_publicacion TIMESTAMP NOT NULL,
     estado_fisico calidad_libro NOT NULL,
     valor_puntos_solicitado BIGINT NOT NULL CHECK (valor_puntos_solicitado >= 0),
     valor_referencia_calculado BIGINT CHECK (valor_referencia_calculado IS NULL OR valor_referencia_calculado >= 0),
-    comentario VARCHAR,
+    comentario VARCHAR(2047),
     estado estado_publicacion NOT NULL DEFAULT 'DISPONIBLE',
     color_semaforo color_semaforo NOT NULL DEFAULT 'SIN_REFERENCIA',
     PRIMARY KEY (isbn, propietario_id, hora_de_publicacion)
@@ -76,7 +76,7 @@ CREATE TABLE publicacion (
 
 CREATE TABLE compra (
     comprador_id UUID NOT NULL REFERENCES usuario(id_usuario),
-    isbn VARCHAR NOT NULL,
+    isbn VARCHAR(13) NOT NULL,
     propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     puntos BIGINT NOT NULL CHECK (puntos > 0),
@@ -87,10 +87,10 @@ CREATE TABLE compra (
 );
 
 CREATE TABLE intercambio (
-    isbn_solicitante VARCHAR NOT NULL,
+    isbn_solicitante VARCHAR(13) NOT NULL,
     propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-    isbn_ofrecida VARCHAR NOT NULL,
+    isbn_ofrecida VARCHAR(13) NOT NULL,
     propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     estado estado_intercambio NOT NULL,
@@ -111,10 +111,10 @@ CREATE TABLE intercambio (
 );
 
 CREATE TABLE movimiento_puntos_intercambio (
-    isbn_solicitante VARCHAR NOT NULL,
+    isbn_solicitante VARCHAR(13) NOT NULL,
     propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-    isbn_ofrecida VARCHAR NOT NULL,
+    isbn_ofrecida VARCHAR(13) NOT NULL,
     propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
@@ -129,16 +129,16 @@ CREATE TABLE movimiento_puntos_intercambio (
 );
 
 CREATE TABLE cadena (
-    isbn_solicitante_anterior VARCHAR NOT NULL,
+    isbn_solicitante_anterior VARCHAR(13) NOT NULL,
     propietario_id_solicitante_anterior UUID NOT NULL,
     hora_de_publicacion_solicitante_anterior TIMESTAMP NOT NULL,
-    isbn_ofrecida_anterior VARCHAR NOT NULL,
+    isbn_ofrecida_anterior VARCHAR(13) NOT NULL,
     propietario_id_ofrecida_anterior UUID NOT NULL,
     hora_de_publicacion_ofrecida_anterior TIMESTAMP NOT NULL,
-    isbn_solicitante_siguiente VARCHAR NOT NULL,
+    isbn_solicitante_siguiente VARCHAR(13) NOT NULL,
     propietario_id_solicitante_siguiente UUID NOT NULL,
     hora_de_publicacion_solicitante_siguiente TIMESTAMP NOT NULL,
-    isbn_ofrecida_siguiente VARCHAR NOT NULL,
+    isbn_ofrecida_siguiente VARCHAR(13) NOT NULL,
     propietario_id_ofrecida_siguiente UUID NOT NULL,
     hora_de_publicacion_ofrecida_siguiente TIMESTAMP NOT NULL,
     estado estado_cadena NOT NULL DEFAULT 'ACTIVA',
@@ -154,14 +154,14 @@ CREATE TABLE cadena (
 );
 
 CREATE TABLE resena (
-    isbn_solicitante VARCHAR NOT NULL,
+    isbn_solicitante VARCHAR(13) NOT NULL,
     propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-    isbn_ofrecida VARCHAR NOT NULL,
+    isbn_ofrecida VARCHAR(13) NOT NULL,
     propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     calificacion SMALLINT NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
-    comentario VARCHAR,
+    comentario VARCHAR(1023),
     calidad calidad_resena,
     solicitante_reviewer BOOLEAN NOT NULL,
     PRIMARY KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
@@ -216,8 +216,8 @@ CREATE TABLE cartel_mal_intercambiador (
 
 CREATE TABLE lista (
     usuario_id UUID NOT NULL REFERENCES usuario(id_usuario),
-    isbn VARCHAR NOT NULL REFERENCES libro_metadata_cache(isbn),
-    nota_privada VARCHAR,
+    isbn VARCHAR(13) NOT NULL REFERENCES libro_metadata_cache(isbn),
+    nota_privada VARCHAR(511),
     precio_min BIGINT CHECK (precio_min IS NULL OR precio_min >= 0),
     precio_max BIGINT CHECK (precio_max IS NULL OR precio_max >= 0),
     condiciones_aceptables calidad_libro[],
@@ -227,13 +227,13 @@ CREATE TABLE lista (
 );
 
 CREATE TABLE clasificado_en (
-    isbn VARCHAR NOT NULL REFERENCES libro_metadata_cache(isbn),
-    nombre_categoria VARCHAR NOT NULL REFERENCES categoria(nombre),
+    isbn VARCHAR(13) NOT NULL REFERENCES libro_metadata_cache(isbn),
+    nombre_categoria VARCHAR(255) NOT NULL REFERENCES categoria(nombre),
     PRIMARY KEY (isbn, nombre_categoria)
 );
 
 CREATE TABLE publicacion_historial_precio (
-    isbn VARCHAR NOT NULL,
+    isbn VARCHAR(13) NOT NULL,
     propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     fecha_cambio TIMESTAMP NOT NULL DEFAULT now(),
@@ -249,7 +249,7 @@ CREATE TABLE publicacion_historial_precio (
 CREATE TABLE notificacion (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     usuario_id UUID NOT NULL REFERENCES usuario(id_usuario),
-    isbn VARCHAR NOT NULL,
+    isbn VARCHAR(13) NOT NULL,
     propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     tipo tipo_notificacion NOT NULL,
@@ -263,13 +263,13 @@ CREATE TABLE notificacion (
 CREATE TABLE evento_sistema (
     tipo_evento tipo_evento_sistema NOT NULL,
     fecha_evento TIMESTAMP NOT NULL DEFAULT now(),
-    descripcion VARCHAR,
+    descripcion VARCHAR(255),
     PRIMARY KEY (tipo_evento, fecha_evento)
 );
 
 CREATE TABLE movimiento_puntos_compra (
     comprador_id UUID NOT NULL,
-    isbn VARCHAR NOT NULL,
+    isbn VARCHAR(13) NOT NULL,
     propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
@@ -282,10 +282,10 @@ CREATE TABLE movimiento_puntos_compra (
 );
 
 CREATE TABLE movimiento_puntos_resena (
-    isbn_solicitante VARCHAR NOT NULL,
+    isbn_solicitante VARCHAR(13) NOT NULL,
     propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-    isbn_ofrecida VARCHAR NOT NULL,
+    isbn_ofrecida VARCHAR(13) NOT NULL,
     propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     solicitante_reviewer BOOLEAN NOT NULL,
