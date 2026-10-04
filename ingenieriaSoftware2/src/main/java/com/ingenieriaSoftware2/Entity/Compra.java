@@ -2,22 +2,14 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.CompraId;
 import com.ingenieriaSoftware2.Enums.EstadoCompra;
-import jakarta.persistence.Column;
-import jakarta.persistence.EmbeddedId;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapsId;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,29 +20,35 @@ import java.util.List;
 @AllArgsConstructor
 public class Compra {
     @EmbeddedId
+        @AttributeOverrides({
+            @AttributeOverride(name = "compradorEmail", column = @Column(name = "comprador_id")),
+            @AttributeOverride(name = "isbn", column = @Column(name = "isbn")),
+            @AttributeOverride(name = "propietarioEmail", column = @Column(name = "propietario_id")),
+            @AttributeOverride(name = "horaPublicacion", column = @Column(name = "hora_de_publicacion"))
+        })
     private CompraId id;
 
-    @MapsId("compradorEmail")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "comprador_email")
+        @JoinColumn(name = "comprador_id", referencedColumnName = "email", insertable = false, updatable = false)
     private Usuario comprador;
 
-    @MapsId("isbn")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "isbn", referencedColumnName = "isbn")
-    private Libro libro;
+        @JoinColumns({
+            @JoinColumn(name = "isbn", referencedColumnName = "isbn", insertable = false, updatable = false),
+            @JoinColumn(name = "propietario_id", referencedColumnName = "email_propietario_id", insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion", referencedColumnName = "hora_de_publicacion", insertable = false, updatable = false)
+        })
+        private Publicacion publicacion;
 
-    @MapsId("propietarioEmail")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "propietario_email")
+        @JoinColumn(name = "propietario_id", referencedColumnName = "email", insertable = false, updatable = false)
     private Usuario propietario;
 
     private Integer puntos;
 
-    private Instant timestamp;
-
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "estado", nullable = false, columnDefinition = "estado_compra")
     private EstadoCompra estado;
 
     @OneToMany(mappedBy = "compra")

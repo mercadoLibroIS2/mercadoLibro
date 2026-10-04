@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Entity
+@Table(name = "libro_metadata_cache")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -40,6 +41,7 @@ public class Libro {
     @DecimalMax("5.0")
     private BigDecimal puntuacionExterna;
 
+    @Transient
     private Integer valorReferencia;
 
     // Frescura del cache, independiente para cada tipo de dato
@@ -51,17 +53,12 @@ public class Libro {
 
     @ManyToMany
     @JoinTable(
-            name = "libro_categoria",
+            name = "clasificado_en",
             joinColumns = @JoinColumn(name = "isbn", referencedColumnName = "isbn"),
             inverseJoinColumns = @JoinColumn(name = "nombre_categoria", referencedColumnName = "nombre")
     )
     private Set<Categoria> categorias = new HashSet<>();
 
-    // ---- Usuarios que siguen este libro (lado inverso de Usuario.librosSeguidos) ----
-    @ManyToMany(mappedBy = "librosSeguidos")
-    private Set<Usuario> seguidores = new HashSet<>();
-
-    // ---- Lado inverso (opcional, no agrega columnas) ----
     @OneToMany(mappedBy = "libro")
     private List<Publicacion> publicaciones = new ArrayList<>();
 }

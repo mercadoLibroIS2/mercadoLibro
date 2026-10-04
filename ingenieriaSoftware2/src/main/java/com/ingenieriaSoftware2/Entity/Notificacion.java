@@ -22,8 +22,9 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Notificacion {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        @Column(name = "id")
+        private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "email_usuario", nullable = false)
@@ -34,8 +35,8 @@ public class Notificacion {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "isbn",                 referencedColumnName = "isbn"),
-            @JoinColumn(name = "email_propietario_id", referencedColumnName = "email_propietario"),
-            @JoinColumn(name = "hora_de_publicacion",  referencedColumnName = "hora_publicacion")
+            @JoinColumn(name = "email_propietario_id", referencedColumnName = "email_propietario_id"),
+            @JoinColumn(name = "hora_de_publicacion",  referencedColumnName = "hora_de_publicacion")
     })
     private Publicacion publicacion;
 

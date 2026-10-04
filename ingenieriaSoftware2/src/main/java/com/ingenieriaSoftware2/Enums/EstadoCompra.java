@@ -4,5 +4,6 @@ public enum EstadoCompra {
     PENDIENTE,
     ACEPTADA,
     RECHAZADA,
-    CONFIRMADA
+    CANCELADA,
+    COMPLETADA
 }

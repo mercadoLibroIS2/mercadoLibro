@@ -24,6 +24,6 @@ public class CompraId implements Serializable {
     private String isbn;
     private String propietarioEmail;
 
-    @Column(name = "hora_publicacion")
+    @Column(name = "hora_de_publicacion")
     private LocalDateTime horaPublicacion;
 }

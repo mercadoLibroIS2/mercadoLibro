@@ -2,7 +2,6 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
-import com.ingenieriaSoftware2.Enums.TipoIntercambio;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
@@ -12,10 +11,8 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Getter
@@ -39,20 +36,20 @@ public class Intercambio {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "isbn_solicitante",                referencedColumnName = "isbn",              insertable = false, updatable = false),
-            @JoinColumn(name = "propietario_id_solicitante",      referencedColumnName = "email_propietario", insertable = false, updatable = false),
-            @JoinColumn(name = "hora_de_publicacion_solicitante", referencedColumnName = "hora_publicacion",  insertable = false, updatable = false)
+            @JoinColumn(name = "propietario_id_solicitante",      referencedColumnName = "email_propietario_id", insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion_solicitante", referencedColumnName = "hora_de_publicacion",  insertable = false, updatable = false)
     })
     private Publicacion publicacionSolicitante;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "isbn_ofrecida",                referencedColumnName = "isbn",              insertable = false, updatable = false),
-            @JoinColumn(name = "propietario_id_ofrecida",      referencedColumnName = "email_propietario", insertable = false, updatable = false),
-            @JoinColumn(name = "hora_de_publicacion_ofrecida", referencedColumnName = "hora_publicacion",  insertable = false, updatable = false)
+            @JoinColumn(name = "propietario_id_ofrecida",      referencedColumnName = "email_propietario_id", insertable = false, updatable = false),
+            @JoinColumn(name = "hora_de_publicacion_ofrecida", referencedColumnName = "hora_de_publicacion",  insertable = false, updatable = false)
     })
     private Publicacion publicacionOfrecida;
 
-    @ManyToOne
+        @Transient
     private CadenaIntercambio cadena;
 
     @OneToMany(mappedBy = "intercambio")

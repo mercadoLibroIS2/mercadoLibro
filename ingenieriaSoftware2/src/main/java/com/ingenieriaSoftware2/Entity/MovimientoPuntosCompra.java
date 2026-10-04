@@ -27,10 +27,10 @@ public class MovimientoPuntosCompra {
     @MapsId("compraId")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
-            @JoinColumn(name = "comprador_id",        referencedColumnName = "comprador_email"),
+            @JoinColumn(name = "comprador_id",        referencedColumnName = "comprador_id"),
             @JoinColumn(name = "isbn",                referencedColumnName = "isbn"),
-            @JoinColumn(name = "propietario_id",      referencedColumnName = "propietario_email"),
-            @JoinColumn(name = "hora_de_publicacion", referencedColumnName = "hora_publicacion")
+            @JoinColumn(name = "propietario_id",      referencedColumnName = "propietario_id"),
+            @JoinColumn(name = "hora_de_publicacion", referencedColumnName = "hora_de_publicacion")
     })
     private Compra compra;
 

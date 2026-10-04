@@ -18,6 +18,6 @@ import java.time.LocalDateTime;
 public class PublicacionId implements Serializable {
     private String isbn;
     private String emailPropietario;
-    @Column(name = "hora_publicacion")
+    @Column(name = "hora_de_publicacion")
     private LocalDateTime horaPublicacion;
 }

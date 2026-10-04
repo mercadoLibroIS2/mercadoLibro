@@ -1,7 +1,5 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -14,8 +12,10 @@ import com.ingenieriaSoftware2.DTO.Response.CompraResponseDTO;
 import com.ingenieriaSoftware2.Entity.Compra;
 import com.ingenieriaSoftware2.Entity.Ids.CompraId;
 import com.ingenieriaSoftware2.Entity.Libro;
+import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoCompra;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Exception.Compra.CompraOperacionException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Repository.CompraRepository;
@@ -38,19 +38,23 @@ public class CompraServiceImpl implements CompraService {
     @Override
     public CompraResponseDTO pedirCompra(UUID compradorId, CompraRequestDTO request) {
         Usuario comprador = usuario(compradorId);
-        Libro libro = libroRepository.findByIsbnAndDisponibleTrue(request.isbn())
+        Libro libro = libroRepository.findById(request.isbn())
                 .orElseThrow(() -> new CompraOperacionException("El libro no existe o no está disponible."));
-        Usuario propietario = libro.getPropietario();
+        Publicacion publicacion = libro.getPublicaciones().stream()
+            .filter(item -> item.getEstado() == EstadoPublicacion.DISPONIBLE)
+            .findFirst()
+            .orElseThrow(() -> new CompraOperacionException("La publicación no está disponible."));
+        Usuario propietario = publicacion.getPropietario();
         if (propietario.getId().equals(comprador.getId())) {
             throw new CompraOperacionException("No puedes comprar tu propio libro.");
         }
 
-        int puntos = Objects.requireNonNullElse(libro.getValorReferencia(), 0);
+        int puntos = Objects.requireNonNullElse(publicacion.getValorPuntosSolicitado(), 0);
         if (puntos <= 0 || saldo(comprador) < puntos) {
             throw new CompraOperacionException("No tienes puntos suficientes para solicitar la compra.");
         }
 
-        CompraId id = new CompraId(comprador.getEmail(), libro.getIsbn(), propietario.getEmail(), LocalDateTime.now());
+        CompraId id = new CompraId(comprador.getEmail(), libro.getIsbn(), propietario.getEmail(), publicacion.getId().getHoraPublicacion());
         if (compraRepository.existsById(id)) {
             throw new CompraOperacionException("Ya existe una compra con este libro y comprador.");
         }
@@ -58,16 +62,14 @@ public class CompraServiceImpl implements CompraService {
         Compra compra = new Compra();
         compra.setId(id);
         compra.setComprador(comprador);
-        compra.setLibro(libro);
+        compra.setPublicacion(publicacion);
         compra.setPropietario(propietario);
         compra.setPuntos(puntos);
-        compra.setTimestamp(Instant.now());
         compra.setEstado(EstadoCompra.PENDIENTE);
 
         reservar(comprador, puntos);
-        libro.setDisponible(false);
         usuarioRepository.save(comprador);
-        libroRepository.save(libro);
+        publicacion.setEstado(EstadoPublicacion.RESERVADA);
         return toResponse(compraRepository.save(compra));
     }
 
@@ -88,9 +90,8 @@ public class CompraServiceImpl implements CompraService {
         validarPropietario(compra, propietarioId);
         validarEstado(compra, EstadoCompra.PENDIENTE);
         devolverReserva(compra.getComprador(), compra.getPuntos());
-        compra.getLibro().setDisponible(true);
+        compra.getPublicacion().setEstado(EstadoPublicacion.DISPONIBLE);
         usuarioRepository.save(compra.getComprador());
-        libroRepository.save(compra.getLibro());
         compra.setEstado(EstadoCompra.RECHAZADA);
         return toResponse(compraRepository.save(compra));
     }
@@ -109,26 +110,26 @@ public class CompraServiceImpl implements CompraService {
         Usuario propietario = compra.getPropietario();
         propietario.setSaldoTotal(saldo(propietario) + puntos);
         usuarioRepository.save(propietario);
-        compra.setEstado(EstadoCompra.CONFIRMADA);
+        compra.setEstado(EstadoCompra.COMPLETADA);
         return toResponse(compraRepository.save(compra));
     }
 
     @Override
     public List<CompraResponseDTO> enviadas(UUID compradorId) {
-        return compraRepository.findByCompradorOrderByTimestampDesc(usuario(compradorId))
+        return compraRepository.findByComprador(usuario(compradorId))
                 .stream().map(this::toResponse).toList();
     }
 
     @Override
     public List<CompraResponseDTO> recibidas(UUID propietarioId) {
-        return compraRepository.findByPropietarioOrderByTimestampDesc(usuario(propietarioId))
+        return compraRepository.findByPropietario(usuario(propietarioId))
                 .stream().map(this::toResponse).toList();
     }
 
     @Override
     public List<CompraResponseDTO> confirmadas(UUID usuarioId) {
         Usuario usuario = usuario(usuarioId);
-        return compraRepository.findByEstadoOrderByTimestampDesc(EstadoCompra.CONFIRMADA).stream()
+        return compraRepository.findByEstado(EstadoCompra.COMPLETADA).stream()
                 .filter(compra -> compra.getComprador().getId().equals(usuario.getId())
                         || compra.getPropietario().getId().equals(usuario.getId()))
                 .map(this::toResponse).toList();
@@ -172,7 +173,7 @@ public class CompraServiceImpl implements CompraService {
 
     private CompraResponseDTO toResponse(Compra compra) {
         return new CompraResponseDTO(compra.getId(), compra.getComprador().getId(),
-                compra.getPropietario().getId(), compra.getLibro().getId(), compra.getLibro().getIsbn(),
-                compra.getPuntos(), compra.getTimestamp(), compra.getEstado());
+                compra.getPropietario().getId(), compra.getPublicacion().getId().getIsbn(), compra.getPublicacion().getId().getIsbn(),
+                compra.getPuntos(), compra.getEstado());
     }
 }

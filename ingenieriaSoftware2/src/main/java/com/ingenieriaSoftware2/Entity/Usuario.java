@@ -2,12 +2,16 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Enums.Rol;
+import com.ingenieriaSoftware2.Enums.EstadoCuenta;
+import com.ingenieriaSoftware2.Enums.FrecuenciaNotificacion;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -15,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.*;
 
 @Entity
+@Table(name = "usuario")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,34 +27,59 @@ import java.util.*;
 public class Usuario implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(unique = true, nullable = false)
+    @Column(name = "id_usuario", nullable = false)
     private UUID id;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "email", unique = true, nullable = false)
     private String email;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "nombre_usuario", unique = true, nullable = false)
     private String nombre;
 
-    @Column(nullable = false)
+    @Column(name = "contrasenia", nullable = false)
     private String contrasenia;
 
+    @Column(name = "saldo_total", nullable = false)
     private Integer saldoTotal;
+    @Column(name = "saldo_reservado", nullable = false)
     private Integer saldoReservado;
+    @Column(name = "reputacion_promedio")
     private float reputacionPromedio;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "rol", columnDefinition = "rol_usuario")
     private Rol rol = Rol.USUARIO;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "estado_cuenta", columnDefinition = "estado_cuenta")
+    private EstadoCuenta estadoCuenta = EstadoCuenta.ACTIVA;
+
+    @Column(name = "notificacion_email")
+    private boolean notificacionEmail = true;
+
+    @Column(name = "notificacion_inapp")
+    private boolean notificacionInapp = true;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "frecuencia_notificacion", columnDefinition = "frecuencia_notificacion")
+    private FrecuenciaNotificacion frecuenciaNotificacion = FrecuenciaNotificacion.INSTANTANEA;
+
+    @Column(name = "hora_resumen_diario")
+    private java.time.LocalTime horaResumenDiario;
+
+    @Transient
     private boolean esActivo;
 
     @OneToMany(mappedBy = "propietario")
     private List<Publicacion> publicaciones = new ArrayList<>();
 
-    @OneToMany(mappedBy = "usuario")
+    @Transient
     private List<OfertaIntercambio> ofertas = new ArrayList<>();
 
-    @ManyToMany(mappedBy = "participantes")
+    @Transient
     private Set<CadenaIntercambio> cadenas = new HashSet<>();
 
     @OneToMany(mappedBy = "usuario")
@@ -70,13 +100,8 @@ public class Usuario implements UserDetails {
     @OneToMany(mappedBy = "comprador")
     private List<Compra> comprasRealizadas = new ArrayList<>();
 
-    @ManyToMany
-    @JoinTable(
-            name = "seguimiento",
-            joinColumns = @JoinColumn(name = "email_usuario", referencedColumnName = "email"),
-            inverseJoinColumns = @JoinColumn(name = "isbn", referencedColumnName = "isbn")
-    )
-    private Set<Libro> librosSeguidos = new HashSet<>();
+        @Transient
+        private Set<Libro> librosSeguidos = new HashSet<>();
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
