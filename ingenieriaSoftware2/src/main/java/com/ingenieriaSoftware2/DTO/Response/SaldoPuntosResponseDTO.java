@@ -1,8 +1,8 @@
 package com.ingenieriaSoftware2.DTO.Response;
 
 public record SaldoPuntosResponseDTO(
-        Integer saldoTotal,
-        Integer saldoReservado,
-        Integer saldoDisponible
+        java.math.BigDecimal saldoTotal,
+        java.math.BigDecimal saldoReservado,
+        java.math.BigDecimal saldoDisponible
 ) {
 }

@@ -8,7 +8,6 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 
 @Embeddable
 @Data
@@ -16,7 +15,18 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @EqualsAndHashCode
 public class ReseniaId implements Serializable {
-    private IntercambioId intercambioId;
-    @Column(name = "solicitante_reviewer")
+    @Column(name = "isbn_solicitante")
+    private String isbnSolicitante;
+    @Column(name = "propietario_id_solicitante")
+    private String propietarioIdSolicitante;
+    @Column(name = "hora_de_publicacion_solicitante")
+    private java.time.LocalDateTime horaDePublicacionSolicitante;
+    @Column(name = "isbn_ofrecida")
+    private String isbnOfrecida;
+    @Column(name = "propietario_id_ofrecida")
+    private String propietarioIdOfrecida;
+    @Column(name = "hora_de_publicacion_ofrecida")
+    private java.time.LocalDateTime horaDePublicacionOfrecida;
+    @Column(name = "solicitante_reviewer", nullable = false)
     private Boolean solicitanteReviewer; //Si el solicitante es el que hace la reseña es True
 }

@@ -31,7 +31,7 @@ public class Intercambio {
     @PositiveOrZero
     @Column(name = "puntos_comprometidos", nullable = false,
             columnDefinition = "numeric default 0 check (puntos_comprometidos >= 0)")
-    private Integer puntosComprometidos = 0;
+        private java.math.BigDecimal puntosComprometidos = java.math.BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({

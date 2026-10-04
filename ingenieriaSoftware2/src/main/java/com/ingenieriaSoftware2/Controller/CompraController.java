@@ -77,7 +77,7 @@ public class CompraController {
 
     private Usuario usuarioActual() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return usuarioRepository.findByNombre(authentication.getName())
+        return usuarioRepository.findByNombreOrEmail(authentication.getName(), authentication.getName())
                 .orElseThrow(UsuarioNoEncontrado::new);
     }
 }

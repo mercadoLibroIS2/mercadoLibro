@@ -14,7 +14,7 @@ public class UsuarioMapper {
                 usuario.getRol().name(),
                 usuario.getSaldoTotal(),
                 usuario.getSaldoReservado(),
-                usuario.getSaldoTotal() - usuario.getSaldoReservado(),
+                usuario.getSaldoTotal().subtract(usuario.getSaldoReservado()),
                 usuario.getReputacionPromedio()
         );
     }

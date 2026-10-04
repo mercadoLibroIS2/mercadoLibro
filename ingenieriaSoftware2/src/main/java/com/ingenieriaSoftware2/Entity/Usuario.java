@@ -17,6 +17,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "usuario")
@@ -33,18 +34,18 @@ public class Usuario implements UserDetails {
     @Column(name = "email", unique = true, nullable = false)
     private String email;
 
-    @Column(name = "nombre_usuario", unique = true, nullable = false)
+    @Column(name = "nombre_usuario", nullable = false)
     private String nombre;
 
-    @Column(name = "contrasenia", nullable = false)
+    @Transient
     private String contrasenia;
 
     @Column(name = "saldo_total", nullable = false)
-    private Integer saldoTotal;
+    private BigDecimal saldoTotal = BigDecimal.ZERO;
     @Column(name = "saldo_reservado", nullable = false)
-    private Integer saldoReservado;
+    private BigDecimal saldoReservado = BigDecimal.ZERO;
     @Column(name = "reputacion_promedio")
-    private float reputacionPromedio;
+    private BigDecimal reputacionPromedio;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -115,6 +116,6 @@ public class Usuario implements UserDetails {
 
     @Override
     public String getUsername() {
-        return nombre;
+        return email;
     }
 }

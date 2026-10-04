@@ -7,9 +7,9 @@ public record PerfilResponseDTO(
         String nombre,
         String email,
         String rol,
-        Integer saldoTotal,
-        Integer saldoReservado,
-        Integer saldoDisponible,
-        Float reputacionPromedio
+        java.math.BigDecimal saldoTotal,
+        java.math.BigDecimal saldoReservado,
+        java.math.BigDecimal saldoDisponible,
+        java.math.BigDecimal reputacionPromedio
 ) {
 }

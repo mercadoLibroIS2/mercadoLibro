@@ -35,14 +35,14 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public UserDetails loadUserByUsername(String nombre){
-        Usuario usuario = usuarioRepository.findByNombre(nombre).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario usuario = usuarioRepository.findByNombreOrEmail(nombre, nombre).orElseThrow(UsuarioNoEncontrado::new);
         return usuario;
     }
 
     @Override
     public Usuario getUsuarioActual() {
-        String nombre = SecurityContextHolder.getContext().getAuthentication().getName();
-        return usuarioRepository.findByNombre(nombre).orElseThrow(UsuarioNoEncontrado::new);
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return usuarioRepository.findByNombreOrEmail(username, username).orElseThrow(UsuarioNoEncontrado::new);
     }
 
     @Override

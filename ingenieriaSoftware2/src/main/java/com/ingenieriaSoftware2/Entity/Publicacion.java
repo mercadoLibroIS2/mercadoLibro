@@ -2,6 +2,8 @@ package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
+import com.ingenieriaSoftware2.Enums.ColorSemaforo;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -37,9 +39,9 @@ public class Publicacion {
     private EstadoFisico estadoFisico;
 
     @Column(name = "valor_puntos_solicitado", nullable = false)
-    private Integer valorPuntosSolicitado;
+    private Long valorPuntosSolicitado;
     @Column(name = "valor_referencia_calculado")
-    private Integer valorReferenciaCalculado;
+    private Long valorReferenciaCalculado;
     @Column(name = "comentario")
     private String comentario;
 

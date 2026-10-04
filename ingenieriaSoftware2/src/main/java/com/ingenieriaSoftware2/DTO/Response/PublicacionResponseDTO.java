@@ -6,8 +6,8 @@ import com.ingenieriaSoftware2.Enums.EstadoFisico;
 public record PublicacionResponseDTO(
         PublicacionId publicacionId,
         EstadoFisico estadoFisico,
-        Integer valorPuntosSolicitado,
-        Integer valorReferenciaCalculado,
+        Long valorPuntosSolicitado,
+        Long valorReferenciaCalculado,
         String comentario
 ) {
 }

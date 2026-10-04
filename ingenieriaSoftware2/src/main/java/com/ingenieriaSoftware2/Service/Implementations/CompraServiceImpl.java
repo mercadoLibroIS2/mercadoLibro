@@ -3,6 +3,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -49,8 +50,8 @@ public class CompraServiceImpl implements CompraService {
             throw new CompraOperacionException("No puedes comprar tu propio libro.");
         }
 
-        int puntos = Objects.requireNonNullElse(publicacion.getValorPuntosSolicitado(), 0);
-        if (puntos <= 0 || saldo(comprador) < puntos) {
+        long puntos = Objects.requireNonNullElse(publicacion.getValorPuntosSolicitado(), 0L);
+        if (puntos <= 0 || saldo(comprador).compareTo(BigDecimal.valueOf(puntos)) < 0) {
             throw new CompraOperacionException("No tienes puntos suficientes para solicitar la compra.");
         }
 
@@ -104,11 +105,11 @@ public class CompraServiceImpl implements CompraService {
             throw new CompraOperacionException("Solo el comprador puede confirmar la recepción.");
         }
         validarEstado(compra, EstadoCompra.ACEPTADA);
-        int puntos = Objects.requireNonNullElse(compra.getPuntos(), 0);
+        long puntos = Objects.requireNonNullElse(compra.getPuntos(), 0L);
         devolverReserva(compra.getComprador(), puntos);
         usuarioRepository.save(compra.getComprador());
         Usuario propietario = compra.getPropietario();
-        propietario.setSaldoTotal(saldo(propietario) + puntos);
+        propietario.setSaldoTotal(saldo(propietario).add(BigDecimal.valueOf(puntos)));
         usuarioRepository.save(propietario);
         compra.setEstado(EstadoCompra.COMPLETADA);
         return toResponse(compraRepository.save(compra));
@@ -156,24 +157,25 @@ public class CompraServiceImpl implements CompraService {
         }
     }
 
-    private int saldo(Usuario usuario) {
-        return Objects.requireNonNullElse(usuario.getSaldoTotal(), 0);
+    private BigDecimal saldo(Usuario usuario) {
+        return Objects.requireNonNullElse(usuario.getSaldoTotal(), BigDecimal.ZERO);
     }
 
-    private void reservar(Usuario usuario, int puntos) {
-        usuario.setSaldoTotal(saldo(usuario) - puntos);
-        usuario.setSaldoReservado(Objects.requireNonNullElse(usuario.getSaldoReservado(), 0) + puntos);
+    private void reservar(Usuario usuario, long puntos) {
+        usuario.setSaldoTotal(saldo(usuario).subtract(BigDecimal.valueOf(puntos)));
+        usuario.setSaldoReservado(Objects.requireNonNullElse(usuario.getSaldoReservado(), BigDecimal.ZERO).add(BigDecimal.valueOf(puntos)));
     }
 
-    private void devolverReserva(Usuario usuario, Integer puntos) {
-        int cantidad = Objects.requireNonNullElse(puntos, 0);
-        usuario.setSaldoTotal(saldo(usuario) + cantidad);
-        usuario.setSaldoReservado(Math.max(0, Objects.requireNonNullElse(usuario.getSaldoReservado(), 0) - cantidad));
+    private void devolverReserva(Usuario usuario, Long puntos) {
+        long cantidad = Objects.requireNonNullElse(puntos, 0L);
+        usuario.setSaldoTotal(saldo(usuario).add(BigDecimal.valueOf(cantidad)));
+        usuario.setSaldoReservado(Objects.requireNonNullElse(usuario.getSaldoReservado(), BigDecimal.ZERO)
+                .subtract(BigDecimal.valueOf(cantidad)).max(BigDecimal.ZERO));
     }
 
     private CompraResponseDTO toResponse(Compra compra) {
-        return new CompraResponseDTO(compra.getId(), compra.getComprador().getId(),
-                compra.getPropietario().getId(), compra.getPublicacion().getId().getIsbn(), compra.getPublicacion().getId().getIsbn(),
+        return new CompraResponseDTO(compra.getId(), compra.getComprador().getEmail(),
+            compra.getPropietario().getEmail(), compra.getPublicacion().getId().getIsbn(), compra.getPublicacion().getId().getIsbn(),
                 compra.getPuntos(), compra.getEstado());
     }
 }

@@ -17,15 +17,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class CompraId implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    @Column(name = "comprador_id")
-    private String compradorEmail;
-    private String isbn;
-    @Column(name = "propietario_id")
-    private String propietarioEmail;
-
-    @Column(name = "hora_de_publicacion")
-    private LocalDateTime horaPublicacion;
+public class ReporteId implements Serializable {
+    @Column(name = "email_reportante_id")
+    private String emailReportanteId;
+    @Column(name = "hora_reporte")
+    private LocalDateTime horaReporte;
+    @Column(name = "email_reportado_id")
+    private String emailReportadoId;
 }

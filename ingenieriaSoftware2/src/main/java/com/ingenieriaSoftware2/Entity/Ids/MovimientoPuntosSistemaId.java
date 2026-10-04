@@ -15,7 +15,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.util.UUID;
 
 @Embeddable
 @Getter
@@ -38,8 +37,8 @@ public class MovimientoPuntosSistemaId implements Serializable {
     })
     private EventoSistemaId eventoSistemaId;
 
-    @Column(name = "id_usuario")
-    private UUID usuarioId;
+        @Column(name = "id_usuario")
+        private String usuarioId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo")

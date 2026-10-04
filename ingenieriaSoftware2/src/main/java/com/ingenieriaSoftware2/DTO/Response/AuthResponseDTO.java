@@ -8,6 +8,6 @@ public record AuthResponseDTO(
         String username,
         String email,
         String rol,
-        Integer puntos
+        java.math.BigDecimal puntos
 ) {
 }

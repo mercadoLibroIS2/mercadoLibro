@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode
 public class EventoSistemaId implements Serializable {
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_evento_sistema")
+    @Column(name = "tipo_evento")
     TipoEventoSistema tipoEventoSistema;
     @Column(name = "fecha_evento")
     LocalDateTime fechaEvento = LocalDateTime.now();

@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS movimiento_puntos_sistema, movimiento_puntos_resena,
     publicacion_historial_precio, lista, cartel_mal_intercambiador,
     bajar_calificacion, baneo, reporte, resena, cadena,
     movimiento_puntos_intercambio, intercambio, compra, publicacion,
-    categoria, libro_metadata_cache, usuario CASCADE;
+    categoria, libro_metadata_cache, clasificado_en, usuario CASCADE;
 
 DROP TYPE IF EXISTS estado_compra, tipo_evento_sistema, frecuencia_notificacion,
     tipo_notificacion, color_semaforo, estado_publicacion, estado_cadena,
@@ -63,7 +63,7 @@ CREATE TABLE categoria (
 
 CREATE TABLE publicacion (
     isbn VARCHAR NOT NULL REFERENCES libro_metadata_cache(isbn),
-    email_propietario_id VARCHAR NOT NULL REFERENCES usuario(email),
+    propietario_id UUID NOT NULL REFERENCES usuario(id_usuario),
     hora_de_publicacion TIMESTAMP NOT NULL,
     estado_fisico calidad_libro NOT NULL,
     valor_puntos_solicitado BIGINT NOT NULL CHECK (valor_puntos_solicitado >= 0),
@@ -71,36 +71,36 @@ CREATE TABLE publicacion (
     comentario VARCHAR,
     estado estado_publicacion NOT NULL DEFAULT 'DISPONIBLE',
     color_semaforo color_semaforo NOT NULL DEFAULT 'SIN_REFERENCIA',
-    PRIMARY KEY (isbn, email_propietario_id, hora_de_publicacion)
+    PRIMARY KEY (isbn, propietario_id, hora_de_publicacion)
 );
 
 CREATE TABLE compra (
-    comprador_id VARCHAR NOT NULL REFERENCES usuario(email),
+    comprador_id UUID NOT NULL REFERENCES usuario(id_usuario),
     isbn VARCHAR NOT NULL,
-    propietario_id VARCHAR NOT NULL,
+    propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     puntos BIGINT NOT NULL CHECK (puntos > 0),
     estado estado_compra NOT NULL DEFAULT 'PENDIENTE',
     PRIMARY KEY (comprador_id, isbn, propietario_id, hora_de_publicacion),
     FOREIGN KEY (isbn, propietario_id, hora_de_publicacion)
-        REFERENCES publicacion(isbn, email_propietario_id, hora_de_publicacion)
+        REFERENCES publicacion(isbn, propietario_id, hora_de_publicacion)
 );
 
 CREATE TABLE intercambio (
     isbn_solicitante VARCHAR NOT NULL,
-    propietario_id_solicitante VARCHAR NOT NULL,
+    propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
     isbn_ofrecida VARCHAR NOT NULL,
-    propietario_id_ofrecida VARCHAR NOT NULL,
+    propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     estado estado_intercambio NOT NULL,
     puntos_comprometidos NUMERIC NOT NULL DEFAULT 0 CHECK (puntos_comprometidos >= 0),
     PRIMARY KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
                  isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida),
     FOREIGN KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante)
-        REFERENCES publicacion(isbn, email_propietario_id, hora_de_publicacion),
+        REFERENCES publicacion(isbn, propietario_id, hora_de_publicacion),
     FOREIGN KEY (isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida)
-        REFERENCES publicacion(isbn, email_propietario_id, hora_de_publicacion),
+        REFERENCES publicacion(isbn, propietario_id, hora_de_publicacion),
     CONSTRAINT intercambio_propietarios_distintos_check
         CHECK (propietario_id_solicitante <> propietario_id_ofrecida),
     CONSTRAINT intercambio_publicaciones_distintas_check CHECK (
@@ -112,12 +112,12 @@ CREATE TABLE intercambio (
 
 CREATE TABLE movimiento_puntos_intercambio (
     isbn_solicitante VARCHAR NOT NULL,
-    propietario_id_solicitante VARCHAR NOT NULL,
+    propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
     isbn_ofrecida VARCHAR NOT NULL,
-    propietario_id_ofrecida VARCHAR NOT NULL,
+    propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
-    id_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
     tipo tipo_movimiento NOT NULL,
     monto BIGINT NOT NULL CHECK (monto > 0),
     PRIMARY KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
@@ -130,16 +130,16 @@ CREATE TABLE movimiento_puntos_intercambio (
 
 CREATE TABLE cadena (
     isbn_solicitante_anterior VARCHAR NOT NULL,
-    propietario_id_solicitante_anterior VARCHAR NOT NULL,
+    propietario_id_solicitante_anterior UUID NOT NULL,
     hora_de_publicacion_solicitante_anterior TIMESTAMP NOT NULL,
     isbn_ofrecida_anterior VARCHAR NOT NULL,
-    propietario_id_ofrecida_anterior VARCHAR NOT NULL,
+    propietario_id_ofrecida_anterior UUID NOT NULL,
     hora_de_publicacion_ofrecida_anterior TIMESTAMP NOT NULL,
     isbn_solicitante_siguiente VARCHAR NOT NULL,
-    propietario_id_solicitante_siguiente VARCHAR NOT NULL,
+    propietario_id_solicitante_siguiente UUID NOT NULL,
     hora_de_publicacion_solicitante_siguiente TIMESTAMP NOT NULL,
     isbn_ofrecida_siguiente VARCHAR NOT NULL,
-    propietario_id_ofrecida_siguiente VARCHAR NOT NULL,
+    propietario_id_ofrecida_siguiente UUID NOT NULL,
     hora_de_publicacion_ofrecida_siguiente TIMESTAMP NOT NULL,
     estado estado_cadena NOT NULL DEFAULT 'ACTIVA',
     PRIMARY KEY (isbn_solicitante_anterior, propietario_id_solicitante_anterior, hora_de_publicacion_solicitante_anterior,
@@ -155,10 +155,10 @@ CREATE TABLE cadena (
 
 CREATE TABLE resena (
     isbn_solicitante VARCHAR NOT NULL,
-    propietario_id_solicitante VARCHAR NOT NULL,
+    propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
     isbn_ofrecida VARCHAR NOT NULL,
-    propietario_id_ofrecida VARCHAR NOT NULL,
+    propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     calificacion SMALLINT NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
     comentario VARCHAR,
@@ -173,56 +173,56 @@ CREATE TABLE resena (
 );
 
 CREATE TABLE reporte (
-    email_reportante_id VARCHAR NOT NULL REFERENCES usuario(email),
+    usuario_reportante_id UUID NOT NULL REFERENCES usuario(id_usuario),
     hora_reporte TIMESTAMP NOT NULL,
-    email_reportado_id VARCHAR NOT NULL REFERENCES usuario(email),
+    usuario_reportado_id UUID NOT NULL REFERENCES usuario(id_usuario),
     entidad_tipo entidad_reporte NOT NULL,
     motivo motivo_reporte NOT NULL,
     estado estado_reporte NOT NULL DEFAULT 'PENDIENTE',
-    PRIMARY KEY (email_reportante_id, hora_reporte, email_reportado_id),
-    CHECK (email_reportante_id <> email_reportado_id)
+    PRIMARY KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id),
+    CHECK (usuario_reportante_id <> usuario_reportado_id)
 );
 
 CREATE TABLE baneo (
-    email_reportante_id VARCHAR NOT NULL,
+    usuario_reportante_id UUID NOT NULL,
     hora_reporte TIMESTAMP NOT NULL,
-    email_reportado_id VARCHAR NOT NULL,
+    usuario_reportado_id UUID NOT NULL,
     fecha_inicio TIMESTAMP NOT NULL DEFAULT now(),
     fecha_fin TIMESTAMP,
-    PRIMARY KEY (email_reportante_id, hora_reporte, email_reportado_id),
-    FOREIGN KEY (email_reportante_id, hora_reporte, email_reportado_id)
-        REFERENCES reporte(email_reportante_id, hora_reporte, email_reportado_id)
+    PRIMARY KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id),
+    FOREIGN KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id)
+        REFERENCES reporte(usuario_reportante_id, hora_reporte, usuario_reportado_id)
 );
 
 CREATE TABLE bajar_calificacion (
-    email_reportante_id VARCHAR NOT NULL,
+    usuario_reportante_id UUID NOT NULL,
     hora_reporte TIMESTAMP NOT NULL,
-    email_reportado_id VARCHAR NOT NULL,
+    usuario_reportado_id UUID NOT NULL,
     castigo SMALLINT,
-    PRIMARY KEY (email_reportante_id, hora_reporte, email_reportado_id),
-    FOREIGN KEY (email_reportante_id, hora_reporte, email_reportado_id)
-        REFERENCES reporte(email_reportante_id, hora_reporte, email_reportado_id)
+    PRIMARY KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id),
+    FOREIGN KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id)
+        REFERENCES reporte(usuario_reportante_id, hora_reporte, usuario_reportado_id)
 );
 
 CREATE TABLE cartel_mal_intercambiador (
-    email_reportante_id VARCHAR NOT NULL,
+    usuario_reportante_id UUID NOT NULL,
     hora_reporte TIMESTAMP NOT NULL,
-    email_reportado_id VARCHAR NOT NULL,
+    usuario_reportado_id UUID NOT NULL,
     cartel BOOLEAN NOT NULL DEFAULT TRUE,
-    PRIMARY KEY (email_reportante_id, hora_reporte, email_reportado_id),
-    FOREIGN KEY (email_reportante_id, hora_reporte, email_reportado_id)
-        REFERENCES reporte(email_reportante_id, hora_reporte, email_reportado_id)
+    PRIMARY KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id),
+    FOREIGN KEY (usuario_reportante_id, hora_reporte, usuario_reportado_id)
+        REFERENCES reporte(usuario_reportante_id, hora_reporte, usuario_reportado_id)
 );
 
 CREATE TABLE lista (
-    email_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    usuario_id UUID NOT NULL REFERENCES usuario(id_usuario),
     isbn VARCHAR NOT NULL REFERENCES libro_metadata_cache(isbn),
     nota_privada VARCHAR,
     precio_min BIGINT CHECK (precio_min IS NULL OR precio_min >= 0),
     precio_max BIGINT CHECK (precio_max IS NULL OR precio_max >= 0),
     condiciones_aceptables calidad_libro[],
     fecha_agregado TIMESTAMP NOT NULL DEFAULT now(),
-    PRIMARY KEY (email_usuario, isbn),
+    PRIMARY KEY (usuario_id, isbn),
     CHECK (precio_min IS NULL OR precio_max IS NULL OR precio_min <= precio_max)
 );
 
@@ -234,30 +234,30 @@ CREATE TABLE clasificado_en (
 
 CREATE TABLE publicacion_historial_precio (
     isbn VARCHAR NOT NULL,
-    email_propietario_id VARCHAR NOT NULL,
+    propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     fecha_cambio TIMESTAMP NOT NULL DEFAULT now(),
     valor_puntos_anterior BIGINT NOT NULL,
     valor_puntos_nuevo BIGINT NOT NULL,
     color_anterior color_semaforo,
     color_nuevo color_semaforo,
-    PRIMARY KEY (isbn, email_propietario_id, hora_de_publicacion, fecha_cambio),
-    FOREIGN KEY (isbn, email_propietario_id, hora_de_publicacion)
-        REFERENCES publicacion(isbn, email_propietario_id, hora_de_publicacion)
+    PRIMARY KEY (isbn, propietario_id, hora_de_publicacion, fecha_cambio),
+    FOREIGN KEY (isbn, propietario_id, hora_de_publicacion)
+        REFERENCES publicacion(isbn, propietario_id, hora_de_publicacion)
 );
 
 CREATE TABLE notificacion (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    email_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    usuario_id UUID NOT NULL REFERENCES usuario(id_usuario),
     isbn VARCHAR NOT NULL,
-    email_propietario_id VARCHAR NOT NULL,
+    propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
     tipo tipo_notificacion NOT NULL,
     leida BOOLEAN NOT NULL DEFAULT FALSE,
     archivada BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_creacion TIMESTAMP NOT NULL DEFAULT now(),
-    FOREIGN KEY (isbn, email_propietario_id, hora_de_publicacion)
-        REFERENCES publicacion(isbn, email_propietario_id, hora_de_publicacion)
+    FOREIGN KEY (isbn, propietario_id, hora_de_publicacion)
+        REFERENCES publicacion(isbn, propietario_id, hora_de_publicacion)
 );
 
 CREATE TABLE evento_sistema (
@@ -268,11 +268,11 @@ CREATE TABLE evento_sistema (
 );
 
 CREATE TABLE movimiento_puntos_compra (
-    comprador_id VARCHAR NOT NULL,
+    comprador_id UUID NOT NULL,
     isbn VARCHAR NOT NULL,
-    propietario_id VARCHAR NOT NULL,
+    propietario_id UUID NOT NULL,
     hora_de_publicacion TIMESTAMP NOT NULL,
-    id_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
     tipo tipo_movimiento NOT NULL,
     monto BIGINT NOT NULL CHECK (monto > 0),
     PRIMARY KEY (comprador_id, isbn, propietario_id, hora_de_publicacion, id_usuario, tipo),
@@ -283,13 +283,13 @@ CREATE TABLE movimiento_puntos_compra (
 
 CREATE TABLE movimiento_puntos_resena (
     isbn_solicitante VARCHAR NOT NULL,
-    propietario_id_solicitante VARCHAR NOT NULL,
+    propietario_id_solicitante UUID NOT NULL,
     hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
     isbn_ofrecida VARCHAR NOT NULL,
-    propietario_id_ofrecida VARCHAR NOT NULL,
+    propietario_id_ofrecida UUID NOT NULL,
     hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
     solicitante_reviewer BOOLEAN NOT NULL,
-    id_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
     tipo tipo_movimiento NOT NULL,
     monto BIGINT NOT NULL CHECK (monto > 0),
     PRIMARY KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
@@ -306,7 +306,7 @@ CREATE TABLE movimiento_puntos_resena (
 CREATE TABLE movimiento_puntos_sistema (
     tipo_evento tipo_evento_sistema NOT NULL,
     fecha_evento TIMESTAMP NOT NULL,
-    id_usuario VARCHAR NOT NULL REFERENCES usuario(email),
+    id_usuario UUID NOT NULL REFERENCES usuario(id_usuario),
     tipo tipo_movimiento NOT NULL,
     monto BIGINT NOT NULL CHECK (monto > 0),
     PRIMARY KEY (tipo_evento, fecha_evento, id_usuario, tipo),
@@ -314,14 +314,14 @@ CREATE TABLE movimiento_puntos_sistema (
         REFERENCES evento_sistema(tipo_evento, fecha_evento)
 );
 
-CREATE INDEX idx_publicacion_propietario ON publicacion(email_propietario_id);
+CREATE INDEX idx_publicacion_propietario ON publicacion(propietario_id);
 CREATE INDEX idx_publicacion_isbn ON publicacion(isbn);
 CREATE INDEX idx_compra_comprador ON compra(comprador_id);
 CREATE INDEX idx_compra_publicacion ON compra(isbn, propietario_id, hora_de_publicacion);
 CREATE INDEX idx_intercambio_solicitante ON intercambio(isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante);
 CREATE INDEX idx_intercambio_ofrecida ON intercambio(isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida);
 CREATE INDEX idx_lista_isbn ON lista(isbn);
-CREATE INDEX idx_notificacion_usuario ON notificacion(email_usuario);
-CREATE INDEX idx_reporte_reportado ON reporte(email_reportado_id);
+CREATE INDEX idx_notificacion_usuario ON notificacion(usuario_id);
+CREATE INDEX idx_reporte_reportado ON reporte(usuario_reportado_id);
 
 COMMIT;

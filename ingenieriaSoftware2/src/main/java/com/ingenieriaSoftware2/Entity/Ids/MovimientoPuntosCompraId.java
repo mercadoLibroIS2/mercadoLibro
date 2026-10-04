@@ -10,7 +10,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
-import java.util.UUID;
 
 @Embeddable
 @Getter
@@ -20,7 +19,8 @@ import java.util.UUID;
 @EqualsAndHashCode
 public class MovimientoPuntosCompraId implements Serializable {
     private CompraId compraId;
-    private UUID usuarioId;
+    @Column(name = "id_usuario")
+    private String usuarioId;
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "tipo", columnDefinition = "tipo_movimiento")

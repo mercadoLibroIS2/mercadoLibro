@@ -44,7 +44,7 @@ public class Compra {
         @JoinColumn(name = "propietario_id", referencedColumnName = "email", insertable = false, updatable = false)
     private Usuario propietario;
 
-    private Integer puntos;
+    private Long puntos;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)

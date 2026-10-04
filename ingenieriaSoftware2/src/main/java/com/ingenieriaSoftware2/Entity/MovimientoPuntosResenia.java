@@ -40,6 +40,6 @@ public class MovimientoPuntosResenia {
     // FK a usuario (parte 2 de la PK)
     @MapsId("usuarioId")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_usuario")
+    @JoinColumn(name = "id_usuario", referencedColumnName = "email")
     private Usuario usuario;
 }

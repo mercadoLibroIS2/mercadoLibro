@@ -20,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -57,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
                 passwordEncoder.encode(usuarioRequestDTO.contrasenia())
         );
         usuario.setRol(Rol.USUARIO);
-        usuario.setReputacionPromedio(0.0F);
+        usuario.setReputacionPromedio(BigDecimal.ZERO);
         usuario.setEsActivo(true);
 
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
@@ -137,7 +138,7 @@ public class AuthServiceImpl implements AuthService {
                     jwtService.extraerNombreUsuario(token);
 
             Usuario usuario = usuarioRepository
-                    .findByNombre(nombreUsuario)
+                    .findByNombreOrEmail(nombreUsuario, nombreUsuario)
                     .orElseThrow(UsuarioNoEncontrado::new);
 
             return jwtService.validarToken(
@@ -162,7 +163,7 @@ public class AuthServiceImpl implements AuthService {
                 jwtService.extraerNombreUsuario(token);
 
         Usuario usuario = usuarioRepository
-                .findByNombre(nombreUsuario)
+                .findByNombreOrEmail(nombreUsuario, nombreUsuario)
                 .orElseThrow(UsuarioNoEncontrado::new);
 
         String nuevoToken =

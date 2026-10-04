@@ -30,7 +30,7 @@ public class MovimientoPuntosSistema {
     @JoinColumns({
             @JoinColumn(
                     name = "tipo_evento",
-                    referencedColumnName = "tipo_evento_sistema",
+                    referencedColumnName = "tipo_evento",
                     insertable = false,
                     updatable = false
             ),
@@ -46,6 +46,7 @@ public class MovimientoPuntosSistema {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "id_usuario",
+            referencedColumnName = "email",
             insertable = false,
             updatable = false
     )

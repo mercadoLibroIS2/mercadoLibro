@@ -3,23 +3,22 @@ package com.ingenieriaSoftware2.Entity.Ids;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 
 @Embeddable
-@Data
-@NoArgsConstructor   // JPA lo necesita
+@Getter
+@Setter
+@NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class PublicacionId implements Serializable {
+public class ListaId implements Serializable {
+    @Column(name = "email_usuario")
+    private String emailUsuario;
     @Column(name = "isbn")
     private String isbn;
-    @Column(name = "email_propietario_id")
-    private String emailPropietario;
-    @Column(name = "hora_de_publicacion")
-    private LocalDateTime horaPublicacion;
 }

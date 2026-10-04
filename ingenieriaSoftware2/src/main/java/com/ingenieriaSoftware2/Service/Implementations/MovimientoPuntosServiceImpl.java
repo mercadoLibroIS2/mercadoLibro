@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -65,8 +66,8 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
     @Transactional
     public void asignarPuntosIniciales(Usuario usuario) {
 
-        usuario.setSaldoTotal(PUNTOS_INICIALES);
-        usuario.setSaldoReservado(0);
+        usuario.setSaldoTotal(BigDecimal.valueOf(PUNTOS_INICIALES));
+        usuario.setSaldoReservado(BigDecimal.ZERO);
 
         usuarioRepository.save(usuario);
 
@@ -84,7 +85,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
         MovimientoPuntosSistemaId movimientoId =
                 new MovimientoPuntosSistemaId(
                         eventoId,
-                        usuario.getId(),
+                        usuario.getEmail(),
                         TipoMovimiento.INGRESO
                 );
 
@@ -104,18 +105,17 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
         Usuario usuario = usuarioService.getUsuarioActual();
 
-        Integer saldoTotal =
+        BigDecimal saldoTotal =
                 usuario.getSaldoTotal() != null
                         ? usuario.getSaldoTotal()
-                        : 0;
+                        : BigDecimal.ZERO;
 
-        Integer saldoReservado =
+        BigDecimal saldoReservado =
                 usuario.getSaldoReservado() != null
                         ? usuario.getSaldoReservado()
-                        : 0;
+                        : BigDecimal.ZERO;
 
-        Integer saldoDisponible =
-                saldoTotal - saldoReservado;
+        BigDecimal saldoDisponible = saldoTotal.subtract(saldoReservado);
 
         return new SaldoPuntosResponseDTO(
                 saldoTotal,
@@ -140,7 +140,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
         List<MovimientoPuntosSistema> movimientosSistema =
                 movimientoPuntosSistemaRepository
                         .findByMovimientoPuntosSistemaId_UsuarioId(
-                                usuario.getId()
+                                usuario.getEmail()
                         );
 
         movimientosSistema.forEach(m ->
@@ -171,7 +171,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
         List<MovimientoPuntosCompra> movimientosCompra =
                 movimientoPuntosCompraRepository
                         .findByMovimientoPuntosCompraId_UsuarioId(
-                                usuario.getId()
+                                usuario.getEmail()
                         );
 
         movimientosCompra.forEach(m ->
@@ -197,7 +197,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
         List<MovimientoPuntosIntercambio> movimientosIntercambio =
                 movimientoPuntosIntercambioRepository
                         .findByMovimientoPuntosIntercambioId_UsuarioId(
-                                usuario.getId()
+                                usuario.getEmail()
                         );
 
         movimientosIntercambio.forEach(m ->

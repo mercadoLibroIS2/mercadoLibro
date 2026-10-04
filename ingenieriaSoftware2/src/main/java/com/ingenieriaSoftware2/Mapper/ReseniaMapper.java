@@ -32,7 +32,13 @@ public class ReseniaMapper {
     }
 
     public ReseniaResponseDTO toDTO(Resenia resenia) {
-        IntercambioId intercambioId = resenia.getId().getIntercambioId();
+        IntercambioId intercambioId = new IntercambioId(
+            resenia.getId().getIsbnSolicitante(),
+            resenia.getId().getPropietarioIdSolicitante(),
+            resenia.getId().getHoraDePublicacionSolicitante(),
+            resenia.getId().getIsbnOfrecida(),
+            resenia.getId().getPropietarioIdOfrecida(),
+            resenia.getId().getHoraDePublicacionOfrecida());
         boolean solicitanteReviewer = Boolean.TRUE.equals(resenia.getId().getSolicitanteReviewer());
 
         String emailSolicitante = intercambioId.getPropietarioIdSolicitante();
