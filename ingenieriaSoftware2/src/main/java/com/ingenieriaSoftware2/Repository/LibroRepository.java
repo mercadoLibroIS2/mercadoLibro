@@ -16,4 +16,5 @@ import java.util.UUID;
 
 @Repository
 public interface LibroRepository extends JpaRepository<Libro, String> {
+    Optional<Libro> findByIsbn(String isbn);
 }
