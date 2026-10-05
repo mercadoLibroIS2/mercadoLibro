@@ -36,6 +36,9 @@ public class Intercambio {
             columnDefinition = "numeric default 0 check (puntos_comprometidos >= 0)")
     private Integer puntosComprometidos = 0;
 
+    @Column(name = "motivo_rechazo")
+    private String motivoRechazo;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumns({
             @JoinColumn(name = "isbn_solicitante",                referencedColumnName = "isbn",              insertable = false, updatable = false),
