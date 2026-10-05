@@ -22,11 +22,4 @@ public class LibroController {
     @Autowired
     private SecurityUtils securityUtils;
 
-    @PostMapping("/publicar")
-    public ResponseEntity<LibroResponseDTO> publicarLibro(@Valid @RequestBody LibroRequestDTO request) {
-        UUID usuarioId = securityUtils.obtenerUsuarioAutenticado().getId();
-        LibroResponseDTO response = libroService.publicarLibro(request, usuarioId);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
 }

@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Mapper;
 
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
 import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
@@ -23,31 +24,33 @@ public class ReseniaMapper {
     @Autowired
     private ReseniaRepository reseniaRepository;
 
-    public Resenia toEntity(ReseniaRequestDTO dto){
-        if(dto == null){
-            return null;
-        }
+    public Resenia toEntity(ReseniaRequestDTO dto) {
         Resenia resenia = new Resenia();
-        resenia.setAutor(usuarioRepository.findById(dto.autorId()).orElseThrow(()-> new UsuarioNoEncontrado()));
-        resenia.setCalificado(usuarioRepository.findById(dto.calificado()).orElseThrow(()-> new UsuarioNoEncontrado()));
-        resenia.setIntercambio(intercambioRepository.findById(dto.intercambioId()).orElseThrow(()->new IntercambioNoExiste()));
         resenia.setCalificacion(dto.calificacion());
-        resenia.setComentario(dto.comentario());
-
-        Resenia reseniaGuardada = reseniaRepository.save(resenia);
-
-        return reseniaGuardada;
+        resenia.setComentario(limpiar(dto.comentario()));
+        return resenia;
     }
 
-    public ReseniaResponseDTO toDTO(Resenia resenia){
-        ReseniaResponseDTO dto = new ReseniaResponseDTO(
-                resenia.getId(),
-                resenia.getIntercambio().getId(),
-                resenia.getAutor().getId(),
-                resenia.getCalificado().getId(),
+    public ReseniaResponseDTO toDTO(Resenia resenia) {
+        IntercambioId intercambioId = resenia.getId().getIntercambioId();
+        boolean solicitanteReviewer = Boolean.TRUE.equals(resenia.getId().getSolicitanteReviewer());
+
+        String emailSolicitante = intercambioId.getPropietarioIdSolicitante();
+        String emailOfrecida    = intercambioId.getPropietarioIdOfrecida();
+
+        return new ReseniaResponseDTO(
+                intercambioId,
+                solicitanteReviewer,
+                solicitanteReviewer ? emailSolicitante : emailOfrecida,
+                solicitanteReviewer ? emailOfrecida    : emailSolicitante,
                 resenia.getCalificacion(),
                 resenia.getComentario()
         );
-        return dto;
+    }
+
+    private String limpiar(String texto) {
+        if (texto == null) return null;
+        String t = texto.trim();
+        return t.isEmpty() ? null : t;
     }
 }

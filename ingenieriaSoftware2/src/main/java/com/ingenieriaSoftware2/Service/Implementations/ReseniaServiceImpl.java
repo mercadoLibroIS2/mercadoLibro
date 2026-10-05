@@ -1,29 +1,32 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosReseniaId;
+import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
-import com.ingenieriaSoftware2.Entity.MovimientoPuntos;
+import com.ingenieriaSoftware2.Entity.MovimientoPuntosResenia;
 import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
+import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
-import com.ingenieriaSoftware2.Repository.IntercambioRepository;
-import com.ingenieriaSoftware2.Repository.MovimientoPuntosRepository;
-import com.ingenieriaSoftware2.Repository.ReseniaRepository;
-import com.ingenieriaSoftware2.Repository.UsuarioRepository;
+import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.util.UUID;
 
 @Service
 public class ReseniaServiceImpl implements ReseniaService {
+
     @Autowired
     private ReseniaRepository reseniaRepository;
 
@@ -34,64 +37,109 @@ public class ReseniaServiceImpl implements ReseniaService {
     private IntercambioRepository intercambioRepository;
 
     @Autowired
-    private MovimientoPuntosRepository movimientoPuntosRepository;
-
-    @Autowired
     private ReseniaMapper reseniaMapper;
 
-    private Integer puntosResenia = 50;
+    @Autowired
+    private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
 
-    @Transactional
+    private Long puntosResenia = 50L;
+
     @Override
-    public ReseniaResponseDTO crearResenia(UUID autorId, UUID calificadoId, UUID intercambioId, float calificacion, String comentario, LocalDate fecha) {
+    public ReseniaResponseDTO crearResenia(
+            ReseniaRequestDTO dto,
+            UUID usuarioId
+    ) {
 
-        if (calificacion>5||calificacion<0||comentario.length()>500){
+        if (dto.calificacion() > 5
+                || dto.calificacion() < 0
+                || (dto.comentario() != null && dto.comentario().length() > 500)) {
+
             throw new AtributoFueraDeRangoException();
         }
 
-        Usuario autor = usuarioRepository.findById(autorId).orElseThrow(() -> new UsuarioNoEncontrado());
-        Usuario calificado = usuarioRepository.findById(calificadoId).orElseThrow(() -> new UsuarioNoEncontrado());
-        Intercambio intercambio = intercambioRepository.findById(intercambioId).orElseThrow(() -> new IntercambioNoExiste());
-        boolean esValido =
-                (intercambio.getPrestador().equals(autor) && intercambio.getReceptor().equals(calificado)) ||
-                        (intercambio.getPrestador().equals(calificado) && intercambio.getReceptor().equals(autor));
+        Usuario usuario = usuarioRepository
+                .findById(usuarioId)
+                .orElseThrow(UsuarioNoEncontrado::new);
 
-        if (esValido) {
-            Resenia resenia = new Resenia();
-            resenia.setAutor(autor);
-            resenia.setCalificado(calificado);
-            resenia.setIntercambio(intercambio);
-            resenia.setComentario(comentario);
-            resenia.setCalificacion(calificacion);
+        String email = usuario.getEmail();
 
-            Resenia reseniaGuardada = reseniaRepository.save(resenia);
+        Intercambio intercambio = intercambioRepository
+                .findById(dto.intercambioId())
+                .orElseThrow(IntercambioNoExiste::new);
 
-            autor.getReseniasEscritas().add(reseniaGuardada);
-            calificado.getReseniasRecibidas().add(reseniaGuardada);
-            MovimientoPuntos movimientoPuntos = new MovimientoPuntos();
-            movimientoPuntos.setUsuario(autor);
-            movimientoPuntos.setTipo(TipoMovimiento.ENTRADA);
-            movimientoPuntos.setCantidad(puntosResenia);
-            MovimientoPuntos movimientoPuntosGuardado = movimientoPuntosRepository.save(movimientoPuntos);
+        boolean solicitanteReviewer;
 
-            autor.getMovimientosPuntos().add(movimientoPuntosGuardado);
+        if (email.equals(intercambio.getId().getPropietarioIdSolicitante())) {
 
-            Integer puntosActuales = autor.getSaldoTotal();
-            Integer puntosTotal = puntosActuales + puntosResenia;
+            solicitanteReviewer = true;
 
-            autor.setSaldoTotal(puntosTotal);
+        } else if (email.equals(intercambio.getId().getPropietarioIdOfrecida())) {
 
-            Usuario autorActualizado = usuarioRepository.save(autor);
+            solicitanteReviewer = false;
 
-            Integer cantResenias = calificado.getReseniasRecibidas().toArray().length;
-            float nuevaReputacion = (calificado.getReputacionPromedio() + calificacion) / cantResenias;
+        } else {
 
-            calificado.setReputacionPromedio(nuevaReputacion);
-
-            Usuario calificadoActualizado = usuarioRepository.save(calificado);
-
-            return reseniaMapper.toDTO(reseniaGuardada);
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Solo las partes del intercambio pueden reseñarlo"
+            );
         }
-        throw new IntercambioNoExiste();
+
+        if (intercambio.getEstado() != EstadoIntercambio.COMPLETADO) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Solo se puede reseñar un intercambio completado"
+            );
+        }
+
+        ReseniaId reseniaId =
+                new ReseniaId(intercambio.getId(), solicitanteReviewer);
+
+        if (reseniaRepository.existsById(reseniaId)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ya dejaste una reseña para este intercambio"
+            );
+        }
+
+        Resenia resenia = new Resenia();
+
+        resenia.setId(reseniaId);
+        resenia.setIntercambio(intercambio);
+        resenia.setCalificacion(dto.calificacion());
+        resenia.setComentario(
+                dto.comentario() != null
+                        ? dto.comentario().trim()
+                        : null
+        );
+
+        reseniaRepository.save(resenia);
+
+        Usuario reviewer = usuario;
+
+        MovimientoPuntosResenia movimiento =
+                new MovimientoPuntosResenia();
+
+        movimiento.setMovimientoPuntosReseniaId(
+                new MovimientoPuntosReseniaId(
+                        reseniaId,
+                        usuarioId,
+                        TipoMovimiento.INGRESO
+                )
+        );
+
+        movimiento.setResenia(resenia);
+        movimiento.setUsuario(reviewer);
+        movimiento.setMonto(puntosResenia);
+
+        movimientoPuntosReseniaRepository.save(movimiento);
+
+        // P3 será responsable de modificar saldoTotal/saldoReservado.
+
+        // TODO: recalcular reputacionPromedio de la otra parte del intercambio.
+
+        return reseniaMapper.toDTO(resenia);
     }
 }

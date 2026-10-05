@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.UUID;
 
 public record LibroResponseDTO(
-        UUID id,
         String isbn,
         String titulo,
         String autor,
