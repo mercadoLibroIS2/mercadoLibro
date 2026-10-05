@@ -1,15 +1,21 @@
 package com.ingenieriaSoftware2.Service.Implementations.Auxiliares;
 
 import com.ingenieriaSoftware2.Entity.Libro;
+import com.ingenieriaSoftware2.Enums.ColorSemaforo;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
 import com.ingenieriaSoftware2.Exception.Libro.LibroNoExisteException;
 import com.ingenieriaSoftware2.Repository.LibroRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import static com.ingenieriaSoftware2.Enums.ColorSemaforo.*;
+
 
 @Component
 public class Calculadora {
+
+    private static final double limiteVerde = 1.10;
+    private static final double limiteAmarillo = 1.30;
     @Autowired
     private LibroRepository libroRepository;
     public Integer calcular (String isbn, EstadoFisico estadoFisico){
@@ -26,5 +32,17 @@ public class Calculadora {
             case ACEPTABLE -> 0.65;
             case DETERIORADO -> 0.45;
         };
+    }
+
+    public ColorSemaforo calculadoraColor(Integer valorSolicitado, Integer valorReferencia){
+        if (valorSolicitado == null || valorReferencia == null || valorReferencia <= 0) {
+            return SIN_REFERENCIA;
+        }
+
+        double ratio = (double) valorSolicitado / valorReferencia;
+
+        if (ratio <= limiteVerde) return VERDE;
+        if (ratio <= limiteAmarillo) return AMARILLO;
+        return ROJO;
     }
 }
