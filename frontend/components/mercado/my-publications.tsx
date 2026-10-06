@@ -167,7 +167,7 @@ export function MyPublications({
             <button type="button" onClick={() => setEditing(null)} className="rounded-xl border px-4 py-2 font-semibold">
               Cancelar
             </button>
-            <button disabled={saving} className="rounded-xl bg-amber-800 px-4 py-2 font-bold text-white disabled:opacity-60">
+            <button type="submit" disabled={saving} className="rounded-xl bg-amber-800 px-4 py-2 font-bold text-white disabled:opacity-60">
               {saving ? "Guardando…" : "Guardar cambios"}
             </button>
           </div>
@@ -210,12 +210,14 @@ export function MyPublications({
                   {canEdit && (
                     <div className="flex gap-2 border-t border-stone-100 pt-3">
                       <button
+                        type="button"
                         onClick={() => setEditing(publication)}
                         className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50"
                       >
                         <Pencil className="h-4 w-4" /> Editar
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDelete(publication)}
                         className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
                       >

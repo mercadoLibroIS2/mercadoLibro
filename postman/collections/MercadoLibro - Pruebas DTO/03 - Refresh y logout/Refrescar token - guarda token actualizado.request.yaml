@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/refrescar"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Refrescar token responde HTTP 200', function () { pm.response.to.have.status(200); });
+      pm.test('AuthResponseDTO contiene un token renovado', function () {
+        const body = pm.response.json();
+        pm.expect(body.id).to.eql(pm.collectionVariables.get('userId'));
+        pm.expect(body.token).to.be.a('string').and.not.empty;
+        pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));
+        pm.collectionVariables.set('token', body.token);
+      });
+    language: text/javascript
+order: 1000

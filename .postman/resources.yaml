@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 0a74b16e-20db-417a-8ad3-17a21daf4bd7
+
+cloudResources:
+  collections:
+    ../postman/collections/MercadoLibro - Pruebas DTO: 9e63184e-52f2-4fef-bff6-bd800e79e307
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/

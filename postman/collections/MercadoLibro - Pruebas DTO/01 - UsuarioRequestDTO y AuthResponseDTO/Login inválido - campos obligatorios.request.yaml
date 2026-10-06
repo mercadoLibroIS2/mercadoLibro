@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "nombreOEmail": "",
+      "contrasenia": ""
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Los campos obligatorios de login se rechazan con HTTP 400', function () { pm.response.to.have.status(400); });
+      pm.test('La respuesta identifica un error de validación', function () { pm.expect(pm.response.json().error).to.eql('ValidationError'); });
+    language: text/javascript
+order: 8000
