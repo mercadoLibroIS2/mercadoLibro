@@ -23,31 +23,48 @@ DO $$ BEGIN
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- Mismos valores que TipoMovimiento.java (y que el CHECK de movimiento_puntos_sistema)
 DO $$ BEGIN
     CREATE TYPE tipo_movimiento AS ENUM (
+        'INGRESO',
+        'EGRESO',
         'RESERVA',
-        'LIBERACION',
-        'PAGO',
-        'COBRO',
+        'LIBERACION_RESERVA',
+        'DEVOLUCION',
         'BONIFICACION'
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- TODO: reemplazar por los valores reales del enum TipoNotificacion de Java
+-- Mismos valores que TipoNotificacion.java
 DO $$ BEGIN
     CREATE TYPE tipo_notificacion AS ENUM (
-        'COMPLETAR_CON_LOS_VALORES_DE_TIPO_NOTIFICACION'
+        'INTERCAMBIO_SOLICITADO',
+        'INTERCAMBIO_ACEPTADO',
+        'INTERCAMBIO_COMPLETADO',
+        'RESENIA_RECIBIDA',
+        'PUNTOS_GANADOS',
+        'PUNTOS_GASTADOS'
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- Si el tipo ya existía de antes, estos agregan los valores que falten
+-- Si el tipo ya existía de antes, estos agregan los valores que falten.
+-- Valores viejos que hayan quedado (por ejemplo LIBERACION, PAGO, COBRO) no molestan.
 ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_PROPONENTE';
 ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_RECEPTOR';
+
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'INGRESO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'EGRESO';
 ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'RESERVA';
-ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'LIBERACION';
-ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'PAGO';
-ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'COBRO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'LIBERACION_RESERVA';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'DEVOLUCION';
 ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'BONIFICACION';
+
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_SOLICITADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_ACEPTADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_COMPLETADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'RESENIA_RECIBIDA';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
 
 
 -- =======================================================
