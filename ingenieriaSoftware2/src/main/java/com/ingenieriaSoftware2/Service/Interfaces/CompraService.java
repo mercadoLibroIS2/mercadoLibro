@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface CompraService {
-    // Alta de una compra sobre un libro publicado
+
     CompraResponseDTO realizarCompra(CompraRequestDTO request, UUID compradorId);
 
     CompraResponseDTO obtenerPorId(CompraId compraId);
@@ -17,12 +17,11 @@ public interface CompraService {
 
     List<CompraResponseDTO> listarPorVendedor(UUID vendedorId);
 
-    // Transiciones de estado del flujo de compra
-    CompraResponseDTO confirmarPago(CompraId compraId,UUID compradorId);
+    CompraResponseDTO confirmarPago(CompraId compraId, UUID compradorId);
 
-    CompraResponseDTO marcarComoEnviada(CompraId compraId, String infoEnvio);
+    CompraResponseDTO marcarComoEnviada(CompraId compraId, UUID vendedorId, String infoEnvio);
 
-    CompraResponseDTO marcarComoEntregada(CompraId compraId);
+    CompraResponseDTO marcarComoEntregada(CompraId compraId, UUID compradorId);
 
-    CompraResponseDTO cancelarCompra(CompraId compraId, String motivo);
+    CompraResponseDTO cancelarCompra(CompraId compraId, UUID usuarioId, String motivo);
 }

@@ -8,26 +8,25 @@ import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/intercambio")
-@CrossOrigin(origins = "http://localhost:5173")
+@RequestMapping("/api/intercambios")
+@RequiredArgsConstructor
 public class IntercambioController {
-    @Autowired
-    private IntercambioService intercambioService;
+
+    private final IntercambioService intercambioService;
 
     @PostMapping
-    public ResponseEntity<IntercambioResponseDTO> proponerIntercambio(@RequestParam UUID usuarioId,
+    public ResponseEntity<IntercambioResponseDTO> proponerIntercambio(@AuthenticationPrincipal Usuario usuario,
                                                                       @Valid @RequestBody IntercambioRequestDTO request) {
-        IntercambioResponseDTO response = intercambioService.proponerIntercambio(request, usuarioId);
+        IntercambioResponseDTO response = intercambioService.proponerIntercambio(request, usuario.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -36,29 +35,29 @@ public class IntercambioController {
         return ResponseEntity.ok(intercambioService.obtenerPorId(id.toId()));
     }
 
-    @GetMapping("/enviados/{usuarioId}")
-    public ResponseEntity<List<IntercambioResponseDTO>> listarPropuestasEnviadas(@PathVariable UUID usuarioId) {
-        return ResponseEntity.ok(intercambioService.listarPropuestasEnviadas(usuarioId));
+    @GetMapping("/enviados")
+    public ResponseEntity<List<IntercambioResponseDTO>> listarPropuestasEnviadas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(intercambioService.listarPropuestasEnviadas(usuario.getId()));
     }
 
     @PatchMapping("/aceptar")
-    public ResponseEntity<IntercambioResponseDTO> aceptarIntercambio(@Valid @ModelAttribute IntercambioIdParams id,
-                                                                     @RequestParam UUID usuarioId) {
-        return ResponseEntity.ok(intercambioService.aceptarIntercambio(id.toId(), usuarioId));
+    public ResponseEntity<IntercambioResponseDTO> aceptarIntercambio(@AuthenticationPrincipal Usuario usuario,
+                                                                     @Valid @ModelAttribute IntercambioIdParams id) {
+        return ResponseEntity.ok(intercambioService.aceptarIntercambio(id.toId(), usuario.getId()));
     }
 
     @PatchMapping("/rechazar")
-    public ResponseEntity<IntercambioResponseDTO> rechazarIntercambio(@Valid @ModelAttribute IntercambioIdParams id,
-                                                                      @RequestParam UUID usuarioId,
-                                                                      @RequestBody(required = false) RechazoRequestDTO rechazo) {
-        String motivo = rechazo != null ? rechazo.motivo() : null;
-        return ResponseEntity.ok(intercambioService.rechazarIntercambio(id.toId(), usuarioId, motivo));
+    public ResponseEntity<IntercambioResponseDTO> rechazarIntercambio(@AuthenticationPrincipal Usuario usuario,
+                                                                      @Valid @ModelAttribute IntercambioIdParams id,
+                                                                      @RequestBody(required = false) RechazoRequestDTO body) {
+        String motivo = body != null ? body.motivo() : null;
+        return ResponseEntity.ok(intercambioService.rechazarIntercambio(id.toId(), usuario.getId(), motivo));
     }
 
     @PatchMapping("/cancelar")
-    public ResponseEntity<IntercambioResponseDTO> cancelarIntercambio(@Valid @ModelAttribute IntercambioIdParams id,
-                                                                      @RequestParam UUID usuarioId) {
-        return ResponseEntity.ok(intercambioService.cancelarIntercambio(id.toId(), usuarioId));
+    public ResponseEntity<IntercambioResponseDTO> cancelarIntercambio(@AuthenticationPrincipal Usuario usuario,
+                                                                      @Valid @ModelAttribute IntercambioIdParams id) {
+        return ResponseEntity.ok(intercambioService.cancelarIntercambio(id.toId(), usuario.getId()));
     }
 
     @PatchMapping("/completar")

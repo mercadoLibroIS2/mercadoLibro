@@ -8,26 +8,25 @@ import com.ingenieriaSoftware2.DTO.Response.CompraResponseDTO;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Service.Interfaces.CompraService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/compra")
-@CrossOrigin(origins = "http://localhost:5173")
+@RequestMapping("/api/compras")
+@RequiredArgsConstructor
 public class CompraController {
-    @Autowired
-    private CompraService compraService;
+
+    private final CompraService compraService;
 
     @PostMapping
-    public ResponseEntity<CompraResponseDTO> realizarCompra(@RequestParam UUID compradorId,
+    public ResponseEntity<CompraResponseDTO> realizarCompra(@AuthenticationPrincipal Usuario usuario,
                                                             @Valid @RequestBody CompraRequestDTO request) {
-        CompraResponseDTO response = compraService.realizarCompra(request, compradorId);
+        CompraResponseDTO response = compraService.realizarCompra(request, usuario.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -36,14 +35,14 @@ public class CompraController {
         return ResponseEntity.ok(compraService.obtenerPorId(id.toId()));
     }
 
-    @GetMapping("/comprador/{compradorId}")
-    public ResponseEntity<List<CompraResponseDTO>> listarPorComprador(@PathVariable UUID compradorId) {
-        return ResponseEntity.ok(compraService.listarPorComprador(compradorId));
+    @GetMapping("/mis-compras")
+    public ResponseEntity<List<CompraResponseDTO>> listarMisCompras(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(compraService.listarPorComprador(usuario.getId()));
     }
 
-    @GetMapping("/vendedor/{vendedorId}")
-    public ResponseEntity<List<CompraResponseDTO>> listarPorVendedor(@PathVariable UUID vendedorId) {
-        return ResponseEntity.ok(compraService.listarPorVendedor(vendedorId));
+    @GetMapping("/mis-ventas")
+    public ResponseEntity<List<CompraResponseDTO>> listarMisVentas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(compraService.listarPorVendedor(usuario.getId()));
     }
 
     @PatchMapping("/confirmar-pago")
@@ -53,20 +52,23 @@ public class CompraController {
     }
 
     @PatchMapping("/enviar")
-    public ResponseEntity<CompraResponseDTO> marcarComoEnviada(@Valid @ModelAttribute CompraIdParams id,
+    public ResponseEntity<CompraResponseDTO> marcarComoEnviada(@AuthenticationPrincipal Usuario usuario,
+                                                               @Valid @ModelAttribute CompraIdParams id,
                                                                @Valid @RequestBody EnvioRequestDTO body) {
-        return ResponseEntity.ok(compraService.marcarComoEnviada(id.toId(), body.infoEnvio()));
+        return ResponseEntity.ok(compraService.marcarComoEnviada(id.toId(), usuario.getId(), body.infoEnvio()));
     }
 
     @PatchMapping("/entregar")
-    public ResponseEntity<CompraResponseDTO> marcarComoEntregada(@Valid @ModelAttribute CompraIdParams id) {
-        return ResponseEntity.ok(compraService.marcarComoEntregada(id.toId()));
+    public ResponseEntity<CompraResponseDTO> marcarComoEntregada(@AuthenticationPrincipal Usuario usuario,
+                                                                 @Valid @ModelAttribute CompraIdParams id) {
+        return ResponseEntity.ok(compraService.marcarComoEntregada(id.toId(), usuario.getId()));
     }
 
     @PatchMapping("/cancelar")
-    public ResponseEntity<CompraResponseDTO> cancelarCompra(@Valid @ModelAttribute CompraIdParams id,
-                                                            @RequestBody(required = false) CancelacionRequestDTO cancelacionRequestDTO) {
-        String motivo = cancelacionRequestDTO != null ? cancelacionRequestDTO.motivo() : null;
-        return ResponseEntity.ok(compraService.cancelarCompra(id.toId(), motivo));
+    public ResponseEntity<CompraResponseDTO> cancelarCompra(@AuthenticationPrincipal Usuario usuario,
+                                                            @Valid @ModelAttribute CompraIdParams id,
+                                                            @RequestBody(required = false) CancelacionRequestDTO body) {
+        String motivo = body != null ? body.motivo() : null;
+        return ResponseEntity.ok(compraService.cancelarCompra(id.toId(), usuario.getId(), motivo));
     }
 }

@@ -9,6 +9,7 @@ import com.ingenieriaSoftware2.Entity.Intercambio;
 import com.ingenieriaSoftware2.Entity.MovimientoPuntosIntercambio;
 import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
+import com.ingenieriaSoftware2.Enums.EstadoCompra;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
@@ -20,10 +21,7 @@ import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleExce
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoExisteException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.IntercambioMapper;
-import com.ingenieriaSoftware2.Repository.IntercambioRepository;
-import com.ingenieriaSoftware2.Repository.MovimientoPuntosIntercambioRepository;
-import com.ingenieriaSoftware2.Repository.PublicacionRepository;
-import com.ingenieriaSoftware2.Repository.UsuarioRepository;
+import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +34,9 @@ import java.util.UUID;
 @Service
 public class IntercambioServiceImpl implements IntercambioService {
     private static final int PUNTOS_BONIFICACION = 100;
+
+    @Autowired
+    private CompraRepository compraRepository;
 
     @Autowired
     private IntercambioRepository intercambioRepository;
@@ -142,12 +143,14 @@ public class IntercambioServiceImpl implements IntercambioService {
         Intercambio intercambio = buscarIntercambio(intercambioId);
         Usuario receptor = buscarUsuario(usuarioReceptorId);
         validarEsReceptor(intercambio, receptor);
-        validarEstado(intercambio, EstadoIntercambio.PENDIENTE, EstadoIntercambio.ACEPTADO,
-                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE, EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
+        validarEstado(intercambio, EstadoIntercambio.PENDIENTE);
 
-        // Alguna de las dos pudo quedar reservada en otra compra o intercambio
-        validarPublicacionActiva(intercambio.getPublicacionOfrecida());
-        validarPublicacionActiva(intercambio.getPublicacionSolicitante());
+        Publicacion ofrecida = intercambio.getPublicacionOfrecida();
+        Publicacion solicitada = intercambio.getPublicacionSolicitante();
+
+        // Alguna de las dos pudo quedar reservada por una compra o por otro intercambio
+        validarPublicacionActiva(ofrecida);
+        validarPublicacionActiva(solicitada);
 
         // Si el receptor es el dueño del libro de menor valor, sus puntos se reservan al aceptar
         if (receptor.getEmail().equals(obtenerEmailDeudor(intercambio))) {
@@ -156,8 +159,13 @@ public class IntercambioServiceImpl implements IntercambioService {
 
         cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.RESERVADA);
         intercambio.setEstado(EstadoIntercambio.ACEPTADO);
-        cancelarPendientesDePublicacion(intercambio.getPublicacionOfrecida().getId(), intercambio.getId());
-        cancelarPendientesDePublicacion(intercambio.getPublicacionSolicitante().getId(), intercambio.getId());
+
+        // Lo que estaba pendiente sobre estas publicaciones ya no se puede concretar
+        cancelarPendientesDePublicacion(ofrecida.getId(), intercambio.getId());
+        cancelarPendientesDePublicacion(solicitada.getId(), intercambio.getId());
+        cancelarComprasPendientes(ofrecida);
+        cancelarComprasPendientes(solicitada);
+
         return intercambioMapper.toDTO(intercambio);
     }
 
@@ -180,12 +188,15 @@ public class IntercambioServiceImpl implements IntercambioService {
     public IntercambioResponseDTO cancelarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
         Intercambio intercambio = buscarIntercambio(intercambioId);
         validarEsParticipante(intercambio, buscarUsuario(usuarioId));
-        validarEstado(intercambio, EstadoIntercambio.PENDIENTE, EstadoIntercambio.ACEPTADO);
+        validarEstado(intercambio,
+                EstadoIntercambio.PENDIENTE,
+                EstadoIntercambio.ACEPTADO,
+                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE,
+                EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
 
-        // Devuelve los puntos al deudor si ya se le habían reservado
         liberarReservaSiExiste(intercambio);
 
-        // Las publicaciones solo están reservadas si el intercambio ya se había aceptado
+        // Las publicaciones están reservadas desde que se aceptó
         if (intercambio.getEstado() != EstadoIntercambio.PENDIENTE) {
             cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.DISPONIBLE);
         }
@@ -409,5 +420,16 @@ public class IntercambioServiceImpl implements IntercambioService {
         if (!esProponente && !esReceptor) {
             throw new AccionNoPermitidaException("No participás en este intercambio");
         }
+    }
+
+    private void cancelarComprasPendientes(Publicacion publicacion) {
+        PublicacionId pid = publicacion.getId();
+        compraRepository.buscarPorPublicacionYEstado(
+                        pid.getIsbn(), pid.getEmailPropietario(), pid.getHoraPublicacion(),
+                        EstadoCompra.PENDIENTE_PAGO)
+                .forEach(compra -> {
+                    compra.setEstado(EstadoCompra.CANCELADA);
+                    compra.setMotivoCancelacion("La publicación ya no está disponible");
+                });
     }
 }

@@ -341,3 +341,10 @@ CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
 
 ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_PROPONENTE';
 ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_RECEPTOR';
+ALTER TABLE movimiento_puntos_intercambio ADD COLUMN fecha TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE movimiento_puntos_intercambio DROP CONSTRAINT movimiento_puntos_intercambio_pkey;
+ALTER TABLE movimiento_puntos_intercambio ADD PRIMARY KEY (
+    isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+    isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+    id_usuario, tipo, fecha
+);
