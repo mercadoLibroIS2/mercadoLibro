@@ -1,7 +1,9 @@
 package com.ingenieriaSoftware2.Entity;
 
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
+import com.ingenieriaSoftware2.Enums.ColorSemaforo;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -36,6 +38,8 @@ public class Publicacion {
     private Integer valorPuntosSolicitado;
     private Integer valorReferenciaCalculado;
     private String comentario;
+    private EstadoPublicacion estadoPublicacion = EstadoPublicacion.DISPONIBLE;
+    private ColorSemaforo colorSemaforo = ColorSemaforo.SIN_REFERENCIA;
 
     @OneToMany(mappedBy = "publicacion")
     private List<Notificacion> notificaciones = new ArrayList<>();
