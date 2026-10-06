@@ -5,5 +5,6 @@ public enum TipoMovimiento {
     EGRESO,
     RESERVA,
     LIBERACION_RESERVA,
-    DEVOLUCION
+    DEVOLUCION,
+    BONIFICACION
 }
