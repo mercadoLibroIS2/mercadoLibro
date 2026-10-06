@@ -35,7 +35,6 @@ import java.util.UUID;
 
 @Service
 public class IntercambioServiceImpl implements IntercambioService {
-
     private static final int PUNTOS_BONIFICACION = 100;
 
     @Autowired
@@ -132,11 +131,16 @@ public class IntercambioServiceImpl implements IntercambioService {
         validarEsReceptor(intercambio, receptor);
         validarEstado(intercambio, EstadoIntercambio.PENDIENTE);
 
+        // Alguna de las dos pudo quedar reservada en otra compra o intercambio
+        validarPublicacionActiva(intercambio.getPublicacionOfrecida());
+        validarPublicacionActiva(intercambio.getPublicacionSolicitante());
+
         // Si el receptor es el dueño del libro de menor valor, sus puntos se reservan al aceptar
         if (receptor.getEmail().equals(obtenerEmailDeudor(intercambio))) {
             reservarPuntos(receptor, intercambio);
         }
 
+        cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.RESERVADA);
         intercambio.setEstado(EstadoIntercambio.ACEPTADO);
         return intercambioMapper.toDTO(intercambio);
     }
@@ -164,14 +168,20 @@ public class IntercambioServiceImpl implements IntercambioService {
 
         liberarReservaSiExiste(intercambio);
 
+        // Las publicaciones solo estaban reservadas si el intercambio ya se había aceptado
+        if (intercambio.getEstado() == EstadoIntercambio.ACEPTADO) {
+            cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.DISPONIBLE);
+        }
+
         intercambio.setEstado(EstadoIntercambio.CANCELADO);
         return intercambioMapper.toDTO(intercambio);
     }
 
     @Override
     @Transactional
-    public IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId) {
+    public IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
         Intercambio intercambio = buscarIntercambio(intercambioId);
+        validarEsParticipante(intercambio, buscarUsuario(usuarioId));
         validarEstado(intercambio, EstadoIntercambio.ACEPTADO);
 
         Usuario proponente = buscarPorEmail(intercambio.getId().getPropietarioIdOfrecida());
@@ -181,6 +191,7 @@ public class IntercambioServiceImpl implements IntercambioService {
         bonificar(proponente, intercambio);
         bonificar(receptor, intercambio);
 
+        cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.VENDIDA);
         intercambio.setEstado(EstadoIntercambio.COMPLETADO);
         return intercambioMapper.toDTO(intercambio);
     }
@@ -300,16 +311,21 @@ public class IntercambioServiceImpl implements IntercambioService {
 
     // ---------- Métodos auxiliares ----------
 
+    private void cambiarEstadoPublicaciones(Intercambio intercambio, EstadoPublicacion estado) {
+        intercambio.getPublicacionOfrecida().setEstadoPublicacion(estado);
+        intercambio.getPublicacionSolicitante().setEstadoPublicacion(estado);
+    }
+
     private Intercambio buscarIntercambio(IntercambioId id) {
         return intercambioRepository.findById(id).orElseThrow(() -> new IntercambioNoExiste());
     }
 
     private Usuario buscarUsuario(UUID usuarioId) {
-        return usuarioRepository.findById(usuarioId).orElseThrow(UsuarioNoEncontrado::new);
+        return usuarioRepository.findById(usuarioId).orElseThrow(() -> new UsuarioNoEncontrado());
     }
 
     private Usuario buscarPorEmail(String email) {
-        return usuarioRepository.findByEmail(email).orElseThrow(UsuarioNoEncontrado::new);
+        return usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
     }
 
     private void validarPublicacionActiva(Publicacion publicacion) {

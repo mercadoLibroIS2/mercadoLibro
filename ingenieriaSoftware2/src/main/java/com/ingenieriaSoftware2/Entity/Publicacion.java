@@ -19,6 +19,7 @@ import java.util.List;
 @Setter
 @Getter
 public class Publicacion {
+
     @EmbeddedId
     private PublicacionId id;
 
@@ -27,18 +28,24 @@ public class Publicacion {
     @JoinColumn(name = "isbn")
     private Libro libro;
 
-    @MapsId("emailPropietario")
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "email_propietario")
+    @JoinColumn(name = "email_propietario", referencedColumnName = "email",
+            insertable = false, updatable = false)
     private Usuario propietario;
 
     @Enumerated(EnumType.STRING)
     private EstadoFisico estadoFisico;
 
     private Integer valorPuntosSolicitado;
+
     private Integer valorReferenciaCalculado;
+
     private String comentario;
+
+    @Enumerated(EnumType.STRING)
     private EstadoPublicacion estadoPublicacion = EstadoPublicacion.DISPONIBLE;
+
+    @Enumerated(EnumType.STRING)
     private ColorSemaforo colorSemaforo = ColorSemaforo.SIN_REFERENCIA;
 
     @OneToMany(mappedBy = "publicacion")

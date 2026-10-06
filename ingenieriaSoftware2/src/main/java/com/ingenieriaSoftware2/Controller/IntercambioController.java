@@ -4,12 +4,14 @@ import com.ingenieriaSoftware2.DTO.Request.IntercambioIdParams;
 import com.ingenieriaSoftware2.DTO.Request.IntercambioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Request.RechazoRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.IntercambioResponseDTO;
+import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -60,8 +62,9 @@ public class IntercambioController {
     }
 
     @PatchMapping("/completar")
-    public ResponseEntity<IntercambioResponseDTO> completarIntercambio(@Valid @ModelAttribute IntercambioIdParams id) {
-        return ResponseEntity.ok(intercambioService.completarIntercambio(id.toId()));
+    public ResponseEntity<IntercambioResponseDTO> completarIntercambio(@AuthenticationPrincipal Usuario usuario,
+                                                                       @Valid @ModelAttribute IntercambioIdParams id) {
+        return ResponseEntity.ok(intercambioService.completarIntercambio(id.toId(), usuario.getId()));
     }
 
     @GetMapping("/estado")

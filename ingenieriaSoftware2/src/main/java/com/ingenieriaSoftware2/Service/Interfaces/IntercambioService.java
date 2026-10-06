@@ -22,7 +22,7 @@ public interface IntercambioService {
 
     IntercambioResponseDTO cancelarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
-    IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId);
+    IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
     EstadoIntercambio consultarEstado(IntercambioId intercambioId);
 
