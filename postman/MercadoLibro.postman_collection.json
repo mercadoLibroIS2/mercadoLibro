@@ -1,0 +1,604 @@
+{
+  "info": {
+    "_postman_id": "cab784f0-d07d-41e7-ad04-0e25cd11f10d",
+    "name": "MercadoLibro - Pruebas DTO",
+    "description": "Pruebas de contrato DTO para la API local. Ejecutar en orden con la aplicación disponible en http://localhost:8080. Los casos de DTO sin endpoint implementado están documentados en docs/testing/Postman-DTOs-Confluence.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "testUsername",
+      "value": ""
+    },
+    {
+      "key": "testEmail",
+      "value": ""
+    },
+    {
+      "key": "testPassword",
+      "value": "PruebaLocal2026!"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "bookIsbn",
+      "value": ""
+    },
+    {
+      "key": "bookId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Disponibilidad",
+      "item": [
+        {
+          "name": "Ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/test/ping",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test", "ping"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('El endpoint confirma disponibilidad', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('ok');",
+                  "  pm.expect(body.message).to.eql('pong');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - UsuarioRequestDTO y AuthResponseDTO",
+      "item": [
+        {
+          "name": "Registro válido - genera usuario de prueba y guarda token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString();",
+                  "pm.collectionVariables.set('testUsername', 'qa_' + suffix);",
+                  "pm.collectionVariables.set('testEmail', 'qa_' + suffix + '@example.test');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registro responde HTTP 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('AuthResponseDTO incluye sus campos esperados', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.be.a('string');",
+                  "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "  pm.expect(body.rol).to.eql('USUARIO');",
+                  "  pm.expect(body.puntos).to.eql(100);",
+                  "  pm.collectionVariables.set('userId', body.id);",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{testUsername}}\",\n  \"email\": \"{{testEmail}}\",\n  \"contrasenia\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registro",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "registro"]
+            }
+          }
+        },
+        {
+          "name": "Registro inválido - campos obligatorios, email y longitudes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"ab\",\n  \"email\": \"correo-invalido\",\n  \"contrasenia\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registro",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "registro"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La validación DTO rechaza el registro con HTTP 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('La respuesta identifica un error de validación', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.error).to.eql('ValidationError');",
+                  "  pm.expect(body.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro inválido - campos ausentes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"\",\n  \"email\": \"\",\n  \"contrasenia\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registro",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "registro"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Los campos obligatorios vacíos se rechazan con HTTP 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('La respuesta corresponde a un error de validación', function () { pm.expect(pm.response.json().error).to.eql('ValidationError'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro duplicado - mismo email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{testUsername}}_duplicado\",\n  \"email\": \"{{testEmail}}\",\n  \"contrasenia\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registro",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "registro"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('El email duplicado se rechaza con HTTP 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('La respuesta identifica el conflicto de usuario', function () { pm.expect(pm.response.json().error).to.eql('UsuarioYaExiste'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login válido con nombre - guarda token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreOEmail\": \"{{testUsername}}\",\n  \"contrasenia\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('AuthResponseDTO de login conserva la identidad', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('userId'));",
+                  "  pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login válido con email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreOEmail\": \"{{testEmail}}\",\n  \"contrasenia\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login por email responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Devuelve un token y los datos del usuario', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login inválido - contraseña incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreOEmail\": \"{{testUsername}}\",\n  \"contrasenia\": \"Incorrecta2026!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Credenciales incorrectas responden HTTP 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('La respuesta no entrega un token', function () { pm.expect(pm.response.text()).not.to.include('\"token\"'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login inválido - campos obligatorios",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombreOEmail\": \"\",\n  \"contrasenia\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Los campos obligatorios de login se rechazan con HTTP 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('La respuesta identifica un error de validación', function () { pm.expect(pm.response.json().error).to.eql('ValidationError'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - LibroRequestDTO y LibroResponseDTO",
+      "item": [
+        {
+          "name": "Publicar libro válido - requiere token del registro",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString();",
+                  "pm.collectionVariables.set('bookIsbn', 'QA-' + suffix);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Publicar libro responde HTTP 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('LibroResponseDTO refleja los datos enviados y propietario autenticado', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.isbn).to.eql(pm.collectionVariables.get('bookIsbn'));",
+                  "  pm.expect(body.titulo).to.eql('Libro de prueba Postman');",
+                  "  pm.expect(body.autor).to.eql('Autor QA');",
+                  "  pm.expect(body.categoria).to.eql(['FICCION_GENERAL', 'CIENCIA_FICCION']);",
+                  "  pm.expect(body.estadoFisico).to.eql('BUEN_ESTADO');",
+                  "  pm.expect(body.valorReferencia).to.eql(120);",
+                  "  pm.expect(body.disponible).to.eql(true);",
+                  "  pm.expect(body.propietario).to.eql(pm.collectionVariables.get('userId'));",
+                  "  pm.collectionVariables.set('bookId', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"{{bookIsbn}}\",\n  \"titulo\": \"Libro de prueba Postman\",\n  \"autor\": \"Autor QA\",\n  \"categoria\": [\"FICCION_GENERAL\", \"CIENCIA_FICCION\"],\n  \"estadoFisico\": \"BUEN_ESTADO\",\n  \"valorReferencia\": 120,\n  \"disponible\": true,\n  \"propietario\": \"{{userId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/libro/publicar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "libro", "publicar"]
+            }
+          }
+        },
+        {
+          "name": "Publicar libro sin autenticación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"QA-SIN-TOKEN\",\n  \"titulo\": \"Libro sin autenticación\",\n  \"autor\": \"Autor QA\",\n  \"categoria\": [\"FICCION_GENERAL\"],\n  \"estadoFisico\": \"NUEVO\",\n  \"valorReferencia\": 10,\n  \"disponible\": true,\n  \"propietario\": \"00000000-0000-0000-0000-000000000001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/libro/publicar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "libro", "publicar"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('El endpoint protegido rechaza la solicitud sin token', function () { pm.expect([401, 403]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Refresh y logout",
+      "item": [
+        {
+          "name": "Refrescar token - guarda token actualizado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refrescar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refrescar"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refrescar token responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('AuthResponseDTO contiene un token renovado', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('userId'));",
+                  "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Logout no devuelve contenido', function () { pm.expect(pm.response.text()).to.be.empty; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
