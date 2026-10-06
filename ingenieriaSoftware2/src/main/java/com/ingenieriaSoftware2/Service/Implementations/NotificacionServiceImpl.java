@@ -9,4 +9,6 @@ import org.springframework.stereotype.Service;
 public class NotificacionServiceImpl implements NotificacionService {
     @Autowired
     private NotificacionRepository notificacionRepository;
+
+    // dejo vacío xq me parece que el problema de que no ande está ak
 }
