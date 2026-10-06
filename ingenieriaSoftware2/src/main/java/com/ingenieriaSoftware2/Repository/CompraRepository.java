@@ -3,12 +3,15 @@ package com.ingenieriaSoftware2.Repository;
 import com.ingenieriaSoftware2.Entity.Compra;
 import com.ingenieriaSoftware2.Entity.Ids.CompraId;
 import com.ingenieriaSoftware2.Enums.EstadoCompra;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface CompraRepository extends JpaRepository<Compra, CompraId> {
     List<Compra> findById_CompradorEmail(String email);
@@ -26,4 +29,8 @@ public interface CompraRepository extends JpaRepository<Compra, CompraId> {
                                              @Param("email") String email,
                                              @Param("hora") LocalDateTime hora,
                                              @Param("estado") EstadoCompra estado);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Compra c WHERE c.id = :id")
+    Optional<Compra> findByIdParaActualizar(@Param("id") CompraId id);
 }
+

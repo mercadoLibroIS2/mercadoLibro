@@ -1,23 +1,54 @@
 -- =======================================================
 -- ESQUEMA COMPLETO DE BASE DE DATOS PARA MERCADOLIBRO
--- Compatible con PostgreSQL (Supabase) y H2
+-- Solo PostgreSQL (Supabase). No es compatible con H2 por los tipos ENUM nativos.
+-- Se puede ejecutar varias veces: todo usa IF NOT EXISTS o bloques protegidos.
 -- =======================================================
 
 
+-- =======================================================
+-- TIPOS ENUM
+-- Postgres no tiene CREATE TYPE IF NOT EXISTS, por eso van en bloques DO.
+-- Los valores tienen que coincidir EXACTAMENTE con los enums de Java.
+-- =======================================================
+
 DO $$ BEGIN
-    CREATE TYPE estado_intercambio AS ENUM
-        ('PENDIENTE', 'ACEPTADO', 'RECHAZADO', 'CANCELADO', 'COMPLETADO');
+    CREATE TYPE estado_intercambio AS ENUM (
+        'PENDIENTE',
+        'ACEPTADO',
+        'CONFIRMADO_POR_PROPONENTE',
+        'CONFIRMADO_POR_RECEPTOR',
+        'RECHAZADO',
+        'CANCELADO',
+        'COMPLETADO'
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-    CREATE TYPE tipo_movimiento AS ENUM
-        ('RESERVA', 'LIBERACION_RESERVA', 'INGRESO', 'EGRESO', 'BONIFICACION','DEVOLUCION');
+    CREATE TYPE tipo_movimiento AS ENUM (
+        'RESERVA',
+        'LIBERACION',
+        'PAGO',
+        'COBRO',
+        'BONIFICACION'
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- TODO: reemplazar por los valores reales del enum TipoNotificacion de Java
 DO $$ BEGIN
-    CREATE TYPE tipo_notificacion AS ENUM
-        ('INTERCAMBIO_SOLICITADO','INTERCAMBIO_ACEPTADO','INTERCAMBIO_COMPLETADO','RESENIA_RECIBIDA','PUNTOS_GANADOS','PUNTOS_GASTADOS');
+    CREATE TYPE tipo_notificacion AS ENUM (
+        'COMPLETAR_CON_LOS_VALORES_DE_TIPO_NOTIFICACION'
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Si el tipo ya existía de antes, estos agregan los valores que falten
+ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_PROPONENTE';
+ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_RECEPTOR';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'RESERVA';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'LIBERACION';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'PAGO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'COBRO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'BONIFICACION';
+
 
 -- =======================================================
 -- USUARIO
@@ -222,6 +253,8 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_sistema (
 
 -- =======================================================
 -- MOVIMIENTOS DE PUNTOS - COMPRA
+-- La fecha es parte de la PK: permite varias reservas en la misma compra
+-- (por ejemplo, si se cancela y se vuelve a comprar) y da orden al historial.
 -- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_compra (
@@ -231,8 +264,9 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_compra (
     hora_de_publicacion TIMESTAMP       NOT NULL,
     id_usuario          UUID            NOT NULL REFERENCES usuario (id),
     tipo                tipo_movimiento NOT NULL,
+    fecha               TIMESTAMPTZ     NOT NULL DEFAULT now(),
     monto               BIGINT          NOT NULL CHECK (monto > 0),
-    PRIMARY KEY (comprador_id, isbn, propietario_id, hora_de_publicacion, id_usuario, tipo),
+    PRIMARY KEY (comprador_id, isbn, propietario_id, hora_de_publicacion, id_usuario, tipo, fecha),
     FOREIGN KEY (comprador_id, isbn, propietario_id, hora_de_publicacion)
         REFERENCES compra (comprador_email, isbn, propietario_email, hora_publicacion)
         ON DELETE CASCADE
@@ -241,6 +275,7 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_compra (
 
 -- =======================================================
 -- MOVIMIENTOS DE PUNTOS - INTERCAMBIO
+-- La fecha es parte de la PK por el mismo motivo que en compras.
 -- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
@@ -252,11 +287,12 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
     hora_de_publicacion_ofrecida    TIMESTAMP       NOT NULL,
     id_usuario                      UUID            NOT NULL REFERENCES usuario (id),
     tipo                            tipo_movimiento NOT NULL,
+    fecha                           TIMESTAMPTZ     NOT NULL DEFAULT now(),
     monto                           BIGINT          NOT NULL CHECK (monto > 0),
     PRIMARY KEY (
         isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
         isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
-        id_usuario, tipo
+        id_usuario, tipo, fecha
     ),
     FOREIGN KEY (
         isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
@@ -337,14 +373,4 @@ CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
     oferta_id UUID         NOT NULL REFERENCES oferta_intercambio (id) ON DELETE CASCADE,
     libro_id  VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
     PRIMARY KEY (oferta_id, libro_id)
-);
-
-ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_PROPONENTE';
-ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_RECEPTOR';
-ALTER TABLE movimiento_puntos_intercambio ADD COLUMN fecha TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE movimiento_puntos_intercambio DROP CONSTRAINT movimiento_puntos_intercambio_pkey;
-ALTER TABLE movimiento_puntos_intercambio ADD PRIMARY KEY (
-    isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
-    isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
-    id_usuario, tipo, fecha
 );

@@ -7,5 +7,5 @@ import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 public interface PublicacionService {
     PublicacionResponseDTO publicarLibro(PublicacionRequestDTO request, String email);
     PublicacionResponseDTO verDetallesPublicacion(PublicacionId id);
-    void editarPublicacion(PublicacionId id, PublicacionRequestDTO dto);
+    void editarPublicacion(PublicacionId id, PublicacionRequestDTO dto, String emailUsuario);
 }

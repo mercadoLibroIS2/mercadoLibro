@@ -21,22 +21,26 @@ import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleExce
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoExisteException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.IntercambioMapper;
-import com.ingenieriaSoftware2.Repository.*;
+import com.ingenieriaSoftware2.Repository.CompraRepository;
+import com.ingenieriaSoftware2.Repository.IntercambioRepository;
+import com.ingenieriaSoftware2.Repository.MovimientoPuntosIntercambioRepository;
+import com.ingenieriaSoftware2.Repository.PublicacionRepository;
+import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 public class IntercambioServiceImpl implements IntercambioService {
-    private static final int PUNTOS_BONIFICACION = 100;
 
-    @Autowired
-    private CompraRepository compraRepository;
+    private static final int PUNTOS_BONIFICACION = 100;
 
     @Autowired
     private IntercambioRepository intercambioRepository;
@@ -51,27 +55,25 @@ public class IntercambioServiceImpl implements IntercambioService {
     private MovimientoPuntosIntercambioRepository movimientoRepository;
 
     @Autowired
+    private CompraRepository compraRepository;
+
+    @Autowired
     private IntercambioMapper intercambioMapper;
 
     @Override
     @Transactional
     public IntercambioResponseDTO proponerIntercambio(IntercambioRequestDTO request, UUID usuarioProponenteId) {
-        Usuario proponente = buscarUsuario(usuarioProponenteId);
+        Usuario proponente = bloquearUsuario(usuarioProponenteId);
         String emailProponente = proponente.getEmail();
 
         if (emailProponente.equals(request.emailPropietarioSolicitada())) {
             throw new AccionNoPermitidaException("No podés proponer un intercambio con tu propia publicación");
         }
 
-        PublicacionId idOfrecida = new PublicacionId(
-                request.isbnOfrecida(), emailProponente, request.horaPublicacionOfrecida());
-        PublicacionId idSolicitada = new PublicacionId(
-                request.isbnSolicitada(), request.emailPropietarioSolicitada(), request.horaPublicacionSolicitada());
-
-        Publicacion ofrecida = publicacionRepository.findById(idOfrecida)
-                .orElseThrow(() -> new PublicacionNoExisteException());
-        Publicacion solicitada = publicacionRepository.findById(idSolicitada)
-                .orElseThrow(() -> new PublicacionNoExisteException());
+        Publicacion ofrecida = bloquearPublicacion(new PublicacionId(
+                request.isbnOfrecida(), emailProponente, request.horaPublicacionOfrecida()));
+        Publicacion solicitada = bloquearPublicacion(new PublicacionId(
+                request.isbnSolicitada(), request.emailPropietarioSolicitada(), request.horaPublicacionSolicitada()));
 
         validarPublicacionActiva(ofrecida);
         validarPublicacionActiva(solicitada);
@@ -85,19 +87,14 @@ public class IntercambioServiceImpl implements IntercambioService {
                 request.horaPublicacionOfrecida()
         );
 
-        Intercambio intercambio = intercambioRepository.findById(id).orElse(null);
+        Intercambio intercambio = intercambioRepository.findByIdParaActualizar(id).orElse(null);
 
         if (intercambio != null) {
+            // Uno rechazado o cancelado se reutiliza; los movimientos anteriores quedan en el historial
             boolean terminado = intercambio.getEstado() == EstadoIntercambio.RECHAZADO
                     || intercambio.getEstado() == EstadoIntercambio.CANCELADO;
-
-            Usuario receptor = buscarPorEmail(request.emailPropietarioSolicitada());
-            boolean tuvoReserva =
-                    movimientoRepository.existsById(new MovimientoPuntosIntercambioId(id, proponente.getId(), TipoMovimiento.RESERVA))
-                            || movimientoRepository.existsById(new MovimientoPuntosIntercambioId(id, receptor.getId(), TipoMovimiento.RESERVA));
-
-            if (!terminado || tuvoReserva) {
-                throw new EstadoIntercambioInvalidoException("Ya existe un intercambio entre estas publicaciones");
+            if (!terminado) {
+                throw new EstadoIntercambioInvalidoException("Ya existe un intercambio en curso entre estas publicaciones");
             }
             intercambio.setMotivoRechazo(null);
         } else {
@@ -105,7 +102,9 @@ public class IntercambioServiceImpl implements IntercambioService {
             intercambio.setId(id);
         }
 
+        // Positiva: el proponente ofrece el libro de menor valor y debe la diferencia
         int diferencia = calcularDiferencia(ofrecida, solicitada);
+
         intercambio.setPublicacionOfrecida(ofrecida);
         intercambio.setPublicacionSolicitante(solicitada);
         intercambio.setEstado(EstadoIntercambio.PENDIENTE);
@@ -113,8 +112,7 @@ public class IntercambioServiceImpl implements IntercambioService {
 
         Intercambio guardado = intercambioRepository.save(intercambio);
 
-        // Diferencia positiva: el proponente ofrece el libro de menor valor, así que él es el deudor
-        // y sus puntos se reservan ahora
+        // El proponente reserva SOLO si es el deudor; eso es lo que después permite saber quién debe
         if (diferencia > 0) {
             reservarPuntos(proponente, guardado);
         }
@@ -125,7 +123,9 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Override
     @Transactional
     public IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId) {
-        return intercambioMapper.toDTO(buscarIntercambio(intercambioId));
+        Intercambio intercambio = intercambioRepository.findById(intercambioId)
+                .orElseThrow(() -> new IntercambioNoExiste());
+        return intercambioMapper.toDTO(intercambio);
     }
 
     @Override
@@ -139,25 +139,37 @@ public class IntercambioServiceImpl implements IntercambioService {
 
     @Override
     @Transactional
+    public List<IntercambioResponseDTO> listarPropuestasRecibidas(UUID usuarioId) {
+        String email = buscarUsuario(usuarioId).getEmail();
+        return intercambioRepository.findById_PropietarioIdSolicitante(email).stream()
+                .map(intercambioMapper::toDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
     public IntercambioResponseDTO aceptarIntercambio(IntercambioId intercambioId, UUID usuarioReceptorId) {
-        Intercambio intercambio = buscarIntercambio(intercambioId);
-        Usuario receptor = buscarUsuario(usuarioReceptorId);
+        Intercambio intercambio = bloquearIntercambio(intercambioId);
+        Usuario receptor = bloquearUsuario(usuarioReceptorId);
         validarEsReceptor(intercambio, receptor);
         validarEstado(intercambio, EstadoIntercambio.PENDIENTE);
 
-        Publicacion ofrecida = intercambio.getPublicacionOfrecida();
-        Publicacion solicitada = intercambio.getPublicacionSolicitante();
-
-        // Alguna de las dos pudo quedar reservada por una compra o por otro intercambio
+        // Con el bloqueo, si se vendió o aceptó en paralelo, acá ya se ve RESERVADA
+        Publicacion ofrecida = bloquearPublicacion(idPublicacionOfrecida(intercambio));
+        Publicacion solicitada = bloquearPublicacion(idPublicacionSolicitada(intercambio));
         validarPublicacionActiva(ofrecida);
         validarPublicacionActiva(solicitada);
 
-        // Si el receptor es el dueño del libro de menor valor, sus puntos se reservan al aceptar
-        if (receptor.getEmail().equals(obtenerEmailDeudor(intercambio))) {
-            reservarPuntos(receptor, intercambio);
+        // Si hay compensación y el proponente no reservó, el deudor es el receptor
+        if (intercambio.getPuntosComprometidos() > 0) {
+            Usuario proponente = bloquearPorEmail(intercambio.getId().getPropietarioIdOfrecida());
+            if (!tieneReservaActiva(intercambio, proponente)) {
+                reservarPuntos(receptor, intercambio);
+            }
         }
 
-        cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.RESERVADA);
+        ofrecida.setEstadoPublicacion(EstadoPublicacion.RESERVADA);
+        solicitada.setEstadoPublicacion(EstadoPublicacion.RESERVADA);
         intercambio.setEstado(EstadoIntercambio.ACEPTADO);
 
         // Lo que estaba pendiente sobre estas publicaciones ya no se puede concretar
@@ -172,7 +184,7 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Override
     @Transactional
     public IntercambioResponseDTO rechazarIntercambio(IntercambioId intercambioId, UUID usuarioReceptorId, String motivo) {
-        Intercambio intercambio = buscarIntercambio(intercambioId);
+        Intercambio intercambio = bloquearIntercambio(intercambioId);
         validarEsReceptor(intercambio, buscarUsuario(usuarioReceptorId));
         validarEstado(intercambio, EstadoIntercambio.PENDIENTE);
 
@@ -186,7 +198,7 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Override
     @Transactional
     public IntercambioResponseDTO cancelarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
-        Intercambio intercambio = buscarIntercambio(intercambioId);
+        Intercambio intercambio = bloquearIntercambio(intercambioId);
         validarEsParticipante(intercambio, buscarUsuario(usuarioId));
         validarEstado(intercambio,
                 EstadoIntercambio.PENDIENTE,
@@ -198,7 +210,8 @@ public class IntercambioServiceImpl implements IntercambioService {
 
         // Las publicaciones están reservadas desde que se aceptó
         if (intercambio.getEstado() != EstadoIntercambio.PENDIENTE) {
-            cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.DISPONIBLE);
+            bloquearPublicacion(idPublicacionOfrecida(intercambio)).setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
+            bloquearPublicacion(idPublicacionSolicitada(intercambio)).setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
         }
 
         intercambio.setEstado(EstadoIntercambio.CANCELADO);
@@ -208,16 +221,18 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Override
     @Transactional
     public IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
-        Intercambio intercambio = buscarIntercambio(intercambioId);
+        Intercambio intercambio = bloquearIntercambio(intercambioId);
         Usuario usuario = buscarUsuario(usuarioId);
         validarEsParticipante(intercambio, usuario);
-        validarEstado(intercambio, EstadoIntercambio.ACEPTADO,
-                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE, EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
+        validarEstado(intercambio,
+                EstadoIntercambio.ACEPTADO,
+                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE,
+                EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
 
         boolean esProponente = intercambio.getId().getPropietarioIdOfrecida().equals(usuario.getEmail());
         EstadoIntercambio estado = intercambio.getEstado();
 
-        // Primera confirmación: se registra y se espera al otro
+        // Primera confirmación: se registra y se espera a la otra parte
         if (estado == EstadoIntercambio.ACEPTADO) {
             intercambio.setEstado(esProponente
                     ? EstadoIntercambio.CONFIRMADO_POR_PROPONENTE
@@ -232,14 +247,15 @@ public class IntercambioServiceImpl implements IntercambioService {
         }
 
         // Segunda confirmación: se cierra el intercambio
-        Usuario proponente = buscarPorEmail(intercambio.getId().getPropietarioIdOfrecida());
-        Usuario receptor = buscarPorEmail(intercambio.getId().getPropietarioIdSolicitante());
+        Usuario proponente = bloquearPorEmail(intercambio.getId().getPropietarioIdOfrecida());
+        Usuario receptor = bloquearPorEmail(intercambio.getId().getPropietarioIdSolicitante());
 
         pagarCompensacion(intercambio, proponente, receptor);
         bonificar(proponente, intercambio);
         bonificar(receptor, intercambio);
 
-        cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.VENDIDA);
+        bloquearPublicacion(idPublicacionOfrecida(intercambio)).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
+        bloquearPublicacion(idPublicacionSolicitada(intercambio)).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         intercambio.setEstado(EstadoIntercambio.COMPLETADO);
         return intercambioMapper.toDTO(intercambio);
     }
@@ -247,7 +263,9 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Override
     @Transactional
     public EstadoIntercambio consultarEstado(IntercambioId intercambioId) {
-        return buscarIntercambio(intercambioId).getEstado();
+        return intercambioRepository.findById(intercambioId)
+                .orElseThrow(() -> new IntercambioNoExiste())
+                .getEstado();
     }
 
     @Override
@@ -271,9 +289,8 @@ public class IntercambioServiceImpl implements IntercambioService {
     // ---------- Puntos ----------
 
     /**
-     * Valor de la solicitada menos el de la ofrecida.
-     * Positivo: el proponente ofrece el libro de menor valor y debe la diferencia.
-     * Negativo: el receptor tiene el libro de menor valor y debe la diferencia.
+     * Valor de la solicitada menos el de la ofrecida. Se usa SOLO al proponer:
+     * después, el deudor se deduce de las reservas registradas.
      */
     private int calcularDiferencia(Publicacion ofrecida, Publicacion solicitada) {
         Integer valorOfrecida = ofrecida.getValorReferenciaCalculado();
@@ -286,22 +303,13 @@ public class IntercambioServiceImpl implements IntercambioService {
         return valorSolicitada - valorOfrecida;
     }
 
-    /**
-     * El deudor es el dueño de la publicación de menor valor de referencia.
-     * Devuelve null si los dos libros valen lo mismo.
-     * Los valores no cambian mientras el intercambio está activo porque
-     * editarPublicacion lo bloquea.
-     */
-    private String obtenerEmailDeudor(Intercambio intercambio) {
-        if (intercambio.getPuntosComprometidos() == 0) return null;
-
-        int diferencia = calcularDiferencia(
-                intercambio.getPublicacionOfrecida(),
-                intercambio.getPublicacionSolicitante());
-
-        return diferencia > 0
-                ? intercambio.getId().getPropietarioIdOfrecida()
-                : intercambio.getId().getPropietarioIdSolicitante();
+    /** Una reserva está activa si todavía no se cerró con una liberación o un pago. */
+    private boolean tieneReservaActiva(Intercambio intercambio, Usuario usuario) {
+        IntercambioId id = intercambio.getId();
+        long reservas = movimientoRepository.contarMovimientos(id, usuario.getId(), TipoMovimiento.RESERVA);
+        long cerradas = movimientoRepository.contarMovimientos(id, usuario.getId(), TipoMovimiento.LIBERACION_RESERVA)
+                + movimientoRepository.contarMovimientos(id, usuario.getId(), TipoMovimiento.EGRESO);
+        return reservas > cerradas;
     }
 
     private void reservarPuntos(Usuario deudor, Intercambio intercambio) {
@@ -317,31 +325,37 @@ public class IntercambioServiceImpl implements IntercambioService {
     }
 
     private void liberarReservaSiExiste(Intercambio intercambio) {
-        String emailDeudor = obtenerEmailDeudor(intercambio);
-        if (emailDeudor == null) return;
+        if (intercambio.getPuntosComprometidos() == 0) return;
 
-        Usuario deudor = buscarPorEmail(emailDeudor);
-        MovimientoPuntosIntercambioId reservaId = new MovimientoPuntosIntercambioId(
-                intercambio.getId(), deudor.getId(), TipoMovimiento.RESERVA);
+        Usuario proponente = bloquearPorEmail(intercambio.getId().getPropietarioIdOfrecida());
+        Usuario receptor = bloquearPorEmail(intercambio.getId().getPropietarioIdSolicitante());
+
+        Usuario conReserva = tieneReservaActiva(intercambio, proponente) ? proponente
+                : tieneReservaActiva(intercambio, receptor) ? receptor
+                : null;
 
         // Si el deudor es el receptor y todavía no había aceptado, no hay nada reservado
-        if (!movimientoRepository.existsById(reservaId)) return;
+        if (conReserva == null) return;
 
         int monto = intercambio.getPuntosComprometidos();
-        deudor.setSaldoReservado(saldoReservado(deudor) - monto);
-        registrarMovimiento(intercambio, deudor, TipoMovimiento.LIBERACION_RESERVA, monto);
+        conReserva.setSaldoReservado(saldoReservado(conReserva) - monto);
+        registrarMovimiento(intercambio, conReserva, TipoMovimiento.LIBERACION_RESERVA, monto);
     }
 
     private void pagarCompensacion(Intercambio intercambio, Usuario proponente, Usuario receptor) {
-        String emailDeudor = obtenerEmailDeudor(intercambio);
-        if (emailDeudor == null) return;
-
-        boolean deudorEsProponente = proponente.getEmail().equals(emailDeudor);
-        Usuario deudor = deudorEsProponente ? proponente : receptor;
-        Usuario acreedor = deudorEsProponente ? receptor : proponente;
         int monto = intercambio.getPuntosComprometidos();
+        if (monto == 0) return;
 
-        // Los puntos reservados salen del saldo del deudor
+        Usuario deudor = tieneReservaActiva(intercambio, proponente) ? proponente
+                : tieneReservaActiva(intercambio, receptor) ? receptor
+                : null;
+
+        if (deudor == null) {
+            throw new EstadoIntercambioInvalidoException("No hay puntos reservados para la compensación");
+        }
+
+        Usuario acreedor = deudor.getId().equals(proponente.getId()) ? receptor : proponente;
+
         deudor.setSaldoReservado(saldoReservado(deudor) - monto);
         deudor.setSaldoTotal(saldoTotal(deudor) - monto);
         registrarMovimiento(intercambio, deudor, TipoMovimiento.EGRESO, monto);
@@ -355,18 +369,16 @@ public class IntercambioServiceImpl implements IntercambioService {
         registrarMovimiento(intercambio, usuario, TipoMovimiento.BONIFICACION, PUNTOS_BONIFICACION);
     }
 
-    private void registrarMovimiento(Intercambio intercambio, Usuario usuario,
-                                     TipoMovimiento tipo, int monto) {
+    private void registrarMovimiento(Intercambio intercambio, Usuario usuario, TipoMovimiento tipo, int monto) {
         MovimientoPuntosIntercambio movimiento = new MovimientoPuntosIntercambio();
-        movimiento.setMovimientoPuntosIntercambioId(
-                new MovimientoPuntosIntercambioId(intercambio.getId(), usuario.getId(), tipo));
+        movimiento.setMovimientoPuntosIntercambioId(new MovimientoPuntosIntercambioId(
+                intercambio.getId(), usuario.getId(), tipo, Instant.now().truncatedTo(ChronoUnit.MICROS)));
         movimiento.setIntercambio(intercambio);
         movimiento.setUsuario(usuario);
         movimiento.setMonto((long) monto);
         movimientoRepository.save(movimiento);
     }
 
-    // Los saldos son Integer y pueden venir en null en usuarios recién creados
     private int saldoTotal(Usuario usuario) {
         return usuario.getSaldoTotal() != null ? usuario.getSaldoTotal() : 0;
     }
@@ -375,24 +387,57 @@ public class IntercambioServiceImpl implements IntercambioService {
         return usuario.getSaldoReservado() != null ? usuario.getSaldoReservado() : 0;
     }
 
-    // ---------- Métodos auxiliares ----------
+    // ---------- Compras pendientes ----------
 
-    private void cambiarEstadoPublicaciones(Intercambio intercambio, EstadoPublicacion estado) {
-        intercambio.getPublicacionOfrecida().setEstadoPublicacion(estado);
-        intercambio.getPublicacionSolicitante().setEstadoPublicacion(estado);
+    private void cancelarComprasPendientes(Publicacion publicacion) {
+        PublicacionId pid = publicacion.getId();
+        compraRepository.buscarPorPublicacionYEstado(
+                        pid.getIsbn(), pid.getEmailPropietario(), pid.getHoraPublicacion(),
+                        EstadoCompra.PENDIENTE_PAGO)
+                .forEach(compra -> {
+                    compra.setEstado(EstadoCompra.CANCELADA);
+                    compra.setMotivoCancelacion("La publicación ya no está disponible");
+                });
     }
 
-    private Intercambio buscarIntercambio(IntercambioId id) {
-        return intercambioRepository.findById(id).orElseThrow(() -> new IntercambioNoExiste());
+    // ---------- Búsquedas (las "bloquear" toman lock de escritura) ----------
+
+    private Intercambio bloquearIntercambio(IntercambioId id) {
+        return intercambioRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new IntercambioNoExiste());
+    }
+
+    private Publicacion bloquearPublicacion(PublicacionId id) {
+        return publicacionRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new PublicacionNoExisteException());
+    }
+
+    private PublicacionId idPublicacionOfrecida(Intercambio intercambio) {
+        IntercambioId id = intercambio.getId();
+        return new PublicacionId(id.getIsbnOfrecida(), id.getPropietarioIdOfrecida(), id.getHoraDePublicacionOfrecida());
+    }
+
+    private PublicacionId idPublicacionSolicitada(Intercambio intercambio) {
+        IntercambioId id = intercambio.getId();
+        return new PublicacionId(id.getIsbnSolicitante(), id.getPropietarioIdSolicitante(), id.getHoraDePublicacionSolicitante());
     }
 
     private Usuario buscarUsuario(UUID usuarioId) {
-        return usuarioRepository.findById(usuarioId).orElseThrow(() -> new UsuarioNoEncontrado());
+        return usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new UsuarioNoEncontrado());
     }
 
-    private Usuario buscarPorEmail(String email) {
-        return usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
+    private Usuario bloquearUsuario(UUID usuarioId) {
+        return usuarioRepository.findByIdParaActualizar(usuarioId)
+                .orElseThrow(() -> new UsuarioNoEncontrado());
     }
+
+    private Usuario bloquearPorEmail(String email) {
+        return usuarioRepository.findByEmailParaActualizar(email)
+                .orElseThrow(() -> new UsuarioNoEncontrado());
+    }
+
+    // ---------- Validaciones ----------
 
     private void validarPublicacionActiva(Publicacion publicacion) {
         if (publicacion.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE) {
@@ -420,16 +465,5 @@ public class IntercambioServiceImpl implements IntercambioService {
         if (!esProponente && !esReceptor) {
             throw new AccionNoPermitidaException("No participás en este intercambio");
         }
-    }
-
-    private void cancelarComprasPendientes(Publicacion publicacion) {
-        PublicacionId pid = publicacion.getId();
-        compraRepository.buscarPorPublicacionYEstado(
-                        pid.getIsbn(), pid.getEmailPropietario(), pid.getHoraPublicacion(),
-                        EstadoCompra.PENDIENTE_PAGO)
-                .forEach(compra -> {
-                    compra.setEstado(EstadoCompra.CANCELADA);
-                    compra.setMotivoCancelacion("La publicación ya no está disponible");
-                });
     }
 }

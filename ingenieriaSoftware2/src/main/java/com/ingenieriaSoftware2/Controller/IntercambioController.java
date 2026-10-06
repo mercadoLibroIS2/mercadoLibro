@@ -70,4 +70,9 @@ public class IntercambioController {
     public ResponseEntity<EstadoIntercambio> consultarEstado(@Valid @ModelAttribute IntercambioIdParams id) {
         return ResponseEntity.ok(intercambioService.consultarEstado(id.toId()));
     }
+
+    @GetMapping("/recibidos")
+    public ResponseEntity<List<IntercambioResponseDTO>> listarPropuestasRecibidas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(intercambioService.listarPropuestasRecibidas(usuario.getId()));
+    }
 }

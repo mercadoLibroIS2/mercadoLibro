@@ -8,6 +8,7 @@ import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
+import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
 import com.ingenieriaSoftware2.Exception.Libro.LibroNoExisteException;
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleException;
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoExisteException;
@@ -89,12 +90,14 @@ public class PublicacionServiceImpl implements PublicacionService {
 
     @Override
     @Transactional
-    public void editarPublicacion(PublicacionId id, PublicacionRequestDTO dto) {
-        Publicacion publicacion = publicacionRepository.findById(id)
+    public void editarPublicacion(PublicacionId id, PublicacionRequestDTO dto, String emailUsuario) {
+        if (!id.getEmailPropietario().equals(emailUsuario)) {
+            throw new AccionNoPermitidaException("Solo el dueño puede editar la publicación");
+        }
+
+        Publicacion publicacion = publicacionRepository.findByIdParaActualizar(id)
                 .orElseThrow(() -> new PublicacionNoExisteException());
 
-        // No se puede editar si está reservada/vendida o si participa en un intercambio en curso:
-        // cambiaría el valor de referencia con puntos ya reservados
         boolean tieneIntercambioActivo = intercambioRepository.existeIntercambioActivo(
                 id.getIsbn(), id.getEmailPropietario(), id.getHoraPublicacion(), ESTADOS_INTERCAMBIO_ACTIVOS);
 
@@ -102,7 +105,7 @@ public class PublicacionServiceImpl implements PublicacionService {
             throw new PublicacionNoDisponibleException();
         }
 
-        // El ISBN no se modifica: es parte de la clave primaria (se ignora dto.isbn())
+        // El ISBN no se modifica: es parte de la clave primaria
         publicacion.setEstadoFisico(dto.estadoFisico());
         publicacion.setComentario(dto.comentario());
         publicacion.setValorPuntosSolicitado(dto.valorPuntosSolicitado());
@@ -110,6 +113,5 @@ public class PublicacionServiceImpl implements PublicacionService {
         Integer valorRef = calculadora.calcular(id.getIsbn(), dto.estadoFisico());
         publicacion.setValorReferenciaCalculado(valorRef);
         publicacion.setColorSemaforo(calculadora.calculadoraColor(dto.valorPuntosSolicitado(), valorRef));
-        // Con @Transactional, Hibernate guarda los cambios al terminar el método
     }
 }
