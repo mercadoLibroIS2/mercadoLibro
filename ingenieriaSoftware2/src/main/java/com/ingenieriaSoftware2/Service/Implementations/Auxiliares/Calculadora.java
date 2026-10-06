@@ -10,22 +10,29 @@ import org.springframework.stereotype.Component;
 
 import static com.ingenieriaSoftware2.Enums.ColorSemaforo.*;
 
-
 @Component
 public class Calculadora {
 
-    private static final double limiteVerde = 1.10;
-    private static final double limiteAmarillo = 1.30;
+    private static final double LIMITE_VERDE = 1.10;
+    private static final double LIMITE_AMARILLO = 1.30;
+
     @Autowired
     private LibroRepository libroRepository;
-    public Integer calcular (String isbn, EstadoFisico estadoFisico){
-        Libro libro = libroRepository.findById(isbn).orElseThrow(() -> new LibroNoExisteException());
+
+    public Integer calcular(String isbn, EstadoFisico estadoFisico) {
+        Libro libro = libroRepository.findById(isbn)
+                .orElseThrow(() -> new LibroNoExisteException());
+
         Integer valorBase = libro.getValorReferencia();
-        return (int)Math.round(valorBase*factorPorEstado(estadoFisico));
+        if (valorBase == null || estadoFisico == null) {
+            return null;
+        }
+
+        return (int) Math.round(valorBase * factorPorEstado(estadoFisico));
     }
 
-    public float factorPorEstado(EstadoFisico estadoFisico){
-        return (float) switch (estadoFisico){
+    public double factorPorEstado(EstadoFisico estadoFisico) {
+        return switch (estadoFisico) {
             case NUEVO -> 1.0;
             case COMO_NUEVO -> 0.9;
             case BUEN_ESTADO -> 0.8;
@@ -34,15 +41,15 @@ public class Calculadora {
         };
     }
 
-    public ColorSemaforo calculadoraColor(Integer valorSolicitado, Integer valorReferencia){
+    public ColorSemaforo calculadoraColor(Integer valorSolicitado, Integer valorReferencia) {
         if (valorSolicitado == null || valorReferencia == null || valorReferencia <= 0) {
             return SIN_REFERENCIA;
         }
 
         double ratio = (double) valorSolicitado / valorReferencia;
 
-        if (ratio <= limiteVerde) return VERDE;
-        if (ratio <= limiteAmarillo) return AMARILLO;
+        if (ratio <= LIMITE_VERDE) return VERDE;
+        if (ratio <= LIMITE_AMARILLO) return AMARILLO;
         return ROJO;
     }
 }

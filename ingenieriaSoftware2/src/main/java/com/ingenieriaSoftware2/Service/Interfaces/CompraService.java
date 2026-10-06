@@ -18,7 +18,7 @@ public interface CompraService {
     List<CompraResponseDTO> listarPorVendedor(UUID vendedorId);
 
     // Transiciones de estado del flujo de compra
-    CompraResponseDTO confirmarPago(CompraId compraId);
+    CompraResponseDTO confirmarPago(CompraId compraId,UUID compradorId);
 
     CompraResponseDTO marcarComoEnviada(CompraId compraId, String infoEnvio);
 

@@ -32,8 +32,7 @@ public class Intercambio {
     private EstadoIntercambio estado;
 
     @PositiveOrZero
-    @Column(name = "puntos_comprometidos", nullable = false,
-            columnDefinition = "numeric default 0 check (puntos_comprometidos >= 0)")
+    @Column(name = "puntos_comprometidos", nullable = false)
     private Integer puntosComprometidos = 0;
 
     @Column(name = "motivo_rechazo")

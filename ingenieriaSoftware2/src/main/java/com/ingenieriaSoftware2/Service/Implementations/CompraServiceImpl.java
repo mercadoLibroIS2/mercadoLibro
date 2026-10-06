@@ -24,6 +24,7 @@ import com.ingenieriaSoftware2.Repository.MovimientoPuntosCompraRepository;
 import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.CompraService;
+import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,9 @@ public class CompraServiceImpl implements CompraService {
 
     @Autowired
     private CompraMapper compraMapper;
+
+    @Autowired
+    private IntercambioService intercambioService;
 
     @Override
     @Transactional
@@ -122,12 +126,20 @@ public class CompraServiceImpl implements CompraService {
 
     @Override
     @Transactional
-    public CompraResponseDTO confirmarPago(CompraId compraId) {
+    public CompraResponseDTO confirmarPago(CompraId compraId, UUID compradorId) {
         Compra compra = buscarCompra(compraId);
+        Usuario comprador = validarEsComprador(compra, compradorId);
         validarEstado(compra, EstadoCompra.PENDIENTE_PAGO);
 
-        Usuario comprador = buscarPorEmail(compra.getId().getCompradorEmail());
+        // Si otro comprador ya pagó esta publicación, deja de estar disponible
+        Publicacion publicacion = buscarPublicacion(compra);
+        validarPublicacionDisponible(publicacion);
+
         reservarPuntos(comprador, compra);
+
+        publicacion.setEstadoPublicacion(EstadoPublicacion.RESERVADA);
+        // Las propuestas de intercambio pendientes sobre esta publicación ya no se pueden concretar
+        intercambioService.cancelarPendientesDePublicacion(publicacion.getId(), null);
 
         compra.setEstado(EstadoCompra.PAGADA);
         return compraMapper.toDTO(compra);
@@ -255,6 +267,26 @@ public class CompraServiceImpl implements CompraService {
         if (!Arrays.asList(estadosPermitidos).contains(compra.getEstado())) {
             throw new EstadoCompraInvalidoException(
                     "No se puede realizar esta acción con la compra en estado " + compra.getEstado());
+        }
+    }
+    private Usuario validarEsComprador(Compra compra, UUID usuarioId) {
+        Usuario usuario = buscarUsuario(usuarioId);
+        if (!compra.getId().getCompradorEmail().equals(usuario.getEmail())) {
+            throw new AccionNoPermitidaException("Solo el comprador puede realizar esta acción");
+        }
+        return usuario;
+    }
+
+    private Publicacion buscarPublicacion(Compra compra) {
+        CompraId id = compra.getId();
+        PublicacionId publicacionId = new PublicacionId(id.getIsbn(), id.getPropietarioEmail(), id.getHoraPublicacion());
+        return publicacionRepository.findById(publicacionId)
+                .orElseThrow(() -> new PublicacionNoExisteException());
+    }
+
+    private void validarPublicacionDisponible(Publicacion publicacion) {
+        if (publicacion.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE) {
+            throw new EstadoCompraInvalidoException("La publicación no está disponible");
         }
     }
 }

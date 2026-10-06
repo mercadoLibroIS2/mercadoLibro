@@ -31,4 +31,22 @@ public interface IntercambioRepository extends JpaRepository<Intercambio, Interc
                                     @Param("email") String email,
                                     @Param("hora") LocalDateTime hora,
                                     @Param("estados") List<EstadoIntercambio> estados);
+
+    @Query("""
+    SELECT i FROM Intercambio i
+    WHERE i.estado = :estado
+    AND (
+        (i.id.isbnOfrecida = :isbn
+            AND i.id.propietarioIdOfrecida = :email
+            AND i.id.horaDePublicacionOfrecida = :hora)
+        OR
+        (i.id.isbnSolicitante = :isbn
+            AND i.id.propietarioIdSolicitante = :email
+            AND i.id.horaDePublicacionSolicitante = :hora)
+    )
+""")
+    List<Intercambio> buscarPorPublicacionYEstado(@Param("isbn") String isbn,
+                                                  @Param("email") String email,
+                                                  @Param("hora") LocalDateTime hora,
+                                                  @Param("estado") EstadoIntercambio estado);
 }

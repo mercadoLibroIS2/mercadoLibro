@@ -84,14 +84,27 @@ public class IntercambioServiceImpl implements IntercambioService {
                 request.horaPublicacionOfrecida()
         );
 
-        if (intercambioRepository.existsById(id)) {
-            throw new EstadoIntercambioInvalidoException("Ya existe un intercambio entre estas publicaciones");
+        Intercambio intercambio = intercambioRepository.findById(id).orElse(null);
+
+        if (intercambio != null) {
+            boolean terminado = intercambio.getEstado() == EstadoIntercambio.RECHAZADO
+                    || intercambio.getEstado() == EstadoIntercambio.CANCELADO;
+
+            Usuario receptor = buscarPorEmail(request.emailPropietarioSolicitada());
+            boolean tuvoReserva =
+                    movimientoRepository.existsById(new MovimientoPuntosIntercambioId(id, proponente.getId(), TipoMovimiento.RESERVA))
+                            || movimientoRepository.existsById(new MovimientoPuntosIntercambioId(id, receptor.getId(), TipoMovimiento.RESERVA));
+
+            if (!terminado || tuvoReserva) {
+                throw new EstadoIntercambioInvalidoException("Ya existe un intercambio entre estas publicaciones");
+            }
+            intercambio.setMotivoRechazo(null);
+        } else {
+            intercambio = new Intercambio();
+            intercambio.setId(id);
         }
 
         int diferencia = calcularDiferencia(ofrecida, solicitada);
-
-        Intercambio intercambio = new Intercambio();
-        intercambio.setId(id);
         intercambio.setPublicacionOfrecida(ofrecida);
         intercambio.setPublicacionSolicitante(solicitada);
         intercambio.setEstado(EstadoIntercambio.PENDIENTE);
@@ -129,7 +142,8 @@ public class IntercambioServiceImpl implements IntercambioService {
         Intercambio intercambio = buscarIntercambio(intercambioId);
         Usuario receptor = buscarUsuario(usuarioReceptorId);
         validarEsReceptor(intercambio, receptor);
-        validarEstado(intercambio, EstadoIntercambio.PENDIENTE);
+        validarEstado(intercambio, EstadoIntercambio.PENDIENTE, EstadoIntercambio.ACEPTADO,
+                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE, EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
 
         // Alguna de las dos pudo quedar reservada en otra compra o intercambio
         validarPublicacionActiva(intercambio.getPublicacionOfrecida());
@@ -142,6 +156,8 @@ public class IntercambioServiceImpl implements IntercambioService {
 
         cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.RESERVADA);
         intercambio.setEstado(EstadoIntercambio.ACEPTADO);
+        cancelarPendientesDePublicacion(intercambio.getPublicacionOfrecida().getId(), intercambio.getId());
+        cancelarPendientesDePublicacion(intercambio.getPublicacionSolicitante().getId(), intercambio.getId());
         return intercambioMapper.toDTO(intercambio);
     }
 
@@ -166,10 +182,11 @@ public class IntercambioServiceImpl implements IntercambioService {
         validarEsParticipante(intercambio, buscarUsuario(usuarioId));
         validarEstado(intercambio, EstadoIntercambio.PENDIENTE, EstadoIntercambio.ACEPTADO);
 
+        // Devuelve los puntos al deudor si ya se le habían reservado
         liberarReservaSiExiste(intercambio);
 
-        // Las publicaciones solo estaban reservadas si el intercambio ya se había aceptado
-        if (intercambio.getEstado() == EstadoIntercambio.ACEPTADO) {
+        // Las publicaciones solo están reservadas si el intercambio ya se había aceptado
+        if (intercambio.getEstado() != EstadoIntercambio.PENDIENTE) {
             cambiarEstadoPublicaciones(intercambio, EstadoPublicacion.DISPONIBLE);
         }
 
@@ -181,9 +198,29 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Transactional
     public IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
         Intercambio intercambio = buscarIntercambio(intercambioId);
-        validarEsParticipante(intercambio, buscarUsuario(usuarioId));
-        validarEstado(intercambio, EstadoIntercambio.ACEPTADO);
+        Usuario usuario = buscarUsuario(usuarioId);
+        validarEsParticipante(intercambio, usuario);
+        validarEstado(intercambio, EstadoIntercambio.ACEPTADO,
+                EstadoIntercambio.CONFIRMADO_POR_PROPONENTE, EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
 
+        boolean esProponente = intercambio.getId().getPropietarioIdOfrecida().equals(usuario.getEmail());
+        EstadoIntercambio estado = intercambio.getEstado();
+
+        // Primera confirmación: se registra y se espera al otro
+        if (estado == EstadoIntercambio.ACEPTADO) {
+            intercambio.setEstado(esProponente
+                    ? EstadoIntercambio.CONFIRMADO_POR_PROPONENTE
+                    : EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
+            return intercambioMapper.toDTO(intercambio);
+        }
+
+        boolean yaConfirmo = (estado == EstadoIntercambio.CONFIRMADO_POR_PROPONENTE && esProponente)
+                || (estado == EstadoIntercambio.CONFIRMADO_POR_RECEPTOR && !esProponente);
+        if (yaConfirmo) {
+            throw new EstadoIntercambioInvalidoException("Ya confirmaste; falta la confirmación de la otra parte");
+        }
+
+        // Segunda confirmación: se cierra el intercambio
         Usuario proponente = buscarPorEmail(intercambio.getId().getPropietarioIdOfrecida());
         Usuario receptor = buscarPorEmail(intercambio.getId().getPropietarioIdSolicitante());
 
@@ -200,6 +237,24 @@ public class IntercambioServiceImpl implements IntercambioService {
     @Transactional
     public EstadoIntercambio consultarEstado(IntercambioId intercambioId) {
         return buscarIntercambio(intercambioId).getEstado();
+    }
+
+    @Override
+    @Transactional
+    public void cancelarPendientesDePublicacion(PublicacionId publicacionId, IntercambioId excluir) {
+        List<Intercambio> pendientes = intercambioRepository.buscarPorPublicacionYEstado(
+                publicacionId.getIsbn(),
+                publicacionId.getEmailPropietario(),
+                publicacionId.getHoraPublicacion(),
+                EstadoIntercambio.PENDIENTE);
+
+        for (Intercambio otro : pendientes) {
+            if (otro.getId().equals(excluir)) continue;
+
+            liberarReservaSiExiste(otro);
+            otro.setEstado(EstadoIntercambio.CANCELADO);
+            otro.setMotivoRechazo("La publicación ya no está disponible");
+        }
     }
 
     // ---------- Puntos ----------

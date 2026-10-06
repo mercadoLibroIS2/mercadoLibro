@@ -30,8 +30,11 @@ import java.util.List;
 @Service
 public class PublicacionServiceImpl implements PublicacionService {
 
-    private static final List<EstadoIntercambio> ESTADOS_INTERCAMBIO_ACTIVOS =
-            List.of(EstadoIntercambio.PENDIENTE, EstadoIntercambio.ACEPTADO);
+    private static final List<EstadoIntercambio> ESTADOS_INTERCAMBIO_ACTIVOS = List.of(
+            EstadoIntercambio.PENDIENTE,
+            EstadoIntercambio.ACEPTADO,
+            EstadoIntercambio.CONFIRMADO_POR_PROPONENTE,
+            EstadoIntercambio.CONFIRMADO_POR_RECEPTOR);
 
     @Autowired
     private PublicacionRepository publicacionRepository;

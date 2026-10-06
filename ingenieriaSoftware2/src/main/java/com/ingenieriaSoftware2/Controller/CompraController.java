@@ -5,11 +5,13 @@ import com.ingenieriaSoftware2.DTO.Request.CompraIdParams;
 import com.ingenieriaSoftware2.DTO.Request.CompraRequestDTO;
 import com.ingenieriaSoftware2.DTO.Request.EnvioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.CompraResponseDTO;
+import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Service.Interfaces.CompraService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,8 +47,9 @@ public class CompraController {
     }
 
     @PatchMapping("/confirmar-pago")
-    public ResponseEntity<CompraResponseDTO> confirmarPago(@Valid @ModelAttribute CompraIdParams id) {
-        return ResponseEntity.ok(compraService.confirmarPago(id.toId()));
+    public ResponseEntity<CompraResponseDTO> confirmarPago(@AuthenticationPrincipal Usuario usuario,
+                                                           @Valid @ModelAttribute CompraIdParams id) {
+        return ResponseEntity.ok(compraService.confirmarPago(id.toId(), usuario.getId()));
     }
 
     @PatchMapping("/enviar")

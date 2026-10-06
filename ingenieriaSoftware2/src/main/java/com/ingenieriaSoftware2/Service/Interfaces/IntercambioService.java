@@ -3,6 +3,7 @@ package com.ingenieriaSoftware2.Service.Interfaces;
 import com.ingenieriaSoftware2.DTO.Request.IntercambioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.IntercambioResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
+import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Intercambio;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 
@@ -25,5 +26,7 @@ public interface IntercambioService {
     IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
     EstadoIntercambio consultarEstado(IntercambioId intercambioId);
+
+    void cancelarPendientesDePublicacion(PublicacionId publicacionId, IntercambioId excluir);
 
 }
