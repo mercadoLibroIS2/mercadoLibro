@@ -69,13 +69,10 @@ interface StoreContextValue extends AppState {
   toast: string | null
   showToast: (msg: string) => void
 
-  // Auth & User Switch
-  login: (user: User) => void
-  register: (name: string, username: string, email: string) => void
+  // Auth
   logout: () => Promise<void>
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
-  switchUser: (userId: string) => void
   updateProfile: (patch: Partial<User>) => void
   viewUserProfile: (userId: string) => void
 
@@ -326,31 +323,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [syncSupabaseUser])
 
   // --- Auth & User Switching ---
-  const switchUser = useCallback(
-    (userId: string) => {
-      const found = state.users.find((u) => u.id === userId)
-      if (!found) return
-      setState((prev) => ({ ...prev, currentUser: found }))
-      showToast(`Cambiado a usuario: ${found.name}`)
-    },
-    [showToast, state.users]
-  )
-
-  const login = useCallback(
-    (user: User) => {
-      setState((prev) => {
-        const existing = prev.users.find((u) => u.email.toLowerCase() === user.email.toLowerCase())
-        const currentUser = existing || user
-        const users = existing ? prev.users : [...prev.users, user]
-        return { ...prev, users, currentUser }
-      })
-      // Directs to Welcome / Onboarding screen after login
-      setScreen("bienvenida")
-      showToast(`¡Bienvenido/a de nuevo, ${user.name}!`)
-    },
-    [showToast]
-  )
-
   const signInWithSupabase = useCallback(
     async (email: string, password: string) => {
       try {
@@ -386,47 +358,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
     [syncSupabaseUser, showToast]
-  )
-
-  const register = useCallback(
-    (name: string, username: string, email: string) => {
-      const id = "user-" + Date.now()
-      const newUser: User = {
-        id,
-        name,
-        username: username.replace("@", ""),
-        email,
-        avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250`,
-        rating: 5.0,
-        totalReviews: 0,
-        totalTrades: 0,
-        availablePoints: 100, // RF14: 100 initial points
-        reservedPoints: 0,
-        joinedDate: new Date().toISOString(),
-      }
-
-      const initialMovement: PointMovement = {
-        id: "pm-" + Date.now(),
-        userId: id,
-        type: "INICIAL",
-        amount: 100,
-        balanceAfter: 100,
-        description: "Bienvenida a Mercado Libro — Asignación de 100 puntos iniciales (RF14)",
-        date: new Date().toISOString(),
-      }
-
-      setState((prev) => ({
-        ...prev,
-        users: [...prev.users, newUser],
-        currentUser: newUser,
-        pointMovements: [initialMovement, ...prev.pointMovements],
-      }))
-
-      // Directs to Welcome / Onboarding screen after registration
-      setScreen("bienvenida")
-      showToast("¡Cuenta creada con éxito! Recibiste 100 puntos de bienvenida.")
-    },
-    [showToast]
   )
 
   const signUpWithSupabase = useCallback(
@@ -1280,12 +1211,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSelectedCategory,
         toast,
         showToast,
-        login,
-        register,
         logout,
         signInWithSupabase,
         signUpWithSupabase,
-        switchUser,
         updateProfile,
         viewUserProfile,
         publishBook,

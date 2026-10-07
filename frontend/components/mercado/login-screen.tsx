@@ -1,15 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { BookOpen, LogIn, Users, Loader2, AlertCircle } from "lucide-react"
+import { BookOpen, LogIn, Loader2, AlertCircle } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
-import type { User } from "@/lib/mercado-types"
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function LoginScreen() {
-  const { login, users, setScreen, showToast, signInWithSupabase } = useStore()
+  const { setScreen, signInWithSupabase } = useStore()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({})
@@ -21,7 +20,9 @@ export function LoginScreen() {
     setServerError(null)
     const next: typeof errors = {}
     if (!identifier.trim()) {
-      next.identifier = "Ingresá tu email o usuario"
+      next.identifier = "Ingresá tu email"
+    } else if (!emailRe.test(identifier.trim())) {
+      next.identifier = "El email no tiene un formato válido"
     }
     if (!password) {
       next.password = "Ingresá tu contraseña"
@@ -32,29 +33,10 @@ export function LoginScreen() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    // Si el identificador ingresado coincide con un usuario demo local y la contraseña es simple, permitir demo
-    const demoUser = users.find(
-      (u) =>
-        u.email.toLowerCase() === identifier.toLowerCase() ||
-        u.username.toLowerCase() === identifier.toLowerCase()
-    )
-
-    // Determinar si es email directo o buscar email del usuario registrado
-    let targetEmail = identifier.trim()
-    if (!targetEmail.includes("@") && demoUser) {
-      targetEmail = demoUser.email
-    }
-
     setLoading(true)
     try {
-      // Intentar autenticación con Supabase
-      const res = await signInWithSupabase(targetEmail, password)
+      const res = await signInWithSupabase(identifier.trim(), password)
       if (!res.success) {
-        // Si falló en Supabase pero es un usuario Demo local, permitir acceso como fallback
-        if (demoUser && password === "demo") {
-          login(demoUser)
-          return
-        }
         setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
       }
     } catch {
@@ -80,30 +62,6 @@ export function LoginScreen() {
           </p>
         </div>
 
-        {/* Quick Demo Login selector */}
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-          <div className="flex items-center gap-1.5 text-sm md:text-base font-bold uppercase tracking-wider text-amber-900 mb-2.5">
-            <Users className="h-4 w-4" />
-            <span>Ingreso rápido con cuentas Demo:</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => login(u)}
-                className="flex items-center gap-2 rounded-xl border border-amber-200 bg-white p-2.5 text-left hover:bg-amber-100/70 transition-colors shadow-xs"
-              >
-                <img src={u.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-                <div className="truncate">
-                  <p className="text-sm md:text-base md:text-lg font-bold text-stone-900 truncate">{u.name.split(" ")[0]}</p>
-                  <p className="text-sm md:text-base font-semibold text-amber-900">{u.availablePoints} pts</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {serverError && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm md:text-base font-medium text-rose-800 animate-in fade-in">
             <AlertCircle className="h-5 w-5 shrink-0 text-rose-600" />
@@ -114,8 +72,10 @@ export function LoginScreen() {
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           <Field
             id="login-identifier"
-            label="Email o nombre de usuario"
-            placeholder="franco@mercadolibro.com"
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="ana@ejemplo.com"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             error={errors.identifier}
