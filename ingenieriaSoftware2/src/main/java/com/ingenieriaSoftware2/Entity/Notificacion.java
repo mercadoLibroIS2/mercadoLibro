@@ -44,6 +44,9 @@ public class Notificacion {
     @Column(name = "tipo", nullable = false, columnDefinition = "tipo_notificacion")
     private TipoNotificacion tipo;
 
+    @Column(name = "mensaje", nullable = false)
+    private String mensaje;
+
     @Column(name = "leida", nullable = false, columnDefinition = "boolean default false")
     private Boolean leida = false;
 

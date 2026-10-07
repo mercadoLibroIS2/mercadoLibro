@@ -71,7 +71,7 @@ interface StoreContextValue extends AppState {
   // Auth & User Switch
   login: (user: User) => void
   register: (name: string, username: string, email: string) => void
-  logout: () => void
+  logout: () => Promise<void>
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
   switchUser: (userId: string) => void
@@ -175,7 +175,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, currentUser: null }))
     } catch {
       // storage unavailable
     }
@@ -307,6 +307,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         syncSupabaseUser(session.user)
       } else if (event === "SIGNED_OUT") {
         setState((prev) => ({ ...prev, currentUser: null }))
+        setScreen("login")
       }
     })
 
@@ -480,11 +481,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    let globalSignOutFailed = false
     try {
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut({ scope: "global" })
+      globalSignOutFailed = Boolean(error)
     } catch {
-      // ignore
+      globalSignOutFailed = true
     }
+
+    if (globalSignOutFailed) {
+      try {
+        const { error } = await supabase.auth.signOut({ scope: "local" })
+        if (error) {
+          showToast("No se pudo cerrar la sesión. Verificá tu conexión e intentá nuevamente.")
+          return
+        }
+      } catch {
+        showToast("No se pudo cerrar la sesión. Verificá tu conexión e intentá nuevamente.")
+        return
+      }
+
+      setState((prev) => ({ ...prev, currentUser: null }))
+      setScreen("login")
+      showToast("Sesión cerrada en este dispositivo; no se pudo confirmar el cierre en otros dispositivos.")
+      return
+    }
+
     setState((prev) => ({ ...prev, currentUser: null }))
     setScreen("login")
     showToast("Sesión cerrada.")
