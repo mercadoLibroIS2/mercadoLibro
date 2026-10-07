@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react"
 import type {
@@ -127,6 +128,7 @@ function getInitialState(): AppState {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState)
+  const authSessionVersion = useRef(0)
   const [screen, setScreen] = useState<Screen>("login")
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
@@ -196,7 +198,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   // Helper to map Supabase User and database Profile to our App User
-  const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser) => {
+  const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser, sessionVersion = authSessionVersion.current) => {
     try {
       let profileData: Partial<User> | null = null
       // Intentar leer de la tabla 'usuario' (diseño oficial de MercadoLibro) o 'profiles'
@@ -271,6 +273,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         joinedDate: profileData?.joinedDate || sbUser.created_at || new Date().toISOString(),
       }
 
+      if (sessionVersion !== authSessionVersion.current) return null
+
       setState((prev) => {
         const exists = prev.users.some(
           (u) => u.id === appUser.id || (u.email && u.email.toLowerCase() === appUser.email.toLowerCase())
@@ -290,9 +294,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
+    const initialSessionVersion = authSessionVersion.current
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        syncSupabaseUser(session.user).then((u) => {
+        syncSupabaseUser(session.user, initialSessionVersion).then((u) => {
           if (u) {
             setScreen((currentScreen) => (currentScreen === "login" || currentScreen === "registro" ? "inicio" : currentScreen))
           }
@@ -303,11 +308,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
-        syncSupabaseUser(session.user)
-      } else if (event === "SIGNED_OUT") {
+      if (event === "SIGNED_OUT") {
+        authSessionVersion.current += 1
         setState((prev) => ({ ...prev, currentUser: null }))
         setScreen("login")
+      } else if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "USER_UPDATED") {
+        const sessionVersion = ++authSessionVersion.current
+        if (session?.user) {
+          syncSupabaseUser(session.user, sessionVersion)
+        }
       }
     })
 
@@ -362,8 +371,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo sincronizar la sesión. Intenta iniciar sesión nuevamente." }
+          }
           setScreen("bienvenida")
-          showToast(`¡Bienvenido/a de nuevo, ${u?.name || "lector"}!`)
+          showToast(`¡Bienvenido/a de nuevo, ${u.name || "lector"}!`)
           return { success: true }
         }
 
@@ -453,6 +465,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo sincronizar la sesión. Inicia sesión nuevamente." }
+          }
           const initialMovement: PointMovement = {
             id: "pm-" + Date.now(),
             userId: data.user.id,
