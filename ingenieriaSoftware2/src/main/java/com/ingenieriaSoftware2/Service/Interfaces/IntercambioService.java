@@ -2,28 +2,32 @@ package com.ingenieriaSoftware2.Service.Interfaces;
 
 import com.ingenieriaSoftware2.DTO.Request.IntercambioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.IntercambioResponseDTO;
-import com.ingenieriaSoftware2.Entity.Intercambio;
+import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
+import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface IntercambioService {
-    IntercambioResponseDTO proponerIntercambio(IntercambioRequestDTO request, Long usuarioProponenteId);
 
-    IntercambioResponseDTO obtenerPorId(Long intercambioId);
+    IntercambioResponseDTO proponerIntercambio(IntercambioRequestDTO request, UUID usuarioProponenteId);
 
-    List<IntercambioResponseDTO> listarPropuestasRecibidas(Long usuarioId);
+    IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId);
 
-    List<IntercambioResponseDTO> listarPropuestasEnviadas(Long usuarioId);
+    List<IntercambioResponseDTO> listarPropuestasEnviadas(UUID usuarioId);
 
-    IntercambioResponseDTO aceptarIntercambio(Long intercambioId, Long usuarioReceptorId);
+    List<IntercambioResponseDTO> listarPropuestasRecibidas(UUID usuarioId);
 
-    IntercambioResponseDTO rechazarIntercambio(Long intercambioId, Long usuarioReceptorId, String motivo);
+    IntercambioResponseDTO aceptarIntercambio(IntercambioId intercambioId, UUID usuarioReceptorId);
 
-    IntercambioResponseDTO cancelarIntercambio(Long intercambioId, Long usuarioId);
+    IntercambioResponseDTO rechazarIntercambio(IntercambioId intercambioId, UUID usuarioReceptorId, String motivo);
 
-    IntercambioResponseDTO completarIntercambio(Long intercambioId);
+    IntercambioResponseDTO cancelarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
-    EstadoIntercambio consultarEstado(Long intercambioId);
+    IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
+    EstadoIntercambio consultarEstado(IntercambioId intercambioId);
+
+    void cancelarPendientesDePublicacion(PublicacionId publicacionId, IntercambioId excluir);
 }

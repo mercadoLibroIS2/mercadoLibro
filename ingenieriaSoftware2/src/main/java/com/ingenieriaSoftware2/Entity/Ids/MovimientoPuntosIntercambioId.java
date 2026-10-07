@@ -10,6 +10,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Embeddable
@@ -20,9 +21,14 @@ import java.util.UUID;
 @EqualsAndHashCode
 public class MovimientoPuntosIntercambioId implements Serializable {
     private IntercambioId intercambioId;
+
     private UUID usuarioId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "tipo", columnDefinition = "tipo_movimiento")
+    @Column(name = "tipo", columnDefinition = "tipo_movimiento", nullable = false)
     private TipoMovimiento tipoMovimiento;
+
+    @Column(name = "fecha", nullable = false)
+    private Instant fecha;
 }

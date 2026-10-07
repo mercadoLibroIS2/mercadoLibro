@@ -1,255 +1,393 @@
 -- =======================================================
 -- ESQUEMA COMPLETO DE BASE DE DATOS PARA MERCADOLIBRO
--- Compatible con PostgreSQL (Supabase) y H2
+-- Solo PostgreSQL (Supabase). No es compatible con H2 por los tipos ENUM nativos.
+-- Se puede ejecutar varias veces: todo usa IF NOT EXISTS o bloques protegidos.
 -- =======================================================
 
--- TABLA: usuario
+
+-- =======================================================
+-- TIPOS ENUM
+-- Postgres no tiene CREATE TYPE IF NOT EXISTS, por eso van en bloques DO.
+-- Los valores tienen que coincidir EXACTAMENTE con los enums de Java.
+-- =======================================================
+
+DO $$ BEGIN
+    CREATE TYPE estado_intercambio AS ENUM (
+        'PENDIENTE',
+        'ACEPTADO',
+        'CONFIRMADO_POR_PROPONENTE',
+        'CONFIRMADO_POR_RECEPTOR',
+        'RECHAZADO',
+        'CANCELADO',
+        'COMPLETADO'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Mismos valores que TipoMovimiento.java (y que el CHECK de movimiento_puntos_sistema)
+DO $$ BEGIN
+    CREATE TYPE tipo_movimiento AS ENUM (
+        'INGRESO',
+        'EGRESO',
+        'RESERVA',
+        'LIBERACION_RESERVA',
+        'DEVOLUCION',
+        'BONIFICACION'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Mismos valores que TipoNotificacion.java
+DO $$ BEGIN
+    CREATE TYPE tipo_notificacion AS ENUM (
+        'INTERCAMBIO_SOLICITADO',
+        'INTERCAMBIO_ACEPTADO',
+        'INTERCAMBIO_COMPLETADO',
+        'RESENIA_RECIBIDA',
+        'PUNTOS_GANADOS',
+        'PUNTOS_GASTADOS'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Si el tipo ya existía de antes, estos agregan los valores que falten.
+-- Valores viejos que hayan quedado (por ejemplo LIBERACION, PAGO, COBRO) no molestan.
+ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_PROPONENTE';
+ALTER TYPE estado_intercambio ADD VALUE IF NOT EXISTS 'CONFIRMADO_POR_RECEPTOR';
+
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'INGRESO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'EGRESO';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'RESERVA';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'LIBERACION_RESERVA';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'DEVOLUCION';
+ALTER TYPE tipo_movimiento ADD VALUE IF NOT EXISTS 'BONIFICACION';
+
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_SOLICITADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_ACEPTADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_COMPLETADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'RESENIA_RECIBIDA';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
+
+
+-- =======================================================
+-- USUARIO
+-- =======================================================
+
 CREATE TABLE IF NOT EXISTS usuario (
-    id UUID PRIMARY KEY,
-    nombre VARCHAR(255) UNIQUE,
-    contrasenia VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    saldo_total INTEGER DEFAULT 100,
-    saldo_reservado INTEGER DEFAULT 0,
-    reputacion_promedio REAL DEFAULT 5.0,
-    rol VARCHAR(50) DEFAULT 'USUARIO',
-    es_activo BOOLEAN DEFAULT TRUE
+    id                  UUID PRIMARY KEY,
+    email               VARCHAR(255) NOT NULL UNIQUE,
+    nombre              VARCHAR(255) NOT NULL UNIQUE,
+    contrasenia         VARCHAR(255) NOT NULL,
+    saldo_total         INTEGER DEFAULT 100,
+    saldo_reservado     INTEGER DEFAULT 0,
+    reputacion_promedio REAL NOT NULL DEFAULT 5.0,
+    rol                 VARCHAR(50) DEFAULT 'USUARIO'
+                        CHECK (rol IN ('USUARIO', 'ADMINISTRADOR')),
+    es_activo           BOOLEAN NOT NULL DEFAULT TRUE
 );
 
--- Asegurar columnas en caso de que la tabla ya existiera previamente
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS nombre VARCHAR(255);
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS contrasenia VARCHAR(255);
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS email VARCHAR(255);
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS saldo_total INTEGER DEFAULT 100;
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS saldo_reservado INTEGER DEFAULT 0;
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS reputacion_promedio REAL DEFAULT 5.0;
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'USUARIO';
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS es_activo BOOLEAN DEFAULT TRUE;
 
--- TABLA: libro
+-- =======================================================
+-- CATEGORIA Y LIBRO
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS categoria (
+    nombre             VARCHAR(255) PRIMARY KEY,
+    categoria_padre_id VARCHAR(255) REFERENCES categoria (nombre)
+);
+
 CREATE TABLE IF NOT EXISTS libro (
-    id UUID PRIMARY KEY,
-    isbn VARCHAR(255) UNIQUE NOT NULL,
-    titulo VARCHAR(255) NOT NULL,
-    autor VARCHAR(255) NOT NULL,
-    estado_fisico VARCHAR(50) NOT NULL,
-    valor_referencia INTEGER NOT NULL,
-    disponible BOOLEAN NOT NULL,
-    propietario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE
+    isbn                      VARCHAR(255) PRIMARY KEY,
+    google_books_id           VARCHAR(255) NOT NULL UNIQUE,
+    titulo                    VARCHAR(255) NOT NULL,
+    autores                   VARCHAR(255),
+    puntuacion_externa        NUMERIC(3, 2) CHECK (puntuacion_externa BETWEEN 0 AND 5),
+    valor_referencia          INTEGER,
+    fecha_cache_bibliografico TIMESTAMP,
+    fecha_cache_puntuacion    TIMESTAMP
 );
 
--- TABLA: libro_categoria
 CREATE TABLE IF NOT EXISTS libro_categoria (
-    libro_id UUID NOT NULL REFERENCES libro(id) ON DELETE CASCADE,
-    categoria VARCHAR(50) NOT NULL
+    isbn             VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
+    nombre_categoria VARCHAR(255) NOT NULL REFERENCES categoria (nombre) ON DELETE CASCADE,
+    PRIMARY KEY (isbn, nombre_categoria)
 );
 
--- TABLA: cadena_intercambio
+-- Usuario.librosSeguidos
+CREATE TABLE IF NOT EXISTS seguimiento (
+    email_usuario VARCHAR(255) NOT NULL REFERENCES usuario (email) ON DELETE CASCADE ON UPDATE CASCADE,
+    isbn          VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
+    PRIMARY KEY (email_usuario, isbn)
+);
+
+
+-- =======================================================
+-- PUBLICACION
+-- PK: (isbn, email_propietario, hora_publicacion)
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS publicacion (
+    isbn                       VARCHAR(255) NOT NULL REFERENCES libro (isbn),
+    email_propietario          VARCHAR(255) NOT NULL REFERENCES usuario (email) ON UPDATE CASCADE,
+    hora_publicacion           TIMESTAMP    NOT NULL,
+    estado_fisico              VARCHAR(50)
+                               CHECK (estado_fisico IN ('NUEVO', 'COMO_NUEVO', 'BUEN_ESTADO', 'ACEPTABLE', 'DETERIORADO')),
+    valor_puntos_solicitado    INTEGER,
+    valor_referencia_calculado INTEGER,
+    comentario                 VARCHAR(255),
+    estado_publicacion         VARCHAR(50) NOT NULL DEFAULT 'DISPONIBLE'
+                               CHECK (estado_publicacion IN ('DISPONIBLE', 'RESERVADA', 'VENDIDA', 'ELIMINADA')),
+    color_semaforo             VARCHAR(50) NOT NULL DEFAULT 'SIN_REFERENCIA'
+                               CHECK (color_semaforo IN ('VERDE', 'AMARILLO', 'ROJO', 'SIN_REFERENCIA')),
+    PRIMARY KEY (isbn, email_propietario, hora_publicacion)
+);
+
+
+-- =======================================================
+-- COMPRA
+-- PK: (comprador_email, isbn, propietario_email, hora_publicacion)
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS compra (
+    comprador_email    VARCHAR(255) NOT NULL REFERENCES usuario (email) ON UPDATE CASCADE,
+    isbn               VARCHAR(255) NOT NULL,
+    propietario_email  VARCHAR(255) NOT NULL,
+    hora_publicacion   TIMESTAMP    NOT NULL,
+    puntos             INTEGER      NOT NULL CHECK (puntos >= 0),
+    timestamp          TIMESTAMPTZ  NOT NULL,
+    estado             VARCHAR(50)  NOT NULL
+                       CHECK (estado IN ('PENDIENTE_PAGO', 'PAGADA', 'ENVIADA', 'ENTREGADA', 'CANCELADA')),
+    info_envio         VARCHAR(255),
+    motivo_cancelacion VARCHAR(255),
+    PRIMARY KEY (comprador_email, isbn, propietario_email, hora_publicacion),
+    FOREIGN KEY (isbn, propietario_email, hora_publicacion)
+        REFERENCES publicacion (isbn, email_propietario, hora_publicacion)
+);
+
+
+-- =======================================================
+-- CADENA DE INTERCAMBIO
+-- =======================================================
+
 CREATE TABLE IF NOT EXISTS cadena_intercambio (
-    id UUID PRIMARY KEY,
+    id           UUID PRIMARY KEY,
     puntos_bonus INTEGER DEFAULT 0,
-    estado VARCHAR(50)
+    estado       VARCHAR(50)
 );
 
--- TABLA: cadena_participantes
 CREATE TABLE IF NOT EXISTS cadena_participantes (
-    cadena_id UUID NOT NULL REFERENCES cadena_intercambio(id) ON DELETE CASCADE,
-    usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    cadena_id  UUID NOT NULL REFERENCES cadena_intercambio (id) ON DELETE CASCADE,
+    usuario_id UUID NOT NULL REFERENCES usuario (id) ON DELETE CASCADE,
     PRIMARY KEY (cadena_id, usuario_id)
 );
 
--- TABLA: intercambio
+
+-- =======================================================
+-- INTERCAMBIO
+-- PK: publicación solicitada (3 cols) + publicación ofrecida (3 cols)
+-- =======================================================
+
 CREATE TABLE IF NOT EXISTS intercambio (
-    id UUID PRIMARY KEY,
-    puntos_comprometidos INTEGER,
-    tipo VARCHAR(50),
-    estado VARCHAR(50),
-    libro_deseado_id UUID NOT NULL REFERENCES libro(id),
-    libro_ofrecido_id UUID REFERENCES libro(id),
-    prestador_id UUID NOT NULL REFERENCES usuario(id),
-    receptor_id UUID NOT NULL REFERENCES usuario(id),
-    cadena_id UUID REFERENCES cadena_intercambio(id)
-);
-
--- TABLA: movimiento_puntos
-CREATE TABLE IF NOT EXISTS movimiento_puntos (
-    id UUID PRIMARY KEY,
-    usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-    intercambio_id UUID NOT NULL REFERENCES intercambio(id) ON DELETE CASCADE,
-    tipo VARCHAR(50) NOT NULL,
-    cantidad INTEGER NOT NULL
-);
-
--- TABLA: resenia
-CREATE TABLE IF NOT EXISTS resenia (
-    id UUID PRIMARY KEY,
-    intercambio_id UUID NOT NULL REFERENCES intercambio(id),
-    autor UUID NOT NULL REFERENCES usuario(id),
-    calificado UUID NOT NULL REFERENCES usuario(id),
-    calificacion REAL NOT NULL,
-    comentario VARCHAR(500),
-    fecha DATE DEFAULT CURRENT_DATE
-);
-
--- TABLA: notificacion
-CREATE TABLE IF NOT EXISTS notificacion (
-    id UUID PRIMARY KEY,
-    usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-    intercambio_id UUID REFERENCES intercambio(id),
-    resenia_id UUID REFERENCES resenia(id),
-    movimiento_puntos_id UUID REFERENCES movimiento_puntos(id),
-    tipo VARCHAR(50) NOT NULL,
-    canal VARCHAR(50) NOT NULL,
-    asunto VARCHAR(255) NOT NULL,
-    mensaje VARCHAR(1000) NOT NULL,
-    estado VARCHAR(50) NOT NULL DEFAULT 'PENDIENTE'
-);
-
--- TABLA: oferta_intercambio
-CREATE TABLE IF NOT EXISTS oferta_intercambio (
-    id UUID PRIMARY KEY,
-    usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-    libro_ofrecido_id UUID NOT NULL REFERENCES libro(id) ON DELETE CASCADE,
-    puntos_solicitados INTEGER,
-    precio_min INTEGER,
-    precio_max INTEGER
-);
-
--- TABLA: oferta_libros_deseados
-CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
-    oferta_id UUID NOT NULL REFERENCES oferta_intercambio(id) ON DELETE CASCADE,
-    libro_id UUID NOT NULL REFERENCES libro(id) ON DELETE CASCADE,
-    PRIMARY KEY (oferta_id, libro_id)
+    isbn_solicitante                VARCHAR(255) NOT NULL,
+    propietario_id_solicitante      VARCHAR(255) NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP    NOT NULL,
+    isbn_ofrecida                   VARCHAR(255) NOT NULL,
+    propietario_id_ofrecida         VARCHAR(255) NOT NULL,
+    hora_de_publicacion_ofrecida    TIMESTAMP    NOT NULL,
+    estado                          estado_intercambio NOT NULL DEFAULT 'PENDIENTE',
+    puntos_comprometidos            INTEGER NOT NULL DEFAULT 0 CHECK (puntos_comprometidos >= 0),
+    motivo_rechazo                  VARCHAR(255),
+    cadena_id                       UUID REFERENCES cadena_intercambio (id),
+    PRIMARY KEY (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida
+    ),
+    FOREIGN KEY (isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante)
+        REFERENCES publicacion (isbn, email_propietario, hora_publicacion),
+    FOREIGN KEY (isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida)
+        REFERENCES publicacion (isbn, email_propietario, hora_publicacion)
 );
 
 
 -- =======================================================
--- P3 - EVENTO SISTEMA
+-- RESEÑA
+-- PK: intercambio (6 cols) + solicitante_reviewer
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS resenia (
+    isbn_solicitante                VARCHAR(255) NOT NULL,
+    propietario_id_solicitante      VARCHAR(255) NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP    NOT NULL,
+    isbn_ofrecida                   VARCHAR(255) NOT NULL,
+    propietario_id_ofrecida         VARCHAR(255) NOT NULL,
+    hora_de_publicacion_ofrecida    TIMESTAMP    NOT NULL,
+    solicitante_reviewer            BOOLEAN      NOT NULL,
+    calificacion                    SMALLINT     NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+    comentario                      VARCHAR(255),
+    PRIMARY KEY (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+        solicitante_reviewer
+    ),
+    FOREIGN KEY (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida
+    ) REFERENCES intercambio (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida
+    ) ON DELETE CASCADE
+);
+
+
+-- =======================================================
+-- EVENTO SISTEMA
 -- =======================================================
 
 CREATE TABLE IF NOT EXISTS evento_sistema (
-    tipo_evento_sistema VARCHAR(50) NOT NULL,
-    fecha_evento TIMESTAMP NOT NULL,
-    descripcion VARCHAR(255),
-
-    PRIMARY KEY (
-        tipo_evento_sistema,
-        fecha_evento
-    )
+    tipo_evento_sistema VARCHAR(50) NOT NULL
+                        CHECK (tipo_evento_sistema IN ('ALTA_INICIAL', 'PROMOCION', 'AJUSTE_ADMIN', 'OTRO')),
+    fecha_evento        TIMESTAMP   NOT NULL,
+    descripcion         VARCHAR(255),
+    PRIMARY KEY (tipo_evento_sistema, fecha_evento)
 );
 
+
 -- =======================================================
--- P3 - MOVIMIENTO PUNTOS SISTEMA
+-- MOVIMIENTOS DE PUNTOS - SISTEMA
+-- (acá "tipo" es VARCHAR: MovimientoPuntosSistemaId no usa NAMED_ENUM)
 -- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_sistema (
-    tipo_evento VARCHAR(50) NOT NULL,
-    fecha_evento TIMESTAMP NOT NULL,
-    id_usuario UUID NOT NULL,
-    tipo VARCHAR(50) NOT NULL,
-    monto BIGINT NOT NULL CHECK (monto > 0),
-
-    PRIMARY KEY (
-        tipo_evento,
-        fecha_evento,
-        id_usuario,
-        tipo
-    ),
-
-    CONSTRAINT fk_movimiento_evento
-        FOREIGN KEY (tipo_evento, fecha_evento)
-        REFERENCES evento_sistema (
-            tipo_evento_sistema,
-            fecha_evento
-        ),
-
-    CONSTRAINT fk_movimiento_usuario
-        FOREIGN KEY (id_usuario)
-        REFERENCES usuario(id)
+    tipo_evento  VARCHAR(50) NOT NULL,
+    fecha_evento TIMESTAMP   NOT NULL,
+    id_usuario   UUID        NOT NULL REFERENCES usuario (id),
+    tipo         VARCHAR(50) NOT NULL
+                 CHECK (tipo IN ('INGRESO', 'EGRESO', 'RESERVA', 'LIBERACION_RESERVA', 'DEVOLUCION', 'BONIFICACION')),
+    monto        BIGINT      NOT NULL CHECK (monto > 0),
+    PRIMARY KEY (tipo_evento, fecha_evento, id_usuario, tipo),
+    FOREIGN KEY (tipo_evento, fecha_evento)
+        REFERENCES evento_sistema (tipo_evento_sistema, fecha_evento)
 );
 
--- =====================================================
+
+-- =======================================================
 -- MOVIMIENTOS DE PUNTOS - COMPRA
--- =====================================================
+-- La fecha es parte de la PK: permite varias reservas en la misma compra
+-- (por ejemplo, si se cancela y se vuelve a comprar) y da orden al historial.
+-- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_compra (
-    comprador_id VARCHAR(255) NOT NULL,
-    isbn VARCHAR(255) NOT NULL,
-    propietario_id VARCHAR(255) NOT NULL,
-    hora_de_publicacion TIMESTAMP NOT NULL,
-    id_usuario UUID NOT NULL,
-    tipo VARCHAR(50) NOT NULL,
-    monto BIGINT NOT NULL CHECK (monto > 0),
-
-    PRIMARY KEY (
-        comprador_id,
-        isbn,
-        propietario_id,
-        hora_de_publicacion,
-        id_usuario,
-        tipo
-    )
+    comprador_id        VARCHAR(255)    NOT NULL,
+    isbn                VARCHAR(255)    NOT NULL,
+    propietario_id      VARCHAR(255)    NOT NULL,
+    hora_de_publicacion TIMESTAMP       NOT NULL,
+    id_usuario          UUID            NOT NULL REFERENCES usuario (id),
+    tipo                tipo_movimiento NOT NULL,
+    fecha               TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    monto               BIGINT          NOT NULL CHECK (monto > 0),
+    PRIMARY KEY (comprador_id, isbn, propietario_id, hora_de_publicacion, id_usuario, tipo, fecha),
+    FOREIGN KEY (comprador_id, isbn, propietario_id, hora_de_publicacion)
+        REFERENCES compra (comprador_email, isbn, propietario_email, hora_publicacion)
+        ON DELETE CASCADE
 );
 
 
--- =====================================================
+-- =======================================================
 -- MOVIMIENTOS DE PUNTOS - INTERCAMBIO
--- =====================================================
+-- La fecha es parte de la PK por el mismo motivo que en compras.
+-- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
-    isbn_solicitante VARCHAR(255) NOT NULL,
-    propietario_id_solicitante VARCHAR(255) NOT NULL,
-    hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-
-    isbn_ofrecida VARCHAR(255) NOT NULL,
-    propietario_id_ofrecida VARCHAR(255) NOT NULL,
-    hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
-
-    id_usuario UUID NOT NULL,
-    tipo VARCHAR(50) NOT NULL,
-    monto BIGINT NOT NULL CHECK (monto > 0),
-
+    isbn_solicitante                VARCHAR(255)    NOT NULL,
+    propietario_id_solicitante      VARCHAR(255)    NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP       NOT NULL,
+    isbn_ofrecida                   VARCHAR(255)    NOT NULL,
+    propietario_id_ofrecida         VARCHAR(255)    NOT NULL,
+    hora_de_publicacion_ofrecida    TIMESTAMP       NOT NULL,
+    id_usuario                      UUID            NOT NULL REFERENCES usuario (id),
+    tipo                            tipo_movimiento NOT NULL,
+    fecha                           TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    monto                           BIGINT          NOT NULL CHECK (monto > 0),
     PRIMARY KEY (
-        isbn_solicitante,
-        propietario_id_solicitante,
-        hora_de_publicacion_solicitante,
-        isbn_ofrecida,
-        propietario_id_ofrecida,
-        hora_de_publicacion_ofrecida,
-        id_usuario,
-        tipo
-    )
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+        id_usuario, tipo, fecha
+    ),
+    FOREIGN KEY (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida
+    ) REFERENCES intercambio (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida
+    ) ON DELETE CASCADE
 );
 
 
--- =====================================================
+-- =======================================================
 -- MOVIMIENTOS DE PUNTOS - RESEÑA
--- =====================================================
+-- =======================================================
 
 CREATE TABLE IF NOT EXISTS movimiento_puntos_resenia (
-    isbn_solicitante VARCHAR(255) NOT NULL,
-    propietario_id_solicitante VARCHAR(255) NOT NULL,
-    hora_de_publicacion_solicitante TIMESTAMP NOT NULL,
-
-    isbn_ofrecida VARCHAR(255) NOT NULL,
-    propietario_id_ofrecida VARCHAR(255) NOT NULL,
-    hora_de_publicacion_ofrecida TIMESTAMP NOT NULL,
-
-    solicitante_reviewer BOOLEAN NOT NULL,
-
-    id_usuario UUID NOT NULL,
-    tipo VARCHAR(50) NOT NULL,
-    monto BIGINT NOT NULL CHECK (monto > 0),
-
+    isbn_solicitante                VARCHAR(255)    NOT NULL,
+    propietario_id_solicitante      VARCHAR(255)    NOT NULL,
+    hora_de_publicacion_solicitante TIMESTAMP       NOT NULL,
+    isbn_ofrecida                   VARCHAR(255)    NOT NULL,
+    propietario_id_ofrecida         VARCHAR(255)    NOT NULL,
+    hora_de_publicacion_ofrecida    TIMESTAMP       NOT NULL,
+    solicitante_reviewer            BOOLEAN         NOT NULL,
+    id_usuario                      UUID            NOT NULL REFERENCES usuario (id),
+    tipo                            tipo_movimiento NOT NULL,
+    monto                           BIGINT          NOT NULL CHECK (monto > 0),
     PRIMARY KEY (
-        isbn_solicitante,
-        propietario_id_solicitante,
-        hora_de_publicacion_solicitante,
-        isbn_ofrecida,
-        propietario_id_ofrecida,
-        hora_de_publicacion_ofrecida,
-        solicitante_reviewer,
-        id_usuario,
-        tipo
-    )
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+        solicitante_reviewer, id_usuario, tipo
+    ),
+    FOREIGN KEY (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+        solicitante_reviewer
+    ) REFERENCES resenia (
+        isbn_solicitante, propietario_id_solicitante, hora_de_publicacion_solicitante,
+        isbn_ofrecida, propietario_id_ofrecida, hora_de_publicacion_ofrecida,
+        solicitante_reviewer
+    ) ON DELETE CASCADE
+);
+
+
+-- =======================================================
+-- NOTIFICACION
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS notificacion (
+    id                   UUID PRIMARY KEY,
+    email_usuario        VARCHAR(255) NOT NULL REFERENCES usuario (email) ON DELETE CASCADE ON UPDATE CASCADE,
+    isbn                 VARCHAR(255),
+    email_propietario_id VARCHAR(255),
+    hora_de_publicacion  TIMESTAMP,
+    tipo                 tipo_notificacion NOT NULL,
+    leida                BOOLEAN   NOT NULL DEFAULT FALSE,
+    archivada            BOOLEAN   NOT NULL DEFAULT FALSE,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT now(),
+    FOREIGN KEY (isbn, email_propietario_id, hora_de_publicacion)
+        REFERENCES publicacion (isbn, email_propietario, hora_publicacion)
+        ON DELETE CASCADE
+);
+
+
+-- =======================================================
+-- OFERTA DE INTERCAMBIO
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS oferta_intercambio (
+    id                 UUID PRIMARY KEY,
+    usuario_id         UUID         NOT NULL REFERENCES usuario (id) ON DELETE CASCADE,
+    libro_ofrecido_id  VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
+    puntos_solicitados INTEGER,
+    precio_min         INTEGER,
+    precio_max         INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
+    oferta_id UUID         NOT NULL REFERENCES oferta_intercambio (id) ON DELETE CASCADE,
+    libro_id  VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
+    PRIMARY KEY (oferta_id, libro_id)
 );

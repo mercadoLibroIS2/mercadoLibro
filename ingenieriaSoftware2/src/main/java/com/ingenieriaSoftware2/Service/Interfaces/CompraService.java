@@ -2,25 +2,26 @@ package com.ingenieriaSoftware2.Service.Interfaces;
 
 import com.ingenieriaSoftware2.DTO.Request.CompraRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.CompraResponseDTO;
+import com.ingenieriaSoftware2.Entity.Ids.CompraId;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface CompraService {
-    // Alta de una compra sobre un libro publicado
-    CompraResponseDTO realizarCompra(CompraRequestDTO request, Long compradorId);
 
-    CompraResponseDTO obtenerPorId(Long compraId);
+    CompraResponseDTO realizarCompra(CompraRequestDTO request, UUID compradorId);
 
-    List<CompraResponseDTO> listarPorComprador(Long compradorId);
+    CompraResponseDTO obtenerPorId(CompraId compraId);
 
-    List<CompraResponseDTO> listarPorVendedor(Long vendedorId);
+    List<CompraResponseDTO> listarPorComprador(UUID compradorId);
 
-    // Transiciones de estado del flujo de compra
-    CompraResponseDTO confirmarPago(Long compraId);
+    List<CompraResponseDTO> listarPorVendedor(UUID vendedorId);
 
-    CompraResponseDTO marcarComoEnviada(Long compraId, String infoEnvio);
+    CompraResponseDTO confirmarPago(CompraId compraId, UUID compradorId);
 
-    CompraResponseDTO marcarComoEntregada(Long compraId);
+    CompraResponseDTO marcarComoEnviada(CompraId compraId, UUID vendedorId, String infoEnvio);
 
-    CompraResponseDTO cancelarCompra(Long compraId, String motivo);
+    CompraResponseDTO marcarComoEntregada(CompraId compraId, UUID compradorId);
+
+    CompraResponseDTO cancelarCompra(CompraId compraId, UUID usuarioId, String motivo);
 }

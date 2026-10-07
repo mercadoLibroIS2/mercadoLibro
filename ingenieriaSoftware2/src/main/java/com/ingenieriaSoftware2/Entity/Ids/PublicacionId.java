@@ -16,8 +16,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @EqualsAndHashCode
 public class PublicacionId implements Serializable {
+    @Column(name = "isbn", nullable = false)
     private String isbn;
+
+    @Column(name = "email_propietario", nullable = false)
     private String emailPropietario;
-    @Column(name = "hora_publicacion")
+
+    @Column(name = "hora_publicacion", nullable = false)
     private LocalDateTime horaPublicacion;
 }

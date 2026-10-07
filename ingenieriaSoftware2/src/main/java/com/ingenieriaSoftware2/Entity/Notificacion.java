@@ -26,7 +26,7 @@ public class Notificacion {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "email_usuario", nullable = false)
+    @JoinColumn(name = "email_usuario", referencedColumnName = "email", nullable = false)
     private Usuario usuario;
 
     // FK compuesta a publicacion.
