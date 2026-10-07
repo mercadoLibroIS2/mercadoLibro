@@ -29,9 +29,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        authService.logout(token);
+    public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            authService.logout(authHeader.substring(7));
+        } else {
+            authService.logout(null);
+        }
         return ResponseEntity.ok().build();
     }
 
