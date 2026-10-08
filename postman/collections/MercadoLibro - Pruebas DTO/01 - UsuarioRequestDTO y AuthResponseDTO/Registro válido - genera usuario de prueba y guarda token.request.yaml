@@ -1,0 +1,36 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/registro"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "nombre": "{{testUsername}}",
+      "email": "{{testEmail}}",
+      "contrasenia": "{{testPassword}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      const suffix = Date.now().toString();
+      pm.collectionVariables.set('testUsername', 'qa_' + suffix);
+      pm.collectionVariables.set('testEmail', 'qa_' + suffix + '@example.test');
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Registro responde HTTP 201', function () { pm.response.to.have.status(201); });
+      pm.test('AuthResponseDTO incluye sus campos esperados', function () {
+        const body = pm.response.json();
+        pm.expect(body.id).to.be.a('string');
+        pm.expect(body.token).to.be.a('string').and.not.empty;
+        pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));
+        pm.expect(body.email).to.eql(pm.collectionVariables.get('testEmail'));
+        pm.expect(body.rol).to.eql('USUARIO');
+        pm.expect(body.puntos).to.eql(100);
+        pm.collectionVariables.set('userId', body.id);
+        pm.collectionVariables.set('token', body.token);
+      });
+    language: text/javascript
+order: 1000

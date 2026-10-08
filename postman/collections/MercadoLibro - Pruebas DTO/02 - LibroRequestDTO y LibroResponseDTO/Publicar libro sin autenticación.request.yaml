@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/api/libro/publicar"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "isbn": "QA-SIN-TOKEN",
+      "titulo": "Libro sin autenticación",
+      "autor": "Autor QA",
+      "categoria": ["FICCION_GENERAL"],
+      "estadoFisico": "NUEVO",
+      "valorReferencia": 10,
+      "disponible": true,
+      "propietario": "00000000-0000-0000-0000-000000000001"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('El endpoint protegido rechaza la solicitud sin token', function () { pm.expect([401, 403]).to.include(pm.response.code); });
+    language: text/javascript
+order: 2000

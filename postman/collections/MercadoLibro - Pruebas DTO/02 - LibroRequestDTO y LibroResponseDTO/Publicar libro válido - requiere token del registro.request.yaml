@@ -1,0 +1,46 @@
+$kind: http-request
+url: "{{baseUrl}}/api/libro/publicar"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "isbn": "{{bookIsbn}}",
+      "titulo": "Libro de prueba Postman",
+      "autor": "Autor QA",
+      "categoria": ["FICCION_GENERAL", "CIENCIA_FICCION"],
+      "estadoFisico": "BUEN_ESTADO",
+      "valorReferencia": 120,
+      "disponible": true,
+      "propietario": "{{userId}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{token}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const suffix = Date.now().toString();
+      pm.collectionVariables.set('bookIsbn', 'QA-' + suffix);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Publicar libro responde HTTP 201', function () { pm.response.to.have.status(201); });
+      pm.test('LibroResponseDTO refleja los datos enviados y propietario autenticado', function () {
+        const body = pm.response.json();
+        pm.expect(body.id).to.be.a('string').and.not.empty;
+        pm.expect(body.isbn).to.eql(pm.collectionVariables.get('bookIsbn'));
+        pm.expect(body.titulo).to.eql('Libro de prueba Postman');
+        pm.expect(body.autor).to.eql('Autor QA');
+        pm.expect(body.categoria).to.eql(['FICCION_GENERAL', 'CIENCIA_FICCION']);
+        pm.expect(body.estadoFisico).to.eql('BUEN_ESTADO');
+        pm.expect(body.valorReferencia).to.eql(120);
+        pm.expect(body.disponible).to.eql(true);
+        pm.expect(body.propietario).to.eql(pm.collectionVariables.get('userId'));
+        pm.collectionVariables.set('bookId', body.id);
+      });
+    language: text/javascript
+order: 1000
