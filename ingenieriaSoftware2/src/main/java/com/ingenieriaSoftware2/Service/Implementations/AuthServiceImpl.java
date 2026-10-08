@@ -10,6 +10,8 @@ import com.ingenieriaSoftware2.Exception.Usuario.UsuarioYaExiste;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Security.JwtService;
 import com.ingenieriaSoftware2.Service.Interfaces.AuthService;
+import com.ingenieriaSoftware2.Service.Interfaces.MovimientoPuntosService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -17,41 +19,57 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    private Integer puntosIniciales = 100;
-
     @Autowired
     private UsuarioRepository usuarioRepository;
+
     @Autowired
     private PasswordEncoder passwordEncoder;
+
     @Autowired
     private JwtService jwtService;
+
     @Autowired
     private AuthenticationManager authenticationManager;
 
+    @Autowired
+    private MovimientoPuntosService movimientoPuntosService;
 
     @Override
+    @Transactional
     public AuthResponseDTO registrar(UsuarioRequestDTO usuarioRequestDTO) {
-        if (usuarioRepository.existsByNombre(usuarioRequestDTO.nombre())||(usuarioRepository.existsByEmail(usuarioRequestDTO.email()))){
+
+        if (usuarioRepository.existsByNombre(usuarioRequestDTO.nombre())
+                || usuarioRepository.existsByEmail(usuarioRequestDTO.email())) {
+
             throw new UsuarioYaExiste();
         }
+
         Usuario usuario = new Usuario();
+
         usuario.setNombre(usuarioRequestDTO.nombre());
         usuario.setEmail(usuarioRequestDTO.email());
-        usuario.setContrasenia(passwordEncoder.encode(usuarioRequestDTO.contrasenia()));
+        usuario.setContrasenia(
+                passwordEncoder.encode(usuarioRequestDTO.contrasenia())
+        );
         usuario.setRol(Rol.USUARIO);
-        usuario.setSaldoTotal(puntosIniciales);
-        usuario.setSaldoReservado(0);
         usuario.setReputacionPromedio(0.0F);
         usuario.setEsActivo(true);
 
         Usuario usuarioGuardado = usuarioRepository.save(usuario);
-        String token = jwtService.generarToken((UserDetails) usuarioGuardado);
+
+        movimientoPuntosService.asignarPuntosIniciales(usuarioGuardado);
+
+        String token = jwtService.generarToken(
+                (UserDetails) usuarioGuardado
+        );
+
         return new AuthResponseDTO(
-                usuario.getId(),
+                usuarioGuardado.getId(),
                 token,
                 usuarioGuardado.getNombre(),
                 usuarioGuardado.getEmail(),
@@ -62,7 +80,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponseDTO login(LoginRequestDTO loginRequestDTO) {
+
         try {
+
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             loginRequestDTO.nombreOEmail(),
@@ -70,17 +90,22 @@ public class AuthServiceImpl implements AuthService {
                     )
             );
 
-            Usuario usuario = usuarioRepository.findByNombreOrEmail(
+            Usuario usuario = usuarioRepository
+                    .findByNombreOrEmail(
                             loginRequestDTO.nombreOEmail(),
                             loginRequestDTO.nombreOEmail()
                     )
-                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                    .orElseThrow(
+                            () -> new RuntimeException("Usuario no encontrado")
+                    );
 
             if (!usuario.isEsActivo()) {
                 throw new BadCredentialsException("Usuario desactivado");
             }
 
-            String token = jwtService.generarToken((UserDetails) usuario);
+            String token = jwtService.generarToken(
+                    (UserDetails) usuario
+            );
 
             return new AuthResponseDTO(
                     usuario.getId(),
@@ -92,7 +117,10 @@ public class AuthServiceImpl implements AuthService {
             );
 
         } catch (BadCredentialsException e) {
-            throw new BadCredentialsException("Credenciales inválidas");
+
+            throw new BadCredentialsException(
+                    "Credenciales inválidas"
+            );
         }
     }
 
@@ -102,29 +130,43 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public boolean validarToken(String token) {
-        try {
-            String nombreUsuario = jwtService.extraerNombreUsuario(token);
-            Usuario usuario;
-            usuario = usuarioRepository.findByNombre(nombreUsuario)
-                    .orElseThrow(() -> new UsuarioNoEncontrado());
 
-            return jwtService.validarToken(token, (UserDetails) usuario);
+        try {
+
+            String nombreUsuario =
+                    jwtService.extraerNombreUsuario(token);
+
+            Usuario usuario = usuarioRepository
+                    .findByNombre(nombreUsuario)
+                    .orElseThrow(UsuarioNoEncontrado::new);
+
+            return jwtService.validarToken(
+                    token,
+                    (UserDetails) usuario
+            );
+
         } catch (Exception e) {
+
             return false;
         }
     }
 
     @Override
     public AuthResponseDTO refrescarTocken(String token) {
+
         if (!validarToken(token)) {
             throw new BadCredentialsException("Token inválido");
         }
 
-        String nombreUsuario = jwtService.extraerNombreUsuario(token);
-        Usuario usuario = usuarioRepository.findByNombre(nombreUsuario)
-                .orElseThrow(() -> new UsuarioNoEncontrado());
+        String nombreUsuario =
+                jwtService.extraerNombreUsuario(token);
 
-        String nuevoToken = jwtService.refrescarToken(token);
+        Usuario usuario = usuarioRepository
+                .findByNombre(nombreUsuario)
+                .orElseThrow(UsuarioNoEncontrado::new);
+
+        String nuevoToken =
+                jwtService.refrescarToken(token);
 
         return new AuthResponseDTO(
                 usuario.getId(),
