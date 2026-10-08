@@ -1,4 +1,10 @@
 package com.ingenieriaSoftware2.DTO.Request;
 
-public record CadenaIntercambioRequestDTO() {
+import java.util.List;
+import java.util.UUID;
+
+public record CadenaIntercambioRequestDTO(
+        Integer puntosBonus,
+        List<UUID> intercambioIds
+) {
 }

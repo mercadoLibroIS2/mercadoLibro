@@ -33,10 +33,14 @@ public class Libro {
     @Column(nullable = false)
     private String autor;
 
-    @Column(nullable = false)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "libro_categoria", joinColumns = @JoinColumn(name = "libro_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "categoria")
     private List<CategoriaLibro> categoria = new ArrayList<>();
 
-    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_fisico", nullable = false)
     private EstadoFisico estadoFisico;
 
     @Column(nullable = false)

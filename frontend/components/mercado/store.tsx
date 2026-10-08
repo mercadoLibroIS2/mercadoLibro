@@ -34,6 +34,8 @@ import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluato
 import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import { libroService, cadenaService, reseniaService, setAuthToken, removeAuthToken } from "@/lib/api"
+import { toCategoriaLibro, toEstadoFisico } from "@/lib/mercado-types"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -143,15 +145,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTradeModalInitialType(type)
   }, [])
 
-  // Load from local storage
+  // Load from local storage and sync with Spring Boot API
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
         if (parsed.users && parsed.books) {
-          // Keep currentUser as null on initial page refresh if we want login screen first,
-          // or restore data smoothly.
           setState((prev) => ({
             ...prev,
             users: parsed.users,
@@ -168,6 +168,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+
+    // Cargar catálogo de libros desde el backend / base de datos
+    libroService
+      .obtenerCatalogo(0, 50)
+      .then(({ libros }) => {
+        if (libros && libros.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            books: libros,
+          }))
+        }
+      })
+      .catch(() => {
+        // Mantener libros de respaldo si el backend no está disponible
+      })
+
     setHydrated(true)
   }, [])
 
@@ -291,6 +307,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) {
+        setAuthToken(session.access_token)
+      }
       if (session?.user) {
         syncSupabaseUser(session.user).then((u) => {
           if (u) {
@@ -304,8 +323,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
+        if (session.access_token) {
+          setAuthToken(session.access_token)
+        }
         syncSupabaseUser(session.user)
       } else if (event === "SIGNED_OUT") {
+        removeAuthToken()
         setState((prev) => ({ ...prev, currentUser: null }))
       }
     })
@@ -357,6 +380,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             friendlyError = "Debes confirmar tu correo electrónico antes de ingresar"
           }
           return { success: false, error: friendlyError }
+        }
+
+        if (data.session?.access_token) {
+          setAuthToken(data.session.access_token)
         }
 
         if (data.user) {
@@ -450,6 +477,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { success: true, requiresEmailConfirmation: true }
         }
 
+        if (data.session?.access_token) {
+          setAuthToken(data.session.access_token)
+        }
+
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
           const initialMovement: PointMovement = {
@@ -480,6 +511,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    removeAuthToken()
     try {
       await supabase.auth.signOut()
     } catch {
@@ -513,13 +545,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // --- Books CRUD & Matching (RF01-RF04, RF35) ---
   const publishBook = useCallback(
-    (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
+    async (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
       if (!state.currentUser) return
 
       const id = "book-" + Date.now()
       const refPrice = calculateReferencePrice(data.category, data.condition, data.externalRating || 4.5)
 
-      const newBook: Book = {
+      let newBook: Book = {
         ...data,
         id,
         ownerId: state.currentUser.id,
@@ -529,6 +561,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         availability: "DISPONIBLE",
         referencePrice: refPrice,
         createdAt: new Date().toISOString(),
+      }
+
+      // 1. Intentar publicar en el backend de Spring Boot
+      try {
+        const cat = toCategoriaLibro(data.category as string)
+        const est = toEstadoFisico(data.condition as string)
+        const backendBook = await libroService.publicarLibro({
+          isbn: data.isbn || `ISBN-${Date.now()}`,
+          titulo: data.titulo || data.title,
+          autor: data.autor || data.author,
+          categoria: [cat],
+          estadoFisico: est,
+          valorReferencia: data.valorReferencia ?? data.points ?? 10,
+          disponible: true,
+        })
+        if (backendBook) {
+          newBook = backendBook
+        }
+      } catch (err: unknown) {
+        console.warn("[LibroService] Publicación falló en backend, usando fallback local:", err)
       }
 
       // Check tracker matches for other users (RF35, RF36)
@@ -1119,6 +1171,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
 
+      // Intentar persistir la reseña en Spring Boot
+      reseniaService
+        .crearResenia({
+          calificado: toUserId,
+          intercambioId: tradeId,
+          calificacion: rating,
+          comentario: comment,
+        })
+        .catch((err: unknown) => {
+          console.warn("[ReseniaService] Falló guardar reseña en backend, guardada en local:", err)
+        })
+
       showToast("¡Reseña publicada! Ganaste +5 puntos por colaborar con la comunidad.")
       setReviewTrade(null)
     },
@@ -1187,14 +1251,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.currentUser])
 
   const confirmChainStep = useCallback(
-    (chainId: string) => {
+    async (chainId: string) => {
       if (!state.currentUser) return
+
+      try {
+        const backendChain = await cadenaService.confirmarPaso(chainId)
+        if (backendChain) {
+          setState((prev) => ({
+            ...prev,
+            chains: prev.chains.map((c) => (c.id === chainId ? backendChain : c)),
+          }))
+          showToast("Confirmaste tu participación en la cadena de intercambio.")
+          return
+        }
+      } catch (err: unknown) {
+        console.warn("[CadenaService] Falló confirmación en backend, aplicando local:", err)
+      }
 
       setState((prev) => {
         const updatedChains = prev.chains.map((chain) => {
           if (chain.id !== chainId) return chain
           const updatedSteps = chain.steps.map((step) =>
-            step.userId === prev.currentUser?.id ? { ...step, confirmed: true } : step
+            step.userId === prev.currentUser?.id ? { ...step, confirmed: true, confirmado: true } : step
           )
           const allConfirmed = updatedSteps.every((s) => s.confirmed)
           return {
@@ -1212,7 +1290,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const rejectChain = useCallback(
-    (chainId: string) => {
+    async (chainId: string) => {
+      try {
+        const backendChain = await cadenaService.rechazarCadena(chainId)
+        if (backendChain) {
+          setState((prev) => ({
+            ...prev,
+            chains: prev.chains.map((c) => (c.id === chainId ? backendChain : c)),
+          }))
+          showToast("Cadena de intercambio rechazada.")
+          return
+        }
+      } catch (err: unknown) {
+        console.warn("[CadenaService] Falló rechazo en backend, aplicando local:", err)
+      }
+
       setState((prev) => ({
         ...prev,
         chains: prev.chains.map((c) => (c.id === chainId ? { ...c, status: "CANCELADA" } : c)),

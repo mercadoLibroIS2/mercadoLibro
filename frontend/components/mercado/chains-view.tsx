@@ -63,11 +63,13 @@ export function ChainsView() {
                 </div>
 
                 <span
-                  className={`rounded-full px-3.5 py-1 text-sm md:text-base md:text-lg font-bold ${
+                  className={`rounded-full px-3.5 py-1 text-sm md:text-base font-bold ${
                     chain.status === "COMPLETADA"
                       ? "bg-emerald-100 text-emerald-800"
                       : chain.status === "CANCELADA"
                       ? "bg-rose-100 text-rose-800"
+                      : chain.status === "EN_CURSO"
+                      ? "bg-amber-100 text-amber-900"
                       : "bg-purple-100 text-purple-800"
                   }`}
                 >
@@ -75,7 +77,9 @@ export function ChainsView() {
                     ? "Cadena Completada"
                     : chain.status === "CANCELADA"
                     ? "Cadena Cancelada"
-                    : "En Proceso de Confirmación"}
+                    : chain.status === "EN_CURSO"
+                    ? "En Curso (Esperando confirmaciones)"
+                    : "Propuesta de Cadena"}
                 </span>
               </div>
 
@@ -130,9 +134,11 @@ export function ChainsView() {
                             Entrega su libro:
                           </span>
                           <p className="font-semibold text-stone-900 text-base md:text-lg line-clamp-1 mt-0.5">
-                            {step.givesBook.title}
+                            {step.givesBook?.title || step.libroEntrega?.titulo || "Libro entregado"}
                           </p>
-                          <p className="text-sm md:text-base text-stone-500">{step.givesBook.author}</p>
+                          <p className="text-sm md:text-base text-stone-500">
+                            {step.givesBook?.author || step.libroEntrega?.autor || ""}
+                          </p>
                         </div>
 
                         <div className="flex justify-center text-purple-700">
@@ -144,9 +150,11 @@ export function ChainsView() {
                             Recibe a cambio:
                           </span>
                           <p className="font-semibold text-stone-900 text-base md:text-lg line-clamp-1 mt-0.5">
-                            {step.receivesBook.title}
+                            {step.receivesBook?.title || step.libroRecibe?.titulo || "Libro recibido"}
                           </p>
-                          <p className="text-sm md:text-base text-stone-500">{step.receivesBook.author}</p>
+                          <p className="text-sm md:text-base text-stone-500">
+                            {step.receivesBook?.author || step.libroRecibe?.autor || ""}
+                          </p>
                         </div>
                       </div>
                     </div>

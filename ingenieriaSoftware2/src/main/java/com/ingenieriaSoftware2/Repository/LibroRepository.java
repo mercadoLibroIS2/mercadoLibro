@@ -2,6 +2,7 @@ package com.ingenieriaSoftware2.Repository;
 
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
+import com.ingenieriaSoftware2.Enums.CategoriaLibro;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,19 +21,19 @@ public interface LibroRepository extends JpaRepository<Libro, UUID> {
 
     List<Libro> findByPropietario(Usuario propietario);
 
+    List<Libro> findByPropietarioId(UUID propietarioId);
+
     Optional<Libro> findByIsbnAndDisponibleTrue(String isbn);
 
     @Query("SELECT l FROM Libro l WHERE " +
-            "(:titulo IS NULL OR LOWER(l.titulo) LIKE LOWER(CONCAT('%', :titulo, '%'))) AND " +
-            "(:autor IS NULL OR LOWER(l.autor) LIKE LOWER(CONCAT('%', :autor, '%'))) AND " +
-            "(:categoria IS NULL OR l.categoria = :categoria) AND " +
+            "(:query IS NULL OR LOWER(l.titulo) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(l.autor) LIKE LOWER(CONCAT('%', :query, '%')) OR l.isbn LIKE CONCAT('%', :query, '%')) AND " +
+            "(:categoria IS NULL OR :categoria MEMBER OF l.categoria) AND " +
             "(:estado IS NULL OR l.estadoFisico = :estado) AND " +
             "(:precioMin IS NULL OR l.valorReferencia >= :precioMin) AND " +
             "(:precioMax IS NULL OR l.valorReferencia <= :precioMax) AND " +
             "l.disponible = true")
-    Page<Libro> buscarConFiltros(@Param("titulo") String titulo,
-                                 @Param("autor") String autor,
-                                 @Param("categoria") String categoria,
+    Page<Libro> buscarConFiltros(@Param("query") String query,
+                                 @Param("categoria") CategoriaLibro categoria,
                                  @Param("estado") EstadoFisico estado,
                                  @Param("precioMin") Integer precioMin,
                                  @Param("precioMax") Integer precioMax,
