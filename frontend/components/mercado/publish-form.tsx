@@ -7,6 +7,8 @@ import {
   Info,
   ArrowLeft,
   Image as ImageIcon,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
@@ -17,6 +19,7 @@ import {
   type Category,
 } from "@/lib/mercado-types"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { getApiBaseUrl } from "@/lib/api/client"
 
 interface FormState {
   title: string
@@ -43,9 +46,10 @@ const EMPTY_FORM: FormState = {
 }
 
 export function PublishForm() {
-  const { currentUser, publishBook, setScreen } = useStore()
+  const { currentUser, publishBook, setScreen, showToast } = useStore()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
+  const [isSearchingGoogle, setIsSearchingGoogle] = useState(false)
 
   if (!currentUser) {
     return null
@@ -53,6 +57,112 @@ export function PublishForm() {
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  async function handleSearchGoogleBooks() {
+    const isbnQuery = form.isbn.trim()
+    const titleQuery = form.title.trim()
+    const query = isbnQuery || titleQuery
+
+    if (!query) {
+      showToast("Ingresá un ISBN o título para consultar en Google Books.")
+      return
+    }
+
+    setIsSearchingGoogle(true)
+    try {
+      const cleanIsbn = isbnQuery.replace(/[^0-9X]/gi, "")
+      let volume: {
+        titulo?: string
+        autor?: string
+        descripcion?: string
+        portadaUrl?: string
+        editorial?: string
+        anioPublicacion?: string
+        categorias?: string[]
+      } | null = null
+
+      // 1. Intentar endpoint backend si está disponible
+      try {
+        const baseUrl = getApiBaseUrl()
+        const backendEndpoint = cleanIsbn
+          ? `${baseUrl}/api/libro/google-books/isbn/${cleanIsbn}`
+          : `${baseUrl}/api/libro/google-books/buscar?query=${encodeURIComponent(titleQuery)}`
+        const res = await fetch(backendEndpoint)
+        if (res.ok) {
+          const data = await res.json()
+          volume = Array.isArray(data) ? data[0] : data
+        }
+      } catch {
+        // Fallback a API pública directa de Google Books
+      }
+
+      // 2. Fallback a Google Books Volumes API directa
+      if (!volume) {
+        const googleUrl = cleanIsbn
+          ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}`
+          : `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(titleQuery)}&maxResults=1`
+        const gRes = await fetch(googleUrl)
+        if (gRes.ok) {
+          const gData = await gRes.json()
+          if (gData.items && gData.items.length > 0) {
+            const vInfo = gData.items[0].volumeInfo
+            volume = {
+              titulo: vInfo.title + (vInfo.subtitle ? `: ${vInfo.subtitle}` : ""),
+              autor: vInfo.authors ? vInfo.authors.join(", ") : "",
+              descripcion: vInfo.description || "",
+              portadaUrl: vInfo.imageLinks?.thumbnail?.replace("http://", "https://") || "",
+              editorial: vInfo.publisher || "",
+              anioPublicacion: vInfo.publishedDate || "",
+              categorias: vInfo.categories || [],
+            }
+          }
+        }
+      }
+
+      if (volume) {
+        setForm((prev) => {
+          let matchedCategory = prev.category
+          if (volume.categorias && volume.categorias.length > 0) {
+            const catString = volume.categorias.join(" ").toLowerCase()
+            const found = CATEGORIES.find((c) =>
+              catString.includes(c.toLowerCase()) ||
+              (c === "Ficción" && catString.includes("fiction")) ||
+              (c === "Historia" && catString.includes("history")) ||
+              (c === "Ciencia" && catString.includes("science")) ||
+              (c === "Infantil" && (catString.includes("children") || catString.includes("juvenile"))) ||
+              (c === "Biografía" && (catString.includes("biography") || catString.includes("autobiography"))) ||
+              (c === "Comics y novela gráfica" && (catString.includes("comic") || catString.includes("graphic novel")))
+            )
+            if (found) matchedCategory = found
+          }
+
+          let editionStr = prev.edition
+          if (volume.editorial || volume.anioPublicacion) {
+            editionStr = [volume.editorial, volume.anioPublicacion ? volume.anioPublicacion.substring(0, 4) : ""]
+              .filter(Boolean)
+              .join(" ")
+          }
+
+          return {
+            ...prev,
+            title: volume.titulo || prev.title,
+            author: volume.autor || prev.author,
+            description: volume.descripcion || prev.description,
+            coverUrl: volume.portadaUrl || prev.coverUrl,
+            edition: editionStr || prev.edition,
+            category: matchedCategory,
+          }
+        })
+        showToast("¡Datos y portada autocompletados desde Google Books!")
+      } else {
+        showToast("No se encontraron resultados en Google Books para esa búsqueda.")
+      }
+    } catch {
+      showToast("No se pudo consultar Google Books en este momento.")
+    } finally {
+      setIsSearchingGoogle(false)
+    }
   }
 
   const pointsNum = Number.parseInt(form.points, 10)
@@ -134,13 +244,35 @@ export function PublishForm() {
             error={errors.author}
           />
 
-          <Field
-            id="pub-isbn"
-            label="ISBN (opcional)"
-            placeholder="Ej. 978-84-204-7183-9"
-            value={form.isbn}
-            onChange={(e) => set("isbn", e.target.value)}
-          />
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="pub-isbn" className="block text-base md:text-lg font-bold text-stone-800">
+                ISBN (opcional)
+              </label>
+              <button
+                type="button"
+                onClick={handleSearchGoogleBooks}
+                disabled={isSearchingGoogle || (!form.isbn.trim() && !form.title.trim())}
+                className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title="Autocompletar título, autor, portada y sinopsis desde Google Books"
+              >
+                {isSearchingGoogle ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                )}
+                {isSearchingGoogle ? "Consultando..." : "Google Books"}
+              </button>
+            </div>
+            <input
+              id="pub-isbn"
+              type="text"
+              placeholder="Ej. 978-84-204-7183-9"
+              value={form.isbn}
+              onChange={(e) => set("isbn", e.target.value)}
+              className="w-full rounded-xl border border-stone-200 bg-white p-3 text-base md:text-lg text-stone-900 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

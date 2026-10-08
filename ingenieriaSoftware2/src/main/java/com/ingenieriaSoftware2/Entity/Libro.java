@@ -39,7 +39,6 @@ public class Libro {
     @DecimalMin("0.0")
     @DecimalMax("5.0")
     private BigDecimal puntuacionExterna;
-
     private Integer valorReferencia;
 
     // Frescura del cache, independiente para cada tipo de dato

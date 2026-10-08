@@ -28,6 +28,7 @@ export function generateInitialChains(books: Book[], users: User[]): TradeChain[
           givesBook: b3,
           receivesBook: b1,
           confirmed: false,
+          confirmado: false,
         },
         {
           userId: u2.id,
@@ -36,6 +37,7 @@ export function generateInitialChains(books: Book[], users: User[]): TradeChain[
           givesBook: b1,
           receivesBook: b2,
           confirmed: true,
+          confirmado: true,
         },
         {
           userId: u3.id,
@@ -44,6 +46,7 @@ export function generateInitialChains(books: Book[], users: User[]): TradeChain[
           givesBook: b2,
           receivesBook: b3,
           confirmed: false,
+          confirmado: false,
         },
       ],
     },
