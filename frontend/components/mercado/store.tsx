@@ -34,7 +34,7 @@ import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluato
 import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
-import { libroService, cadenaService, reseniaService, setAuthToken, removeAuthToken } from "@/lib/api"
+import { libroService, publicacionService, cadenaService, reseniaService, setAuthToken, removeAuthToken } from "@/lib/api"
 import { toCategoriaLibro, toEstadoFisico } from "@/lib/mercado-types"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
@@ -169,15 +169,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // ignore
     }
 
-    // Cargar catálogo de libros desde el backend / base de datos
-    libroService
-      .obtenerCatalogo(0, 50)
-      .then(({ libros }) => {
-        if (libros && libros.length > 0) {
+    // Cargar catálogo de publicaciones desde Spring Boot
+    publicacionService
+      .obtenerCatalogo()
+      .then((publicaciones) => {
+        if (publicaciones && publicaciones.length > 0) {
+          const libros = publicaciones.map(publicacionService.toLibro)
           setState((prev) => ({
             ...prev,
             books: libros,
           }))
+        } else {
+          // Fallback a libroService si no hay publicaciones cargadas
+          libroService.obtenerCatalogo(0, 50).then(({ libros }) => {
+            if (libros && libros.length > 0) {
+              setState((prev) => ({ ...prev, books: libros }))
+            }
+          }).catch(() => {})
         }
       })
       .catch(() => {
@@ -563,24 +571,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       }
 
-      // 1. Intentar publicar en el backend de Spring Boot
+      // 1. Intentar publicar en el backend de Spring Boot mediante PublicacionService
       try {
-        const cat = toCategoriaLibro(data.category as string)
         const est = toEstadoFisico(data.condition as string)
-        const backendBook = await libroService.publicarLibro({
-          isbn: data.isbn || `ISBN-${Date.now()}`,
-          titulo: data.titulo || data.title,
-          autor: data.autor || data.author,
-          categoria: [cat],
+        const isbnVal = data.isbn || `978-${Date.now().toString().slice(-10)}`
+        const pubResponse = await publicacionService.publicar({
+          isbn: isbnVal,
           estadoFisico: est,
-          valorReferencia: data.valorReferencia ?? data.points ?? 10,
-          disponible: true,
+          valorPuntosSolicitado: data.points || 10,
+          comentario: data.edition || `${data.title} - ${data.author}`,
         })
-        if (backendBook) {
-          newBook = backendBook
+        if (pubResponse) {
+          const adapted = publicacionService.toLibro(pubResponse)
+          newBook = {
+            ...newBook,
+            id: adapted.id,
+            isbn: adapted.isbn,
+            valorReferencia: adapted.valorReferencia,
+            referencePrice: adapted.referencePrice,
+          }
         }
       } catch (err: unknown) {
-        console.warn("[LibroService] Publicación falló en backend, usando fallback local:", err)
+        console.warn("[PublicacionService] Publicación falló en backend, usando fallback local:", err)
       }
 
       // Check tracker matches for other users (RF35, RF36)

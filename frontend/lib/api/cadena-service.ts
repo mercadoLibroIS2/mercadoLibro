@@ -11,22 +11,27 @@ import type {
   PasoCadenaResponseDTO,
 } from "../mercado-types"
 
-function dtoToPaso(dto: PasoCadenaResponseDTO): PasoCadena {
-  const libroEntrega = dto.libroEntrega ? dtoToLibro(dto.libroEntrega) : null
-  const libroRecibe = dto.libroRecibe ? dtoToLibro(dto.libroRecibe) : null
+function dtoToPaso(dto: any): PasoCadena {
+  const libroEntregaRaw = dto.libroEntrega || dto.libroQueEntrega
+  const libroRecibeRaw = dto.libroRecibe || dto.libroQueRecibe
+  const libroEntrega = libroEntregaRaw ? dtoToLibro(libroEntregaRaw) : null
+  const libroRecibe = libroRecibeRaw ? dtoToLibro(libroRecibeRaw) : null
+  const participanteId = dto.participanteId || dto.usuarioId || ""
+  const nombre = dto.nombre || dto.usuarioNombre || "Participante"
+  const email = dto.email || dto.usuarioEmail || ""
 
   return {
-    participanteId: dto.participanteId,
-    nombre: dto.nombre || "Participante",
-    email: dto.email || "",
+    participanteId,
+    nombre,
+    email,
     libroEntrega,
     libroRecibe,
-    confirmado: dto.confirmado,
-    intercambioId: dto.intercambioId,
+    confirmado: !!dto.confirmado,
+    intercambioId: dto.intercambioId || null,
     // Aliases
-    confirmed: dto.confirmado,
-    userId: dto.participanteId,
-    userName: dto.nombre,
+    confirmed: !!dto.confirmado,
+    userId: participanteId,
+    userName: nombre,
     givesBook: libroEntrega,
     receivesBook: libroRecibe,
   }

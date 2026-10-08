@@ -173,6 +173,10 @@ export type EstadoCadena =
   | "COMPLETADA"
   | "CANCELADA"
 
+export type ColorSemaforo = "VERDE" | "AMARILLO" | "ROJO" | "SIN_REFERENCIA"
+
+export type EstadoPublicacion = "DISPONIBLE" | "RESERVADA" | "VENDIDA" | "ELIMINADA"
+
 export type TipoMovimiento =
   | "ENTRADA"
   | "SALIDA"
@@ -530,15 +534,18 @@ export interface LibroRequestDTO {
 }
 
 export interface LibroResponseDTO {
-  id: string
+  id?: string
   isbn: string
   titulo: string
-  autor: string
-  categoria: CategoriaLibro[]
-  estadoFisico: EstadoFisico
-  valorReferencia: number
-  disponible: boolean
-  propietario: string
+  autor?: string
+  autores?: string
+  categoria?: CategoriaLibro[]
+  categorias?: string[]
+  estadoFisico?: EstadoFisico
+  valorReferencia?: number
+  puntuacionExterna?: number
+  disponible?: boolean
+  propietario?: string
 }
 
 export interface GoogleBookVolumeDTO {
@@ -555,13 +562,18 @@ export interface GoogleBookVolumeDTO {
 }
 
 export interface PasoCadenaResponseDTO {
-  participanteId: string
-  nombre: string
-  email: string
-  libroEntrega: LibroResponseDTO | null
-  libroRecibe: LibroResponseDTO | null
+  participanteId?: string
+  usuarioId?: string
+  nombre?: string
+  usuarioNombre?: string
+  email?: string
+  usuarioEmail?: string
+  libroEntrega?: LibroResponseDTO | null
+  libroQueEntrega?: LibroResponseDTO | null
+  libroRecibe?: LibroResponseDTO | null
+  libroQueRecibe?: LibroResponseDTO | null
   confirmado: boolean
-  intercambioId: string | null
+  intercambioId?: string | null
 }
 
 export interface CadenaIntercambioResponseDTO {
@@ -601,6 +613,86 @@ export interface SpringPage<T> {
   first: boolean
   size: number
   number: number
+}
+
+export interface PublicacionId {
+  isbn: string
+  emailPropietario: string
+  horaPublicacion?: string
+}
+
+export interface PublicacionRequestDTO {
+  isbn: string
+  estadoFisico: EstadoFisico
+  valorPuntosSolicitado: number
+  comentario?: string
+}
+
+export interface PublicacionResponseDTO {
+  publicacionId: PublicacionId
+  estadoFisico: EstadoFisico
+  valorPuntosSolicitado: number
+  valorReferenciaCalculado: number
+  comentario?: string
+  colorSemaforo?: ColorSemaforo
+  estadoPublicacion?: EstadoPublicacion
+  tituloLibro?: string
+  autorLibro?: string
+}
+
+export interface Publicacion {
+  id: string
+  isbn: string
+  propietarioEmail: string
+  propietarioNombre?: string
+  horaPublicacion?: string
+  estadoFisico: EstadoFisico
+  valorPuntosSolicitado: number
+  valorReferenciaCalculado: number
+  comentario?: string
+  colorSemaforo: ColorSemaforo
+  estadoPublicacion: EstadoPublicacion
+  titulo?: string
+  autor?: string
+  portadaUrl?: string
+}
+
+export function getSemaforoColor(color?: ColorSemaforo | string): {
+  badgeClass: string
+  label: string
+  description: string
+  variant: "success" | "warning" | "destructive" | "secondary"
+} {
+  switch (color) {
+    case "VERDE":
+      return {
+        badgeClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+        label: "Precio Justo",
+        description: "El precio en puntos está dentro del valor de mercado recomendado",
+        variant: "success",
+      }
+    case "AMARILLO":
+      return {
+        badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+        label: "Precio Moderado",
+        description: "El precio solicitado está ligeramente por encima de la referencia",
+        variant: "warning",
+      }
+    case "ROJO":
+      return {
+        badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+        label: "Precio Alto",
+        description: "El precio supera significativamente el valor recomendado",
+        variant: "destructive",
+      }
+    default:
+      return {
+        badgeClass: "bg-muted text-muted-foreground border-border",
+        label: "Sin Referencia",
+        description: "Sin datos suficientes de mercado",
+        variant: "secondary",
+      }
+  }
 }
 
 // Aliases directos para tipado retrocompatible

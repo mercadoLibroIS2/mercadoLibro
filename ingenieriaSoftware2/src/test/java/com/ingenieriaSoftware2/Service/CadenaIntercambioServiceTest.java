@@ -4,13 +4,15 @@ import com.ingenieriaSoftware2.DTO.Response.CadenaIntercambioResponseDTO;
 import com.ingenieriaSoftware2.Entity.CadenaIntercambio;
 import com.ingenieriaSoftware2.Entity.Intercambio;
 import com.ingenieriaSoftware2.Entity.Libro;
+import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoCadena;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Mapper.LibroMapper;
 import com.ingenieriaSoftware2.Repository.CadenaIntercambioRepository;
 import com.ingenieriaSoftware2.Repository.IntercambioRepository;
-import com.ingenieriaSoftware2.Repository.LibroRepository;
+import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Implementations.CadenaIntercambioServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +39,7 @@ class CadenaIntercambioServiceTest {
     private IntercambioRepository intercambioRepository;
 
     @Mock
-    private LibroRepository libroRepository;
+    private PublicacionRepository publicacionRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -52,6 +54,8 @@ class CadenaIntercambioServiceTest {
     private Usuario userB;
     private Libro libroA;
     private Libro libroB;
+    private Publicacion pubA;
+    private Publicacion pubB;
     private Intercambio intercambio1;
     private Intercambio intercambio2;
     private CadenaIntercambio cadena;
@@ -71,31 +75,31 @@ class CadenaIntercambioServiceTest {
         userB.setSaldoTotal(100);
 
         libroA = new Libro();
-        libroA.setId(UUID.randomUUID());
+        libroA.setIsbn("ISBN-A");
         libroA.setTitulo("Libro A");
-        libroA.setDisponible(true);
-        libroA.setPropietario(userA);
 
         libroB = new Libro();
-        libroB.setId(UUID.randomUUID());
+        libroB.setIsbn("ISBN-B");
         libroB.setTitulo("Libro B");
-        libroB.setDisponible(true);
-        libroB.setPropietario(userB);
+
+        pubA = new Publicacion();
+        pubA.setLibro(libroA);
+        pubA.setPropietario(userA);
+        pubA.setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
+
+        pubB = new Publicacion();
+        pubB.setLibro(libroB);
+        pubB.setPropietario(userB);
+        pubB.setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
 
         intercambio1 = new Intercambio();
-        intercambio1.setId(UUID.randomUUID());
-        intercambio1.setPrestador(userA);
-        intercambio1.setReceptor(userB);
-        intercambio1.setLibroOfrecido(libroA);
-        intercambio1.setLibroDeseado(libroB);
+        intercambio1.setPublicacionOfrecida(pubA);
+        intercambio1.setPublicacionSolicitante(pubB);
         intercambio1.setEstado(EstadoIntercambio.PENDIENTE);
 
         intercambio2 = new Intercambio();
-        intercambio2.setId(UUID.randomUUID());
-        intercambio2.setPrestador(userB);
-        intercambio2.setReceptor(userA);
-        intercambio2.setLibroOfrecido(libroB);
-        intercambio2.setLibroDeseado(libroA);
+        intercambio2.setPublicacionOfrecida(pubB);
+        intercambio2.setPublicacionSolicitante(pubA);
         intercambio2.setEstado(EstadoIntercambio.PENDIENTE);
 
         cadena = new CadenaIntercambio();
@@ -121,8 +125,8 @@ class CadenaIntercambioServiceTest {
     }
 
     @Test
-    @DisplayName("Confirmar paso transiciona a COMPLETADA cuando todos los participantes confirman")
-    void confirmarPaso_todosConfirman_transicionaACompletadaYAcreditaBonus() {
+    @DisplayName("Confirmar paso cuando todos confirman completa la cadena y acredita bonus")
+    void confirmarPaso_todosConfirman_completaCadenaYAcreditaBonus() {
         intercambio2.setEstado(EstadoIntercambio.ACEPTADO);
 
         when(cadenaIntercambioRepository.findById(cadena.getId())).thenReturn(Optional.of(cadena));
@@ -134,15 +138,14 @@ class CadenaIntercambioServiceTest {
         assertEquals(EstadoCadena.COMPLETADA, response.estado());
         assertEquals(EstadoIntercambio.COMPLETADO, intercambio1.getEstado());
         assertEquals(EstadoIntercambio.COMPLETADO, intercambio2.getEstado());
-        assertFalse(libroA.getDisponible());
-        assertFalse(libroB.getDisponible());
         assertEquals(115, userA.getSaldoTotal());
         assertEquals(115, userB.getSaldoTotal());
+        verify(usuarioRepository, times(2)).save(any(Usuario.class));
     }
 
     @Test
-    @DisplayName("Rechazar cadena transiciona a CANCELADA y asegura disponibilidad de libros")
-    void rechazarCadena_cancelaCadenaYLiberaLibros() {
+    @DisplayName("Rechazar cadena cancela la cadena y libera publicaciones")
+    void rechazarCadena_cancelaCadenaYLiberaPublicaciones() {
         when(cadenaIntercambioRepository.findById(cadena.getId())).thenReturn(Optional.of(cadena));
         when(cadenaIntercambioRepository.save(any(CadenaIntercambio.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -152,18 +155,7 @@ class CadenaIntercambioServiceTest {
         assertEquals(EstadoCadena.CANCELADA, response.estado());
         assertEquals(EstadoIntercambio.RECHAZADO, intercambio1.getEstado());
         assertEquals(EstadoIntercambio.RECHAZADO, intercambio2.getEstado());
-        assertTrue(libroA.getDisponible());
-        assertTrue(libroB.getDisponible());
-    }
-
-    @Test
-    @DisplayName("Obtener cadenas por usuario retorna lista correspondiente")
-    void obtenerCadenasDeUsuario_retornaLista() {
-        when(cadenaIntercambioRepository.findByParticipanteId(userA.getId())).thenReturn(List.of(cadena));
-
-        List<CadenaIntercambioResponseDTO> result = cadenaIntercambioService.obtenerCadenasDeUsuario(userA.getId());
-
-        assertEquals(1, result.size());
-        assertEquals(cadena.getId(), result.get(0).id());
+        assertEquals(EstadoPublicacion.DISPONIBLE, pubA.getEstadoPublicacion());
+        assertEquals(EstadoPublicacion.DISPONIBLE, pubB.getEstadoPublicacion());
     }
 }

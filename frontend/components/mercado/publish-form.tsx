@@ -19,6 +19,7 @@ import {
   type Category,
 } from "@/lib/mercado-types"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { getApiBaseUrl } from "@/lib/api/client"
 
 interface FormState {
   title: string
@@ -83,9 +84,10 @@ export function PublishForm() {
 
       // 1. Intentar endpoint backend si está disponible
       try {
+        const baseUrl = getApiBaseUrl()
         const backendEndpoint = cleanIsbn
-          ? `/api/libro/google-books/isbn/${cleanIsbn}`
-          : `/api/libro/google-books/buscar?query=${encodeURIComponent(titleQuery)}`
+          ? `${baseUrl}/api/libro/google-books/isbn/${cleanIsbn}`
+          : `${baseUrl}/api/libro/google-books/buscar?query=${encodeURIComponent(titleQuery)}`
         const res = await fetch(backendEndpoint)
         if (res.ok) {
           const data = await res.json()

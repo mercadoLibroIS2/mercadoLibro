@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/cadenaIntercambio")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class CadenaIntercambioController {
 
     @Autowired
@@ -26,7 +26,7 @@ public class CadenaIntercambioController {
 
     @GetMapping("/mis-cadenas")
     public ResponseEntity<List<CadenaIntercambioResponseDTO>> obtenerMisCadenas() {
-        UUID usuarioId = securityUtils.obtenerUsuarioAutenticado().getId();
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
         return ResponseEntity.ok(cadenaIntercambioService.obtenerCadenasDeUsuario(usuarioId));
     }
 
@@ -42,13 +42,13 @@ public class CadenaIntercambioController {
 
     @PostMapping("/{id}/confirmar")
     public ResponseEntity<CadenaIntercambioResponseDTO> confirmarPaso(@PathVariable UUID id) {
-        UUID usuarioId = securityUtils.obtenerUsuarioAutenticado().getId();
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
         return ResponseEntity.ok(cadenaIntercambioService.confirmarPaso(id, usuarioId));
     }
 
     @PostMapping("/{id}/rechazar")
     public ResponseEntity<CadenaIntercambioResponseDTO> rechazarCadena(@PathVariable UUID id) {
-        UUID usuarioId = securityUtils.obtenerUsuarioAutenticado().getId();
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
         return ResponseEntity.ok(cadenaIntercambioService.rechazarCadena(id, usuarioId));
     }
 

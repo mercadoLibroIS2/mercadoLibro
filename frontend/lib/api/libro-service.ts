@@ -22,19 +22,24 @@ const googleBooksCache = new Map<string, GoogleBookVolumeDTO>()
  * Convierte un DTO del backend en la entidad Libro utilizada en la interfaz,
  * enriqueciendo con portada y datos de Google Books si están disponibles.
  */
-export function dtoToLibro(dto: LibroResponseDTO, googleData?: GoogleBookVolumeDTO | null): Libro {
+export function dtoToLibro(dto: any, googleData?: GoogleBookVolumeDTO | null): Libro {
   const gb = googleData || (dto.isbn ? googleBooksCache.get(dto.isbn) : undefined)
+  const id = dto.id || dto.isbn || `libro-${Math.random().toString(36).slice(2)}`
+  const autor = dto.autor || dto.autores || gb?.autor || "Autor desconocido"
+  const categoriasRaw = dto.categoria || dto.categorias || gb?.categorias || []
+  const categorias = Array.isArray(categoriasRaw) ? categoriasRaw : [categoriasRaw]
+  const ratingExterno = dto.puntuacionExterna != null ? Number(dto.puntuacionExterna) : (gb?.ratingExterno || 4.5)
 
   return {
-    id: dto.id,
-    isbn: dto.isbn,
-    titulo: dto.titulo,
-    autor: dto.autor,
-    categoria: dto.categoria || [],
-    estadoFisico: dto.estadoFisico,
-    valorReferencia: dto.valorReferencia,
-    disponible: dto.disponible,
-    propietarioId: dto.propietario,
+    id,
+    isbn: dto.isbn || "",
+    titulo: dto.titulo || "Sin título",
+    autor,
+    categoria: categorias,
+    estadoFisico: dto.estadoFisico || "BUENO",
+    valorReferencia: dto.valorReferencia || 10,
+    disponible: dto.disponible ?? true,
+    propietarioId: dto.propietario || "",
     propietarioNombre: dto.propietario ? `Usuario (${dto.propietario.slice(0, 6)})` : "Propietario",
     propietarioRating: 5.0,
     portadaUrl:
@@ -43,15 +48,15 @@ export function dtoToLibro(dto: LibroResponseDTO, googleData?: GoogleBookVolumeD
     descripcion: gb?.descripcion || "Sin descripción disponible.",
     editorial: gb?.editorial,
     anioPublicacion: gb?.anioPublicacion,
-    ratingExterno: gb?.ratingExterno || 4.5,
+    ratingExterno,
 
     // Aliases retrocompatibles
-    title: dto.titulo,
-    author: dto.autor,
-    points: dto.valorReferencia,
-    condition: dto.estadoFisico,
-    category: (dto.categoria && dto.categoria[0]) || "Otros",
-    availability: dto.disponible ? "DISPONIBLE" : "INTERCAMBIADO",
+    title: dto.titulo || "Sin título",
+    author: autor,
+    points: dto.valorReferencia || 10,
+    condition: dto.estadoFisico || "BUENO",
+    category: (categorias && categorias[0]) || "Otros",
+    availability: (dto.disponible ?? true) ? "DISPONIBLE" : "INTERCAMBIADO",
     ownerId: dto.propietario || "owner",
     ownerName: dto.propietario ? `Usuario (${dto.propietario.slice(0, 6)})` : "Propietario",
     ownerRating: 5.0,
@@ -60,7 +65,7 @@ export function dtoToLibro(dto: LibroResponseDTO, googleData?: GoogleBookVolumeD
       gb?.portadaUrl ||
       `https://covers.openlibrary.org/b/isbn/${dto.isbn}-M.jpg?default=false`,
     description: gb?.descripcion || "Sin descripción disponible.",
-    externalRating: gb?.ratingExterno || 4.5,
+    externalRating: ratingExterno,
   }
 }
 
@@ -70,18 +75,22 @@ export const libroService = {
    */
   async obtenerCatalogo(page = 0, size = 20): Promise<{ libros: Libro[]; total: number }> {
     try {
-      const response = await apiFetch<SpringPage<LibroResponseDTO>>(
+      const response = await apiFetch<any>(
         `/api/libro/catalogo?page=${page}&size=${size}`
       )
-      const libros = (response.content || []).map((dto) => dtoToLibro(dto))
-      return { libros, total: response.totalElements }
+      const list = Array.isArray(response) ? response : (response?.content || [])
+      const total = Array.isArray(response) ? response.length : (response?.totalElements ?? list.length)
+      const libros = list.map((dto: any) => dtoToLibro(dto))
+      return { libros, total }
     } catch {
       // Fallback a /api/libro si el endpoint difiere
-      const response = await apiFetch<SpringPage<LibroResponseDTO>>(
+      const response = await apiFetch<any>(
         `/api/libro?page=${page}&size=${size}`
       )
-      const libros = (response.content || []).map((dto) => dtoToLibro(dto))
-      return { libros, total: response.totalElements }
+      const list = Array.isArray(response) ? response : (response?.content || [])
+      const total = Array.isArray(response) ? response.length : (response?.totalElements ?? list.length)
+      const libros = list.map((dto: any) => dtoToLibro(dto))
+      return { libros, total }
     }
   },
 

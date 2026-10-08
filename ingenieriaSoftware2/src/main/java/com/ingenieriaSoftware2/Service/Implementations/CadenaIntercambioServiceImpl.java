@@ -6,16 +6,14 @@ import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
 import com.ingenieriaSoftware2.DTO.Response.PasoCadenaResponseDTO;
 import com.ingenieriaSoftware2.Entity.CadenaIntercambio;
 import com.ingenieriaSoftware2.Entity.Intercambio;
-import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoCadena;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
-import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
-import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Mapper.LibroMapper;
 import com.ingenieriaSoftware2.Repository.CadenaIntercambioRepository;
 import com.ingenieriaSoftware2.Repository.IntercambioRepository;
-import com.ingenieriaSoftware2.Repository.LibroRepository;
+import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.CadenaIntercambioService;
 import jakarta.transaction.Transactional;
@@ -35,7 +33,7 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     private IntercambioRepository intercambioRepository;
 
     @Autowired
-    private LibroRepository libroRepository;
+    private PublicacionRepository publicacionRepository;
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -68,10 +66,12 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
             throw new IllegalStateException("No se puede confirmar un paso en una cadena " + cadena.getEstado());
         }
 
-        // Buscar el intercambio correspondiente al participante
+        // Buscar el intercambio correspondiente al participante que entrega
         boolean encontrado = false;
         for (Intercambio intercambio : cadena.getIntercambios()) {
-            if (intercambio.getPrestador().getId().equals(usuarioId)) {
+            if (intercambio.getPublicacionOfrecida() != null &&
+                intercambio.getPublicacionOfrecida().getPropietario() != null &&
+                intercambio.getPublicacionOfrecida().getPropietario().getId().equals(usuarioId)) {
                 intercambio.setEstado(EstadoIntercambio.ACEPTADO);
                 intercambioRepository.save(intercambio);
                 encontrado = true;
@@ -91,23 +91,23 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         if (todosAceptados) {
             cadena.setEstado(EstadoCadena.COMPLETADA);
 
-            // Marcar intercambios como completados y actualizar libros
+            // Marcar intercambios como completados y actualizar estado de publicaciones
             for (Intercambio i : cadena.getIntercambios()) {
                 i.setEstado(EstadoIntercambio.COMPLETADO);
-                if (i.getLibroDeseado() != null) {
-                    i.getLibroDeseado().setDisponible(false);
-                    libroRepository.save(i.getLibroDeseado());
+                if (i.getPublicacionSolicitante() != null) {
+                    i.getPublicacionSolicitante().setEstadoPublicacion(EstadoPublicacion.VENDIDA);
+                    publicacionRepository.save(i.getPublicacionSolicitante());
                 }
-                if (i.getLibroOfrecido() != null) {
-                    i.getLibroOfrecido().setDisponible(false);
-                    libroRepository.save(i.getLibroOfrecido());
+                if (i.getPublicacionOfrecida() != null) {
+                    i.getPublicacionOfrecida().setEstadoPublicacion(EstadoPublicacion.VENDIDA);
+                    publicacionRepository.save(i.getPublicacionOfrecida());
                 }
             }
 
             // Acreditar puntos bonus si corresponde
             if (cadena.getPuntosBonus() != null && cadena.getPuntosBonus() > 0) {
                 for (Usuario participante : cadena.getParticipantes()) {
-                    participante.setSaldoTotal(participante.getSaldoTotal() + cadena.getPuntosBonus());
+                    participante.setSaldoTotal((participante.getSaldoTotal() != null ? participante.getSaldoTotal() : 0) + cadena.getPuntosBonus());
                     usuarioRepository.save(participante);
                 }
             }
@@ -125,17 +125,27 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         CadenaIntercambio cadena = cadenaIntercambioRepository.findById(cadenaId)
                 .orElseThrow(() -> new IllegalArgumentException("Cadena no encontrada con id: " + cadenaId));
 
+        if (cadena.getEstado() == EstadoCadena.COMPLETADA || cadena.getEstado() == EstadoCadena.CANCELADA) {
+            throw new IllegalStateException("No se puede rechazar una cadena " + cadena.getEstado());
+        }
+
+        boolean esParticipante = cadena.getParticipantes() != null &&
+                cadena.getParticipantes().stream().anyMatch(u -> u.getId().equals(usuarioId));
+        if (!esParticipante) {
+            throw new IllegalArgumentException("El usuario no pertenece a la cadena");
+        }
+
         cadena.setEstado(EstadoCadena.CANCELADA);
 
         for (Intercambio i : cadena.getIntercambios()) {
             i.setEstado(EstadoIntercambio.RECHAZADO);
-            if (i.getLibroDeseado() != null) {
-                i.getLibroDeseado().setDisponible(true);
-                libroRepository.save(i.getLibroDeseado());
+            if (i.getPublicacionSolicitante() != null) {
+                i.getPublicacionSolicitante().setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
+                publicacionRepository.save(i.getPublicacionSolicitante());
             }
-            if (i.getLibroOfrecido() != null) {
-                i.getLibroOfrecido().setDisponible(true);
-                libroRepository.save(i.getLibroOfrecido());
+            if (i.getPublicacionOfrecida() != null) {
+                i.getPublicacionOfrecida().setEstadoPublicacion(EstadoPublicacion.DISPONIBLE);
+                publicacionRepository.save(i.getPublicacionOfrecida());
             }
             intercambioRepository.save(i);
         }
@@ -154,17 +164,6 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         Set<Usuario> participantes = new HashSet<>();
         List<Intercambio> intercambios = new ArrayList<>();
 
-        if (request.intercambioIds() != null && !request.intercambioIds().isEmpty()) {
-            for (UUID intercambioId : request.intercambioIds()) {
-                Intercambio intercambio = intercambioRepository.findById(intercambioId)
-                        .orElseThrow(() -> new IllegalArgumentException("Intercambio no encontrado: " + intercambioId));
-                intercambio.setCadena(cadena);
-                intercambios.add(intercambio);
-                if (intercambio.getPrestador() != null) participantes.add(intercambio.getPrestador());
-                if (intercambio.getReceptor() != null) participantes.add(intercambio.getReceptor());
-            }
-        }
-
         cadena.setIntercambios(intercambios);
         cadena.setParticipantes(participantes);
 
@@ -175,46 +174,50 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     private CadenaIntercambioResponseDTO toResponseDTO(CadenaIntercambio cadena) {
         List<PasoCadenaResponseDTO> pasos = new ArrayList<>();
 
-        for (Usuario participante : cadena.getParticipantes()) {
-            Intercambio intercambioEntrega = cadena.getIntercambios().stream()
-                    .filter(i -> i.getPrestador().getId().equals(participante.getId()))
-                    .findFirst()
-                    .orElse(null);
+        if (cadena.getParticipantes() != null) {
+            for (Usuario participante : cadena.getParticipantes()) {
+                Intercambio intercambioEntrega = (cadena.getIntercambios() != null) ? cadena.getIntercambios().stream()
+                        .filter(i -> i.getPublicacionOfrecida() != null &&
+                                     i.getPublicacionOfrecida().getPropietario() != null &&
+                                     i.getPublicacionOfrecida().getPropietario().getId().equals(participante.getId()))
+                        .findFirst()
+                        .orElse(null) : null;
 
-            Intercambio intercambioRecibe = cadena.getIntercambios().stream()
-                    .filter(i -> i.getReceptor().getId().equals(participante.getId()))
-                    .findFirst()
-                    .orElse(null);
+                Intercambio intercambioRecibe = (cadena.getIntercambios() != null) ? cadena.getIntercambios().stream()
+                        .filter(i -> i.getPublicacionSolicitante() != null &&
+                                     i.getPublicacionSolicitante().getPropietario() != null &&
+                                     i.getPublicacionSolicitante().getPropietario().getId().equals(participante.getId()))
+                        .findFirst()
+                        .orElse(null) : null;
 
-            LibroResponseDTO libroEntrega = null;
-            boolean confirmado = false;
-            UUID intercambioId = null;
+                LibroResponseDTO libroEntrega = null;
+                boolean confirmado = false;
+                String intercambioId = null;
 
-            if (intercambioEntrega != null) {
-                Libro libro = intercambioEntrega.getLibroOfrecido() != null ?
-                        intercambioEntrega.getLibroOfrecido() : intercambioEntrega.getLibroDeseado();
-                libroEntrega = libroMapper.toResponseDTO(libro);
-                confirmado = (intercambioEntrega.getEstado() == EstadoIntercambio.ACEPTADO ||
-                        intercambioEntrega.getEstado() == EstadoIntercambio.COMPLETADO);
-                intercambioId = intercambioEntrega.getId();
+                if (intercambioEntrega != null) {
+                    if (intercambioEntrega.getPublicacionOfrecida() != null && intercambioEntrega.getPublicacionOfrecida().getLibro() != null) {
+                        libroEntrega = libroMapper.toDTO(intercambioEntrega.getPublicacionOfrecida().getLibro());
+                    }
+                    confirmado = (intercambioEntrega.getEstado() == EstadoIntercambio.ACEPTADO ||
+                            intercambioEntrega.getEstado() == EstadoIntercambio.COMPLETADO);
+                    intercambioId = intercambioEntrega.getId() != null ? intercambioEntrega.getId().toString() : null;
+                }
+
+                LibroResponseDTO libroRecibe = null;
+                if (intercambioRecibe != null && intercambioRecibe.getPublicacionSolicitante() != null && intercambioRecibe.getPublicacionSolicitante().getLibro() != null) {
+                    libroRecibe = libroMapper.toDTO(intercambioRecibe.getPublicacionSolicitante().getLibro());
+                }
+
+                pasos.add(new PasoCadenaResponseDTO(
+                        participante.getId(),
+                        participante.getNombre(),
+                        participante.getEmail(),
+                        libroEntrega,
+                        libroRecibe,
+                        confirmado,
+                        intercambioId
+                ));
             }
-
-            LibroResponseDTO libroRecibe = null;
-            if (intercambioRecibe != null) {
-                Libro libro = intercambioRecibe.getLibroDeseado() != null ?
-                        intercambioRecibe.getLibroDeseado() : intercambioRecibe.getLibroOfrecido();
-                libroRecibe = libroMapper.toResponseDTO(libro);
-            }
-
-            pasos.add(new PasoCadenaResponseDTO(
-                    participante.getId(),
-                    participante.getNombre(),
-                    participante.getEmail(),
-                    libroEntrega,
-                    libroRecibe,
-                    confirmado,
-                    intercambioId
-            ));
         }
 
         return new CadenaIntercambioResponseDTO(
@@ -222,7 +225,7 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
                 cadena.getEstado(),
                 cadena.getPuntosBonus(),
                 pasos,
-                cadena.getParticipantes().size()
+                cadena.getParticipantes() != null ? cadena.getParticipantes().size() : 0
         );
     }
 }

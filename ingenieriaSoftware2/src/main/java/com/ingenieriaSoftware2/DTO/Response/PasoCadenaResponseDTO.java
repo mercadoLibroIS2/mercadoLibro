@@ -9,6 +9,6 @@ public record PasoCadenaResponseDTO(
         LibroResponseDTO libroQueEntrega,
         LibroResponseDTO libroQueRecibe,
         boolean confirmado,
-        UUID intercambioId
+        String intercambioId
 ) {
 }

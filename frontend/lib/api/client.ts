@@ -7,9 +7,9 @@ const TOKEN_KEY = "mercadolibro_jwt_token"
 export const getApiBaseUrl = (): string => {
   if (typeof window !== "undefined") {
     // Si estamos en el navegador y hay variable de entorno, usarla
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8086"
   }
-  return process.env.BACKEND_INTERNAL_URL || "http://localhost:8080"
+  return process.env.BACKEND_INTERNAL_URL || "http://localhost:8086"
 }
 
 export const getAuthToken = (): string | null => {
