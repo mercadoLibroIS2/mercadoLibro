@@ -10,17 +10,20 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Events.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+import com.ingenieriaSoftware2.Exception.Resenia.NoInvolucradoException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaExistenteException;
+import com.ingenieriaSoftware2.Exception.Resenia.ReseniaIntercambioIncompletoException;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
 import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -41,6 +44,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Autowired
     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     private Long puntosResenia = 50L;
 

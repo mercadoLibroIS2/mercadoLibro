@@ -18,7 +18,7 @@ interface FormState {
 const EMPTY: FormState = { name: "", username: "", email: "", password: "", confirm: "" }
 
 export function RegisterScreen() {
-  const { register, setScreen, signUpWithSupabase } = useStore()
+  const { setScreen, signUpWithSupabase } = useStore()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<Partial<FormState>>({})
   const [serverError, setServerError] = useState<string | null>(null)

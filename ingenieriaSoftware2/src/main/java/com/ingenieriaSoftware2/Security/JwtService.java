@@ -15,6 +15,8 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 @Slf4j
@@ -23,7 +25,40 @@ public class JwtService implements JwtServiceInterface {
 
     private String secreto = "miClaveSecretaSuperSeguraParaJWTConMasDe32Caracteres";
     private Long expiracion = 86400000L ;
+    private final Set<String> tokensRevocados = ConcurrentHashMap.newKeySet();
 
+    public void revocarToken(String token) {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+
+        String tokenNormalizado = token.trim();
+        if (tokenNormalizado.startsWith("Bearer ")) {
+            tokenNormalizado = tokenNormalizado.substring(7);
+        }
+
+        try {
+            String nombreUsuario = extraerNombreUsuario(tokenNormalizado);
+            if (nombreUsuario != null && !nombreUsuario.isBlank()) {
+                tokensRevocados.add(tokenNormalizado);
+            }
+        } catch (Exception ignored) {
+            tokensRevocados.add(tokenNormalizado);
+        }
+    }
+
+    public boolean estaRevocado(String token) {
+        if (token == null || token.isBlank()) {
+            return true;
+        }
+
+        String tokenNormalizado = token.trim();
+        if (tokenNormalizado.startsWith("Bearer ")) {
+            tokenNormalizado = tokenNormalizado.substring(7);
+        }
+
+        return tokensRevocados.contains(tokenNormalizado);
+    }
 
     @Override
     public Key obtenerClaveFirma() {
@@ -78,6 +113,10 @@ public class JwtService implements JwtServiceInterface {
 
     @Override
     public boolean validarToken(String token, UserDetails userDetails) {
+        if (token == null || token.isBlank() || estaRevocado(token)) {
+            return false;
+        }
+
         final String nombreUsuario = extraerNombreUsuario(token);
         return (nombreUsuario.equals(userDetails.getUsername()) && !tokenExpirado(token));
     }

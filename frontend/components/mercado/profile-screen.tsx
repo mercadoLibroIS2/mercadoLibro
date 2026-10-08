@@ -12,6 +12,7 @@ import {
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
+import { ChangePasswordModal } from "./change-password-modal"
 import type { PointMovementType } from "@/lib/mercado-types"
 
 type ProfileTab = "publicaciones" | "resenas" | "movimientos"
@@ -41,6 +42,7 @@ export function ProfileScreen() {
 
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
   const [editing, setEditing] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const isOwnProfile = screen === "perfil" || selectedProfileUserId === currentUser?.id
   const targetUser = isOwnProfile
@@ -119,6 +121,13 @@ export function ProfileScreen() {
               >
                 <Pencil className="h-4 w-4" />
                 <span>Editar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setChangingPassword(true)}
+                className="flex-1 sm:flex-initial rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+              >
+                Cambiar contraseña
               </button>
             </div>
           )}
@@ -340,6 +349,7 @@ export function ProfileScreen() {
       </div>
 
       {editing ? <EditProfileModal onClose={() => setEditing(false)} /> : null}
+      {changingPassword ? <ChangePasswordModal onClose={() => setChangingPassword(false)} /> : null}
     </div>
   )
 }

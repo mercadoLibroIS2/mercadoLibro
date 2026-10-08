@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react"
 import type {
@@ -68,13 +69,10 @@ interface StoreContextValue extends AppState {
   toast: string | null
   showToast: (msg: string) => void
 
-  // Auth & User Switch
-  login: (user: User) => void
-  register: (name: string, username: string, email: string) => void
-  logout: () => void
+  // Auth
+  logout: () => Promise<void>
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
-  switchUser: (userId: string) => void
   updateProfile: (patch: Partial<User>) => void
   viewUserProfile: (userId: string) => void
 
@@ -127,6 +125,7 @@ function getInitialState(): AppState {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState)
+  const authSessionVersion = useRef(0)
   const [screen, setScreen] = useState<Screen>("login")
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
@@ -175,7 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, currentUser: null }))
     } catch {
       // storage unavailable
     }
@@ -196,7 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   // Helper to map Supabase User and database Profile to our App User
-  const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser) => {
+  const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser, sessionVersion = authSessionVersion.current) => {
     try {
       let profileData: Partial<User> | null = null
       // Intentar leer de la tabla 'usuario' (diseño oficial de MercadoLibro) o 'profiles'
@@ -271,6 +270,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         joinedDate: profileData?.joinedDate || sbUser.created_at || new Date().toISOString(),
       }
 
+      if (sessionVersion !== authSessionVersion.current) return null
+
       setState((prev) => {
         const exists = prev.users.some(
           (u) => u.id === appUser.id || (u.email && u.email.toLowerCase() === appUser.email.toLowerCase())
@@ -290,9 +291,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
+    const initialSessionVersion = authSessionVersion.current
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        syncSupabaseUser(session.user).then((u) => {
+        syncSupabaseUser(session.user, initialSessionVersion).then((u) => {
           if (u) {
             setScreen((currentScreen) => (currentScreen === "login" || currentScreen === "registro" ? "inicio" : currentScreen))
           }
@@ -303,10 +305,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
-        syncSupabaseUser(session.user)
-      } else if (event === "SIGNED_OUT") {
+      if (event === "SIGNED_OUT") {
+        authSessionVersion.current += 1
         setState((prev) => ({ ...prev, currentUser: null }))
+        setScreen("login")
+      } else if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "USER_UPDATED") {
+        const sessionVersion = ++authSessionVersion.current
+        if (session?.user) {
+          syncSupabaseUser(session.user, sessionVersion)
+        }
       }
     })
 
@@ -316,31 +323,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [syncSupabaseUser])
 
   // --- Auth & User Switching ---
-  const switchUser = useCallback(
-    (userId: string) => {
-      const found = state.users.find((u) => u.id === userId)
-      if (!found) return
-      setState((prev) => ({ ...prev, currentUser: found }))
-      showToast(`Cambiado a usuario: ${found.name}`)
-    },
-    [showToast, state.users]
-  )
-
-  const login = useCallback(
-    (user: User) => {
-      setState((prev) => {
-        const existing = prev.users.find((u) => u.email.toLowerCase() === user.email.toLowerCase())
-        const currentUser = existing || user
-        const users = existing ? prev.users : [...prev.users, user]
-        return { ...prev, users, currentUser }
-      })
-      // Directs to Welcome / Onboarding screen after login
-      setScreen("bienvenida")
-      showToast(`¡Bienvenido/a de nuevo, ${user.name}!`)
-    },
-    [showToast]
-  )
-
   const signInWithSupabase = useCallback(
     async (email: string, password: string) => {
       try {
@@ -361,8 +343,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo sincronizar la sesión. Intenta iniciar sesión nuevamente." }
+          }
           setScreen("bienvenida")
-          showToast(`¡Bienvenido/a de nuevo, ${u?.name || "lector"}!`)
+          showToast(`¡Bienvenido/a de nuevo, ${u.name || "lector"}!`)
           return { success: true }
         }
 
@@ -373,47 +358,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
     [syncSupabaseUser, showToast]
-  )
-
-  const register = useCallback(
-    (name: string, username: string, email: string) => {
-      const id = "user-" + Date.now()
-      const newUser: User = {
-        id,
-        name,
-        username: username.replace("@", ""),
-        email,
-        avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250`,
-        rating: 5.0,
-        totalReviews: 0,
-        totalTrades: 0,
-        availablePoints: 100, // RF14: 100 initial points
-        reservedPoints: 0,
-        joinedDate: new Date().toISOString(),
-      }
-
-      const initialMovement: PointMovement = {
-        id: "pm-" + Date.now(),
-        userId: id,
-        type: "INICIAL",
-        amount: 100,
-        balanceAfter: 100,
-        description: "Bienvenida a Mercado Libro — Asignación de 100 puntos iniciales (RF14)",
-        date: new Date().toISOString(),
-      }
-
-      setState((prev) => ({
-        ...prev,
-        users: [...prev.users, newUser],
-        currentUser: newUser,
-        pointMovements: [initialMovement, ...prev.pointMovements],
-      }))
-
-      // Directs to Welcome / Onboarding screen after registration
-      setScreen("bienvenida")
-      showToast("¡Cuenta creada con éxito! Recibiste 100 puntos de bienvenida.")
-    },
-    [showToast]
   )
 
   const signUpWithSupabase = useCallback(
@@ -452,6 +396,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo sincronizar la sesión. Inicia sesión nuevamente." }
+          }
           const initialMovement: PointMovement = {
             id: "pm-" + Date.now(),
             userId: data.user.id,
@@ -480,11 +427,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    let globalSignOutFailed = false
     try {
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut({ scope: "global" })
+      globalSignOutFailed = Boolean(error)
     } catch {
-      // ignore
+      globalSignOutFailed = true
     }
+
+    if (globalSignOutFailed) {
+      try {
+        const { error } = await supabase.auth.signOut({ scope: "local" })
+        if (error) {
+          showToast("No se pudo cerrar la sesión. Verificá tu conexión e intentá nuevamente.")
+          return
+        }
+      } catch {
+        showToast("No se pudo cerrar la sesión. Verificá tu conexión e intentá nuevamente.")
+        return
+      }
+
+      setState((prev) => ({ ...prev, currentUser: null }))
+      setScreen("login")
+      showToast("Sesión cerrada en este dispositivo; no se pudo confirmar el cierre en otros dispositivos.")
+      return
+    }
+
     setState((prev) => ({ ...prev, currentUser: null }))
     setScreen("login")
     showToast("Sesión cerrada.")
@@ -1243,12 +1211,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSelectedCategory,
         toast,
         showToast,
-        login,
-        register,
         logout,
         signInWithSupabase,
         signUpWithSupabase,
-        switchUser,
         updateProfile,
         viewUserProfile,
         publishBook,
