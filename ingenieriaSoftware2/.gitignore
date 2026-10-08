@@ -33,3 +33,7 @@ build/
 .vscode/
 
 .env
+
+../docs/
+
+../postman/collections/
