@@ -1190,6 +1190,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (chainId: string) => {
       if (!state.currentUser) return
 
+      const chain = state.chains.find((item) => item.id === chainId)
+      const currentStep = chain?.steps.find((step) => step.userId === state.currentUser?.id)
+      if (
+        !chain ||
+        !currentStep ||
+        currentStep.confirmed ||
+        (chain.status !== "PROPUESTA" && chain.status !== "EN_CURSO")
+      ) {
+        return
+      }
+
       setState((prev) => {
         const updatedChains = prev.chains.map((chain) => {
           if (chain.id !== chainId) return chain
@@ -1208,18 +1219,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       showToast("Confirmaste tu participación en la cadena de intercambio.")
     },
-    [state.currentUser, showToast]
+    [state.currentUser, state.chains, showToast]
   )
 
   const rejectChain = useCallback(
     (chainId: string) => {
+      const chain = state.chains.find((item) => item.id === chainId)
+      if (
+        !state.currentUser ||
+        !chain?.steps.some((step) => step.userId === state.currentUser?.id) ||
+        (chain.status !== "PROPUESTA" && chain.status !== "EN_CURSO")
+      ) {
+        return
+      }
+
       setState((prev) => ({
         ...prev,
         chains: prev.chains.map((c) => (c.id === chainId ? { ...c, status: "CANCELADA" } : c)),
       }))
       showToast("Cadena de intercambio rechazada.")
     },
-    [showToast]
+    [state.currentUser, state.chains, showToast]
   )
 
   return (

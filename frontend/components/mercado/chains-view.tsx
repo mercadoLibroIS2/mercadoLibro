@@ -14,6 +14,9 @@ import { useStore } from "./store"
 
 export function ChainsView() {
   const { chains, currentUser, confirmChainStep, rejectChain } = useStore()
+  const userChains = currentUser
+    ? chains.filter((chain) => chain.steps.some((step) => step.userId === currentUser.id))
+    : []
 
   return (
     <div className="space-y-6">
@@ -28,7 +31,7 @@ export function ChainsView() {
         </p>
       </div>
 
-      {chains.length === 0 ? (
+      {userChains.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-stone-300 p-8 sm:p-12 text-center bg-white">
           <Share2 className="mx-auto h-10 w-10 text-stone-300 mb-3" />
           <p className="text-base sm:text-lg font-serif font-bold text-stone-800">No hay cadenas activas en este momento</p>
@@ -37,7 +40,7 @@ export function ChainsView() {
           </p>
         </div>
       ) : (
-        chains.map((chain) => {
+        userChains.map((chain) => {
           const myStep = chain.steps.find((s) => s.userId === currentUser?.id)
           const allConfirmed = chain.steps.every((s) => s.confirmed)
 
