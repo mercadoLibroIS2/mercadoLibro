@@ -43,8 +43,23 @@ const EMPTY_FORM: FormState = {
 }
 
 export function PublishForm() {
-  const { currentUser, publishBook, setScreen } = useStore()
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const { currentUser, books, editingBookId, setEditingBookId, publishBook, updateBook, setScreen } = useStore()
+  const editingBook = books.find((book) => book.id === editingBookId)
+  const [form, setForm] = useState<FormState>(() =>
+    editingBook
+      ? {
+          title: editingBook.title,
+          author: editingBook.author,
+          isbn: editingBook.isbn,
+          category: editingBook.category,
+          condition: editingBook.condition,
+          edition: editingBook.edition || "",
+          points: String(editingBook.points),
+          description: editingBook.description || "",
+          coverUrl: editingBook.coverUrl || "",
+        }
+      : EMPTY_FORM
+  )
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
 
   if (!currentUser) {
@@ -55,8 +70,8 @@ export function PublishForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  const pointsNum = Number.parseInt(form.points, 10)
-  const hasPoints = form.points !== "" && !Number.isNaN(pointsNum) && pointsNum > 0
+  const pointsNum = Number(form.points)
+  const hasPoints = form.points !== "" && Number.isSafeInteger(pointsNum) && pointsNum > 0
   const evaluation = hasPoints
     ? evaluatePriceDeal(pointsNum, form.category, form.condition, 4.5)
     : null
@@ -68,13 +83,13 @@ export function PublishForm() {
     if (!form.author.trim()) next.author = "El autor es obligatorio"
     if (!form.category) next.category = "Seleccioná una categoría"
     if (!form.points.trim()) next.points = "Ingresá el valor en puntos"
-    else if (Number.isNaN(pointsNum) || pointsNum <= 0)
+    else if (!Number.isSafeInteger(pointsNum) || pointsNum <= 0)
       next.points = "Ingresá un número de puntos válido mayor a 0"
 
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    publishBook({
+    const bookData = {
       title: form.title.trim(),
       author: form.author.trim(),
       isbn: form.isbn.trim(),
@@ -85,7 +100,15 @@ export function PublishForm() {
       description: form.description.trim() || undefined,
       coverUrl: form.coverUrl.trim() || undefined,
       externalRating: 4.5,
-    })
+    }
+
+    if (editingBook) {
+      updateBook(editingBook.id, bookData)
+      setEditingBookId(null)
+      setScreen("inicio")
+    } else {
+      publishBook(bookData)
+    }
   }
 
   return (
@@ -101,7 +124,7 @@ export function PublishForm() {
           </button>
           <div>
             <h1 className="font-serif text-xl sm:text-3xl font-bold text-stone-900">
-              Publicar un Libro
+              {editingBook ? "Modificar Publicación" : "Publicar un Libro"}
             </h1>
             <p className="text-sm md:text-base text-stone-500">
               Completá los datos del ejemplar para el catálogo.
@@ -299,7 +322,10 @@ export function PublishForm() {
         <div className="flex items-center justify-end gap-3 border-t border-stone-100 pt-4">
           <button
             type="button"
-            onClick={() => setScreen("inicio")}
+            onClick={() => {
+              setEditingBookId(null)
+              setScreen("inicio")
+            }}
             className="rounded-xl border border-stone-200 px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
           >
             Cancelar
@@ -309,7 +335,7 @@ export function PublishForm() {
             className="flex items-center gap-2 rounded-xl bg-amber-800 px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
           >
             <BookPlus className="h-4.5 w-4.5" />
-            Publicar Libro
+            {editingBook ? "Guardar cambios" : "Publicar Libro"}
           </button>
         </div>
       </form>

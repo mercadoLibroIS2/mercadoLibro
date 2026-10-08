@@ -55,6 +55,8 @@ interface StoreContextValue extends AppState {
   setScreen: (s: Screen) => void
   selectedBookId: string | null
   setSelectedBookId: (id: string | null) => void
+  editingBookId: string | null
+  setEditingBookId: (id: string | null) => void
   selectedProfileUserId: string | null
   setSelectedProfileUserId: (id: string | null) => void
   tradeModalBook: Book | null
@@ -128,6 +130,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const authSessionVersion = useRef(0)
   const [screen, setScreen] = useState<Screen>("login")
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
+  const [editingBookId, setEditingBookId] = useState<string | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
   const [tradeModalBook, setTradeModalBookState] = useState<Book | null>(null)
   const [tradeModalInitialType, setTradeModalInitialType] = useState<TradeType>("PUNTOS")
@@ -540,18 +543,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateBook = useCallback(
     (bookId: string, patch: Partial<Book>) => {
+      const book = state.books.find((item) => item.id === bookId)
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede modificar esta publicación.")
+        return
+      }
       setState((prev) => ({
         ...prev,
         books: prev.books.map((b) => (b.id === bookId ? { ...b, ...patch } : b)),
       }))
       showToast("Publicación actualizada.")
     },
-    [showToast]
+    [state.books, state.currentUser, showToast]
   )
 
   const deleteBook = useCallback(
     (bookId: string) => {
       const book = state.books.find((b) => b.id === bookId)
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede eliminar esta publicación.")
+        return
+      }
       if (book && book.availability === "RESERVADO") {
         showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
         return
@@ -562,7 +574,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
       showToast("Publicación eliminada.")
     },
-    [state.books, showToast]
+    [state.books, state.currentUser, showToast]
   )
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
@@ -1198,6 +1210,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setScreen,
         selectedBookId,
         setSelectedBookId,
+        editingBookId,
+        setEditingBookId,
         selectedProfileUserId,
         setSelectedProfileUserId,
         tradeModalBook,
