@@ -27,10 +27,10 @@ public class Libro {
     @Column(name = "isbn")
     private String isbn;
 
-    @Column(name = "google_books_id", nullable = false, unique = true)
+    @Column(name = "google_books_id", unique = true)
     private String googleBooksId;
 
-    @Column(name = "titulo", nullable = false)
+    @Column(name = "titulo")
     private String titulo;
 
     @Column(name = "autores")

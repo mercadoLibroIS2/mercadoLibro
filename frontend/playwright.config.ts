@@ -1,5 +1,11 @@
 import { defineConfig } from "@playwright/test"
 
+const baseURL = process.env.P4_API_URL
+
+if (!baseURL) {
+  throw new Error("Definí P4_API_URL para ejecutar pruebas contra una base de datos exclusiva de pruebas.")
+}
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -9,6 +15,6 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: process.env.P4_API_URL || process.env.P3_API_URL || "http://127.0.0.1:8086",
+    baseURL,
   },
 })

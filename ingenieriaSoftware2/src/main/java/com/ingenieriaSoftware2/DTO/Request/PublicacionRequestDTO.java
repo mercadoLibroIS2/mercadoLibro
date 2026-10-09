@@ -17,7 +17,7 @@ public record PublicacionRequestDTO(
         @Positive
         Integer valorPuntosSolicitado,
 
-        @Size(max = 500)
+        @Size(max = 255)
         String comentario
 ) {
 }

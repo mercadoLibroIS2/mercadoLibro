@@ -1,6 +1,9 @@
 package com.ingenieriaSoftware2.Exception;
 
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioYaExiste;
+import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
+import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleException;
+import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoExisteException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +57,29 @@ public class GlobalExceptionHandler {
         body.put("error", e.getClass().getSimpleName());
         body.put("message", e.getReason() != null ? e.getReason() : e.getMessage());
         return ResponseEntity.status(e.getStatusCode()).body(body);
+    }
+
+    @ExceptionHandler(AccionNoPermitidaException.class)
+    public ResponseEntity<Map<String, Object>> handleAccionNoPermitida(AccionNoPermitidaException e) {
+        return handlePublicacionError(HttpStatus.FORBIDDEN, "AccionNoPermitida", e.getMessage());
+    }
+
+    @ExceptionHandler(PublicacionNoDisponibleException.class)
+    public ResponseEntity<Map<String, Object>> handlePublicacionNoDisponible(PublicacionNoDisponibleException e) {
+        return handlePublicacionError(HttpStatus.CONFLICT, "PublicacionNoDisponible", e.getMessage());
+    }
+
+    @ExceptionHandler(PublicacionNoExisteException.class)
+    public ResponseEntity<Map<String, Object>> handlePublicacionNoExiste(PublicacionNoExisteException e) {
+        return handlePublicacionError(HttpStatus.NOT_FOUND, "PublicacionNoExiste", e.getMessage());
+    }
+
+    private ResponseEntity<Map<String, Object>> handlePublicacionError(HttpStatus status, String error, String message) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", status.value());
+        body.put("error", error);
+        body.put("message", message);
+        return ResponseEntity.status(status).body(body);
     }
 
     @ExceptionHandler(Exception.class)

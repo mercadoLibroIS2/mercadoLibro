@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/publicaciones")
 @RequiredArgsConstructor
@@ -26,6 +28,22 @@ public class PublicacionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping
+    public ResponseEntity<List<PublicacionResponseDTO>> listarPublicaciones() {
+        return ResponseEntity.ok(publicacionService.listarPublicaciones());
+    }
+
+    @GetMapping("/disponibles")
+    public ResponseEntity<List<PublicacionResponseDTO>> listarPublicacionesDisponibles() {
+        return ResponseEntity.ok(publicacionService.listarPublicacionesDisponibles());
+    }
+
+    @GetMapping("/mis-publicaciones")
+    public ResponseEntity<List<PublicacionResponseDTO>> listarMisPublicaciones(
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(publicacionService.listarMisPublicaciones(usuario.getEmail()));
+    }
+
     @GetMapping("/detalle")
     public ResponseEntity<PublicacionResponseDTO> verDetallesPublicacion(@Valid @ModelAttribute PublicacionIdParams id) {
         return ResponseEntity.ok(publicacionService.verDetallesPublicacion(id.toId()));
@@ -36,6 +54,13 @@ public class PublicacionController {
                                                   @Valid @ModelAttribute PublicacionIdParams id,
                                                   @Valid @RequestBody PublicacionRequestDTO dto) {
         publicacionService.editarPublicacion(id.toId(), dto, usuario.getEmail());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/eliminar")
+    public ResponseEntity<Void> eliminarPublicacion(@AuthenticationPrincipal Usuario usuario,
+                                                    @Valid @ModelAttribute PublicacionIdParams id) {
+        publicacionService.eliminarPublicacion(id.toId(), usuario.getEmail());
         return ResponseEntity.noContent().build();
     }
 }
