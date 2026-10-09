@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:e2e:p2": "playwright test --config=playwright.p2.config.ts e2e/p2-publications.spec.ts",
     "test:e2e:p3": "playwright test e2e/p3-points.spec.ts",
     "test:e2e:p4": "playwright test e2e/p4-exchanges.spec.ts",
     "test:e2e:p5": "playwright test --config=playwright.p5.config.ts e2e/p5-catalog-chains.spec.ts",

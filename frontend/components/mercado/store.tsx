@@ -13,6 +13,7 @@ import type {
   Condition,
   NotificationItem,
   PointMovement,
+  PublicationInput,
   Review,
   Screen,
   TrackedBook,
@@ -34,6 +35,13 @@ import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluato
 import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import {
+  databaseCondition,
+  databaseBook,
+  databasePublicationId,
+  findDatabaseBook,
+  loadDatabasePublications,
+} from "@/lib/publicaciones-db"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -52,6 +60,10 @@ interface AppState {
 interface StoreContextValue extends AppState {
   screen: Screen
   setScreen: (s: Screen) => void
+  editingBookId: string | null
+  setEditingBookId: (id: string | null) => void
+  startPublishing: () => void
+  startEditingBook: (bookId: string) => void
   selectedBookId: string | null
   setSelectedBookId: (id: string | null) => void
   selectedProfileUserId: string | null
@@ -79,9 +91,9 @@ interface StoreContextValue extends AppState {
   viewUserProfile: (userId: string) => void
 
   // Books
-  publishBook: (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => void
-  updateBook: (bookId: string, data: Partial<Book>) => void
-  deleteBook: (bookId: string) => void
+  publishBook: (data: PublicationInput) => Promise<boolean>
+  updateBook: (bookId: string, data: PublicationInput) => Promise<boolean>
+  deleteBook: (bookId: string) => Promise<boolean>
 
   // Trades
   requestTradeWithPoints: (bookId: string) => boolean
@@ -128,6 +140,7 @@ function getInitialState(): AppState {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState)
   const [screen, setScreen] = useState<Screen>("login")
+  const [editingBookId, setEditingBookId] = useState<string | null>(null)
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
   const [tradeModalBook, setTradeModalBookState] = useState<Book | null>(null)
@@ -141,6 +154,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setTradeModalBook = useCallback((b: Book | null, type: TradeType = "PUNTOS") => {
     setTradeModalBookState(b)
     setTradeModalInitialType(type)
+  }, [])
+
+  const startPublishing = useCallback(() => {
+    setEditingBookId(null)
+    setSelectedBookId(null)
+    setScreen("publicar")
   }, [])
 
   // Load from local storage
@@ -187,6 +206,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const t = window.setTimeout(() => setToast(null), 3500)
     ;(showToast as unknown as { _t?: number })._t = t
   }, [])
+
+  const startEditingBook = useCallback((bookId: string) => {
+    const book = state.books.find((candidate) => candidate.id === bookId)
+    if (!book || book.ownerId !== state.currentUser?.id) {
+      showToast("Solo el dueño puede editar esta publicación.")
+      return
+    }
+    if (book.availability !== "DISPONIBLE") {
+      showToast("No se puede editar una publicación que no está disponible.")
+      return
+    }
+
+    setEditingBookId(bookId)
+    setSelectedBookId(null)
+    setScreen("publicar")
+  }, [showToast, state.books, state.currentUser])
 
   const resetToInitialData = useCallback(() => {
     const init = getInitialState()
@@ -281,12 +316,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return { ...prev, users, currentUser: appUser }
       })
 
+      try {
+        const persistedBooks = await loadDatabasePublications(appUser, [...SEED_USERS, appUser])
+        setState((prev) => ({
+          ...prev,
+          books: [
+            ...persistedBooks,
+            ...prev.books.filter((book) => {
+              if (persistedBooks.some((saved) => saved.isbn === book.isbn && saved.ownerId === book.ownerId)) {
+                return false
+              }
+              try {
+                databasePublicationId(book)
+                return false
+              } catch {
+                return true
+              }
+            }),
+          ],
+        }))
+      } catch (error) {
+        console.error("[Supabase] Error cargando publicaciones:", error)
+        showToast("No se pudieron cargar las publicaciones guardadas. Revisá la conexión y las políticas de Supabase.")
+      }
+
       return appUser
     } catch (err) {
       console.error("[Supabase] Error sincronizando usuario:", err)
       return null
     }
-  }, [])
+  }, [showToast])
 
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
@@ -304,7 +363,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
-        syncSupabaseUser(session.user)
+        queueMicrotask(() => {
+          void syncSupabaseUser(session.user)
+        })
       } else if (event === "SIGNED_OUT") {
         setState((prev) => ({ ...prev, currentUser: null }))
       }
@@ -513,88 +574,146 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // --- Books CRUD & Matching (RF01-RF04, RF35) ---
   const publishBook = useCallback(
-    (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
-      if (!state.currentUser) return
+    async (data: PublicationInput): Promise<boolean> => {
+      const currentUser = state.currentUser
+      if (!currentUser) return false
 
-      const id = "book-" + Date.now()
-      const refPrice = calculateReferencePrice(data.category, data.condition, data.externalRating || 4.5)
+      try {
+        const book = await findDatabaseBook(data.isbn.trim())
+        const timestamp = new Date().toISOString()
+        const { data: publication, error } = await supabase
+          .from("publicacion")
+          .insert({
+            isbn: data.isbn.trim(),
+            email_propietario: currentUser.email,
+            hora_publicacion: timestamp,
+            estado_fisico: databaseCondition(data.condition),
+            valor_puntos_solicitado: data.points,
+            comentario: data.description || null,
+            estado_publicacion: "DISPONIBLE",
+          })
+          .select("*")
+          .single()
+        if (error) throw error
+        if (!publication) throw new Error("Supabase no devolvió la publicación creada.")
 
-      const newBook: Book = {
-        ...data,
-        id,
-        ownerId: state.currentUser.id,
-        ownerName: state.currentUser.name,
-        ownerRating: state.currentUser.rating,
-        ownerTrades: state.currentUser.totalTrades,
-        availability: "DISPONIBLE",
-        referencePrice: refPrice,
-        createdAt: new Date().toISOString(),
+        const { data: category, error: categoryError } = await supabase
+          .from("libro_categoria")
+          .select("*")
+          .eq("isbn", data.isbn.trim())
+          .maybeSingle()
+        if (categoryError) throw categoryError
+
+        const newBook = databaseBook(
+          publication as Record<string, unknown>,
+          book,
+          { email: currentUser.email, nombre: currentUser.name, reputacion_promedio: currentUser.rating },
+          category as Record<string, unknown> | null || undefined,
+          state.users,
+          currentUser,
+        )
+        setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
+        showToast(`"${newBook.title}" se publicó y guardó en Supabase.`)
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al guardar la publicación."
+        console.error("[Supabase] Error creando publicación:", error)
+        showToast(`No se pudo guardar la publicación: ${message}`)
+        return false
       }
-
-      // Check tracker matches for other users (RF35, RF36)
-      const newNotifs: NotificationItem[] = []
-      state.trackedBooks.forEach((tb) => {
-        if (tb.userId !== state.currentUser?.id) {
-          const matchTitle = newBook.title.toLowerCase().includes(tb.title.toLowerCase())
-          const matchAuthor = tb.author ? newBook.author.toLowerCase().includes(tb.author.toLowerCase()) : true
-          const matchPoints = tb.maxPoints ? newBook.points <= tb.maxPoints : true
-          const matchCond = tb.acceptableConditions?.length
-            ? tb.acceptableConditions.includes(newBook.condition)
-            : true
-
-          if (matchTitle && matchAuthor && matchPoints && matchCond) {
-            newNotifs.push({
-              id: "notif-track-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5),
-              userId: tb.userId,
-              type: "TRACKER_MATCH",
-              title: "¡Coincidencia en tu Tracker!",
-              message: `Se publicó "${newBook.title}" por ${newBook.points} pts (dentro de tus criterios).`,
-              read: false,
-              date: new Date().toISOString(),
-              linkScreen: "inicio",
-              linkData: { bookId: newBook.id },
-            })
-          }
-        }
-      })
-
-      setState((prev) => ({
-        ...prev,
-        books: [newBook, ...prev.books],
-        notifications: [...newNotifs, ...prev.notifications],
-      }))
-
-      showToast(`"${newBook.title}" se publicó con éxito en el catálogo.`)
-      setScreen("inicio")
     },
-    [state.currentUser, state.trackedBooks, showToast]
+    [state.currentUser, state.users, showToast]
   )
 
   const updateBook = useCallback(
-    (bookId: string, patch: Partial<Book>) => {
-      setState((prev) => ({
-        ...prev,
-        books: prev.books.map((b) => (b.id === bookId ? { ...b, ...patch } : b)),
-      }))
-      showToast("Publicación actualizada.")
+    async (bookId: string, patch: PublicationInput): Promise<boolean> => {
+      const book = state.books.find((candidate) => candidate.id === bookId)
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede editar esta publicación.")
+        return false
+      }
+      if (book.availability !== "DISPONIBLE") {
+        showToast("No se puede editar una publicación que no está disponible.")
+        return false
+      }
+
+      try {
+        const [isbn, email, timestamp] = databasePublicationId(book)
+        const { data, error } = await supabase
+          .from("publicacion")
+          .update({
+            estado_fisico: databaseCondition(patch.condition),
+            valor_puntos_solicitado: patch.points,
+            comentario: patch.description || null,
+          })
+          .eq("isbn", isbn)
+          .eq("email_propietario", email)
+          .eq("hora_publicacion", timestamp)
+          .select("*")
+          .single()
+        if (error) throw error
+        if (!data) throw new Error("Supabase no devolvió la publicación actualizada.")
+
+        setState((prev) => ({
+          ...prev,
+          books: prev.books.map((candidate) =>
+            candidate.id === bookId
+              ? { ...candidate, ...patch, referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5) }
+              : candidate,
+          ),
+        }))
+        showToast("Publicación actualizada en Supabase.")
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al actualizar la publicación."
+        console.error("[Supabase] Error actualizando publicación:", error)
+        showToast(`No se pudo actualizar la publicación: ${message}`)
+        return false
+      }
     },
-    [showToast]
+    [showToast, state.books, state.currentUser]
   )
 
   const deleteBook = useCallback(
-    (bookId: string) => {
+    async (bookId: string): Promise<boolean> => {
       const book = state.books.find((b) => b.id === bookId)
-      if (book && book.availability === "RESERVADO") {
-        showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
-        return
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede eliminar esta publicación.")
+        return false
       }
-      setState((prev) => ({
-        ...prev,
-        books: prev.books.filter((b) => b.id !== bookId),
-      }))
-      showToast("Publicación eliminada.")
+      if (book.availability === "RESERVADO") {
+        showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
+        return false
+      }
+      if (book.availability !== "DISPONIBLE") {
+        showToast("No se puede eliminar una publicación que no está disponible.")
+        return false
+      }
+
+      try {
+        const [isbn, email, timestamp] = databasePublicationId(book)
+        const { data, error } = await supabase
+          .from("publicacion")
+          .update({ estado_publicacion: "ELIMINADA" })
+          .eq("isbn", isbn)
+          .eq("email_propietario", email)
+          .eq("hora_publicacion", timestamp)
+          .select("isbn")
+          .single()
+        if (error) throw error
+        if (!data) throw new Error("No se encontró la publicación para eliminar.")
+
+        setState((prev) => ({ ...prev, books: prev.books.filter((candidate) => candidate.id !== bookId) }))
+        showToast("Publicación eliminada de Supabase.")
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al eliminar la publicación."
+        console.error("[Supabase] Error eliminando publicación:", error)
+        showToast(`No se pudo eliminar la publicación: ${message}`)
+        return false
+      }
     },
-    [state.books, showToast]
+    [state.books, state.currentUser, showToast]
   )
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
@@ -1248,6 +1367,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...state,
         screen,
         setScreen,
+        editingBookId,
+        setEditingBookId,
+        startPublishing,
+        startEditingBook,
         selectedBookId,
         setSelectedBookId,
         selectedProfileUserId,

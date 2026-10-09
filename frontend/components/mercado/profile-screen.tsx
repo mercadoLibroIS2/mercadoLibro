@@ -33,6 +33,7 @@ export function ProfileScreen() {
     books,
     reviews,
     pointMovements,
+    startPublishing,
     selectedProfileUserId,
     setSelectedProfileUserId,
     screen,
@@ -106,7 +107,7 @@ export function ProfileScreen() {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setScreen("publicar")}
+                onClick={startPublishing}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-amber-800 px-4 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
               >
                 <PlusCircle className="h-4.5 w-4.5" />
@@ -232,7 +233,7 @@ export function ProfileScreen() {
                 </p>
                 {isOwnProfile && (
                   <button
-                    onClick={() => setScreen("publicar")}
+                    onClick={startPublishing}
                     className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-800 px-3.5 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900"
                   >
                     <PlusCircle className="h-4 w-4" />

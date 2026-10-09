@@ -21,6 +21,7 @@ export function TradeRequestModal() {
     books,
     requestTradeWithPoints,
     requestDirectTrade,
+    startPublishing,
     setScreen,
   } = useStore()
 
@@ -210,7 +211,7 @@ export function TradeRequestModal() {
                     type="button"
                     onClick={() => {
                       setTradeModalBook(null)
-                      setScreen("publicar")
+                      startPublishing()
                     }}
                     className="mt-3.5 inline-flex items-center gap-2 rounded-xl bg-amber-800 px-4 py-2.5 text-base md:text-lg font-semibold text-white hover:bg-amber-900 transition-colors"
                   >

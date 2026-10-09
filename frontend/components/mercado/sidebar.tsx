@@ -23,6 +23,7 @@ export function Sidebar({
   const {
     screen,
     setScreen,
+    startPublishing,
     currentUser,
     trades,
     notifications,
@@ -110,7 +111,7 @@ export function Sidebar({
 
         {/* Primary Action Button: Publicar */}
         <button
-          onClick={() => setScreen("publicar")}
+          onClick={startPublishing}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-800 py-3 text-base md:text-lg font-bold text-white shadow-sm shadow-amber-900/20 hover:bg-amber-900 transition-all active:scale-98"
         >
           <PlusCircle className="h-4.5 w-4.5" />

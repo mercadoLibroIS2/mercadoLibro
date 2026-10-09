@@ -10,7 +10,7 @@ import {
 import { useStore } from "./store"
 
 export function BottomNav() {
-  const { screen, setScreen, currentUser, trades, notifications } = useStore()
+  const { screen, setScreen, startPublishing, currentUser, trades, notifications } = useStore()
 
   if (!currentUser) return null
 
@@ -58,7 +58,7 @@ export function BottomNav() {
 
         {/* 3. Publicar (Elevated Center Button) */}
         <button
-          onClick={() => setScreen("publicar")}
+          onClick={startPublishing}
           className="flex flex-col items-center justify-center -mt-5"
           title="Publicar un libro"
         >
