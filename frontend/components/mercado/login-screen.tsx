@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { BookOpen, LogIn, Users, Loader2, AlertCircle } from "lucide-react"
+import { BookOpen, LogIn, Loader2, AlertCircle } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
 import type { User } from "@/lib/mercado-types"
@@ -78,30 +78,6 @@ export function LoginScreen() {
           <p className="mt-1.5 text-sm md:text-base md:text-lg text-stone-600">
             Accedé a tu perfil e intercambiá libros en la comunidad.
           </p>
-        </div>
-
-        {/* Quick Demo Login selector */}
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-          <div className="flex items-center gap-1.5 text-sm md:text-base font-bold uppercase tracking-wider text-amber-900 mb-2.5">
-            <Users className="h-4 w-4" />
-            <span>Ingreso rápido con cuentas Demo:</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => login(u)}
-                className="flex items-center gap-2 rounded-xl border border-amber-200 bg-white p-2.5 text-left hover:bg-amber-100/70 transition-colors shadow-xs"
-              >
-                <img src={u.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-                <div className="truncate">
-                  <p className="text-sm md:text-base md:text-lg font-bold text-stone-900 truncate">{u.name.split(" ")[0]}</p>
-                  <p className="text-sm md:text-base font-semibold text-amber-900">{u.availablePoints} pts</p>
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
 
         {serverError && (
