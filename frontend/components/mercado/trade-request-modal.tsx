@@ -27,6 +27,7 @@ export function TradeRequestModal() {
 
   const [tradeType, setTradeType] = useState<TradeType>(tradeModalInitialType || "PUNTOS")
   const [selectedMyBookId, setSelectedMyBookId] = useState<string>("")
+  const [submitting, setSubmitting] = useState(false)
 
   // Update trade type when initial type changes
   if (tradeModalInitialType && tradeType !== tradeModalInitialType && !selectedMyBookId) {
@@ -42,14 +43,17 @@ export function TradeRequestModal() {
 
   const canAffordPoints = currentUser.availablePoints >= tradeModalBook.points
 
-  function handleSubmit() {
-    if (tradeType === "PUNTOS") {
-      const ok = requestTradeWithPoints(tradeModalBook!.id)
-      if (ok) setTradeModalBook(null)
-    } else {
-      if (!selectedMyBookId) return
-      const ok = requestDirectTrade(tradeModalBook!.id, selectedMyBookId)
-      if (ok) setTradeModalBook(null)
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      const succeeded = tradeType === "PUNTOS"
+        ? await requestTradeWithPoints(tradeModalBook!.id)
+        : selectedMyBookId
+          ? await requestDirectTrade(tradeModalBook!.id, selectedMyBookId)
+          : false
+      if (succeeded) setTradeModalBook(null)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -238,19 +242,17 @@ export function TradeRequestModal() {
             type="button"
             onClick={handleSubmit}
             disabled={
-              tradeType === "PUNTOS"
-                ? !canAffordPoints
-                : !selectedMyBookId
+              submitting || (tradeType === "PUNTOS" ? !canAffordPoints : !selectedMyBookId)
             }
             className={`rounded-xl px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs transition-all active:scale-95 ${
-              tradeType === "PUNTOS" && !canAffordPoints
+              submitting || (tradeType === "PUNTOS" && !canAffordPoints)
                 ? "bg-stone-300 cursor-not-allowed text-stone-500"
                 : tradeType === "DIRECTO" && !selectedMyBookId
                 ? "bg-stone-300 cursor-not-allowed text-stone-500"
                 : "bg-amber-800 hover:bg-amber-900"
             }`}
           >
-            Enviar Solicitud
+            {submitting ? "Guardando..." : "Enviar Solicitud"}
           </button>
         </div>
       </div>

@@ -42,6 +42,12 @@ import {
   findDatabaseBook,
   loadDatabasePublications,
 } from "@/lib/publicaciones-db"
+import {
+  createSolicitudIntercambio,
+  loadSolicitudesIntercambio,
+  saveSolicitudIntercambio,
+  updateSolicitudIntercambio,
+} from "@/lib/intercambios-db"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -96,12 +102,12 @@ interface StoreContextValue extends AppState {
   deleteBook: (bookId: string) => Promise<boolean>
 
   // Trades
-  requestTradeWithPoints: (bookId: string) => boolean
-  requestDirectTrade: (targetBookId: string, offeredBookId: string) => boolean
-  acceptTrade: (tradeId: string) => void
-  rejectTrade: (tradeId: string) => void
-  cancelTrade: (tradeId: string) => void
-  confirmTradeReceipt: (tradeId: string) => void
+  requestTradeWithPoints: (bookId: string) => Promise<boolean>
+  requestDirectTrade: (targetBookId: string, offeredBookId: string) => Promise<boolean>
+  acceptTrade: (tradeId: string) => Promise<void>
+  rejectTrade: (tradeId: string) => Promise<void>
+  cancelTrade: (tradeId: string) => Promise<void>
+  confirmTradeReceipt: (tradeId: string) => Promise<void>
 
   // Reviews
   addReview: (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => void
@@ -234,61 +240,76 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser) => {
     try {
       let profileData: Partial<User> | null = null
-      // Intentar leer de la tabla 'usuario' (diseño oficial de MercadoLibro) o 'profiles'
-    try {
-        const { data: uData, error: uErr } = await supabase
-          .from("usuario")
-          .select("*")
-          .eq("email", sbUser.email)
-          .maybeSingle()
+      const { data: uData, error: uErr } = await supabase
+        .from("usuario")
+        .select("*")
+        .eq("email", sbUser.email)
+        .maybeSingle()
 
-        if (!uErr && uData) {
-          profileData = {
-            id: sbUser.id,
-            name: sbUser.user_metadata?.name || uData.nombre_usuario || sbUser.email?.split("@")[0],
-            username: uData.nombre_usuario || sbUser.user_metadata?.username,
-            email: uData.email || sbUser.email,
-            avatar: sbUser.user_metadata?.avatar,
-            availablePoints: Number(uData.saldo_total) ?? 100,
-            reservedPoints: Number(uData.saldo_reservado) ?? 0,
-            rating: Number(uData.reputacion_promedio) || 5.0,
-            totalReviews: 0,
-            totalTrades: 0,
-            joinedDate: uData.created_at || sbUser.created_at,
-          }
-        } else {
-          // Fallback a 'profiles' si existiera
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", sbUser.id)
-            .maybeSingle()
-          if (!error && data) {
-            profileData = {
-              id: data.id,
-              name: data.name,
-              username: data.username,
-              email: data.email || sbUser.email,
-              avatar: data.avatar,
-              bio: data.bio,
-              city: data.city,
-              availablePoints: data.available_points ?? 100,
-              reservedPoints: data.reserved_points ?? 0,
-              rating: Number(data.rating) || 5.0,
-              totalReviews: data.total_reviews || 0,
-              totalTrades: data.total_trades || 0,
-              joinedDate: data.created_at,
-            }
-          }
+      if (!uErr && uData) {
+        if (uData.saldo_total == null || uData.saldo_reservado == null) {
+          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
         }
-      } catch {
-        // Ignorar si aún no hay tablas creadas o permisos
+        const availablePoints = Number(uData.saldo_total)
+        const reservedPoints = Number(uData.saldo_reservado)
+        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
+          throw new Error("El saldo guardado en Supabase no es válido.")
+        }
+        profileData = {
+          id: sbUser.id,
+          name: sbUser.user_metadata?.name || uData.nombre_usuario || uData.nombre || sbUser.email?.split("@")[0],
+          username: uData.nombre_usuario || uData.nombre || sbUser.user_metadata?.username,
+          email: uData.email || sbUser.email,
+          avatar: sbUser.user_metadata?.avatar,
+          availablePoints,
+          reservedPoints,
+          rating: Number(uData.reputacion_promedio) || 5.0,
+          totalReviews: 0,
+          totalTrades: 0,
+          joinedDate: uData.created_at || sbUser.created_at,
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", sbUser.id)
+          .maybeSingle()
+        if (error) throw uErr || error
+        if (!data) {
+          throw new Error("No se encontró el perfil con saldo en Supabase. Verificá que la migración de usuario esté aplicada.")
+        }
+        if (data.available_points == null || data.reserved_points == null) {
+          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
+        }
+        const availablePoints = Number(data.available_points)
+        const reservedPoints = Number(data.reserved_points)
+        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
+          throw new Error("El saldo guardado en Supabase no es válido.")
+        }
+        profileData = {
+          id: data.id,
+          name: data.name,
+          username: data.username,
+          email: data.email || sbUser.email,
+          avatar: data.avatar,
+          bio: data.bio,
+          city: data.city,
+          availablePoints,
+          reservedPoints,
+          rating: Number(data.rating) || 5.0,
+          totalReviews: data.total_reviews || 0,
+          totalTrades: data.total_trades || 0,
+          joinedDate: data.created_at,
+        }
       }
 
       const meta = sbUser.user_metadata || {}
       const rawEmail = sbUser.email || ""
       const defaultUsername = rawEmail.split("@")[0] || "usuario"
       const defaultName = meta.name || defaultUsername.charAt(0).toUpperCase() + defaultUsername.slice(1)
+      if (profileData?.availablePoints === undefined || profileData.reservedPoints === undefined) {
+        throw new Error("No se pudo leer el saldo persistido del usuario.")
+      }
 
       const appUser: User = {
         id: sbUser.id,
@@ -301,8 +322,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rating: profileData?.rating ?? 5.0,
         totalReviews: profileData?.totalReviews ?? 0,
         totalTrades: profileData?.totalTrades ?? 0,
-        availablePoints: profileData?.availablePoints ?? 100,
-        reservedPoints: profileData?.reservedPoints ?? 0,
+        availablePoints: profileData.availablePoints,
+        reservedPoints: profileData.reservedPoints,
         joinedDate: profileData?.joinedDate || sbUser.created_at || new Date().toISOString(),
       }
 
@@ -316,8 +337,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return { ...prev, users, currentUser: appUser }
       })
 
+      let persistedBooks: Book[] = []
       try {
-        const persistedBooks = await loadDatabasePublications(appUser, [...SEED_USERS, appUser])
+        persistedBooks = await loadDatabasePublications(appUser, [...SEED_USERS, appUser])
         setState((prev) => ({
           ...prev,
           books: [
@@ -340,9 +362,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast("No se pudieron cargar las publicaciones guardadas. Revisá la conexión y las políticas de Supabase.")
       }
 
+      try {
+        const persistedTrades = await loadSolicitudesIntercambio(appUser, persistedBooks, [...SEED_USERS, appUser])
+        setState((prev) => ({
+          ...prev,
+          trades: [
+            ...persistedTrades,
+            ...prev.trades.filter((trade) => trade.requesterId === appUser.id || trade.ownerId === appUser.id)
+              .filter((trade) => !persistedTrades.some((saved) => saved.id === trade.id)),
+          ],
+        }))
+      } catch (error) {
+        console.error("[Supabase] Error cargando solicitudes de intercambio:", error)
+        showToast("No se pudieron cargar los intercambios guardados. Ejecutá la migración y revisá las políticas de Supabase.")
+      }
+
       return appUser
     } catch (err) {
       console.error("[Supabase] Error sincronizando usuario:", err)
+      showToast(err instanceof Error ? `No se pudo cargar el saldo desde Supabase: ${err.message}` : "No se pudo cargar el saldo desde Supabase.")
       return null
     }
   }, [showToast])
@@ -422,8 +460,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo cargar tu perfil y saldo desde Supabase." }
+          }
           setScreen("bienvenida")
-          showToast(`¡Bienvenido/a de nuevo, ${u?.name || "lector"}!`)
+          showToast(`¡Bienvenido/a de nuevo, ${u.name || "lector"}!`)
           return { success: true }
         }
 
@@ -718,7 +759,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
   const requestTradeWithPoints = useCallback(
-    (bookId: string): boolean => {
+    async (bookId: string): Promise<boolean> => {
       if (!state.currentUser) return false
       const book = state.books.find((b) => b.id === bookId)
       if (!book || book.availability !== "DISPONIBLE") {
@@ -734,7 +775,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      const tradeId = "trade-" + Date.now()
+      const tradeId = crypto.randomUUID()
       const newTrade: TradeRequest = {
         id: tradeId,
         type: "PUNTOS",
@@ -772,6 +813,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         linkData: { tradeId, bookId: book.id },
       }
 
+      try {
+        await saveSolicitudIntercambio(
+          createSolicitudIntercambio(tradeId, "PUNTOS", "PENDIENTE", book, undefined, state.currentUser),
+        )
+      } catch (error) {
+        console.error("[Supabase] Error guardando solicitud por puntos:", error)
+        showToast(error instanceof Error ? `No se pudo guardar la solicitud: ${error.message}` : "No se pudo guardar la solicitud en Supabase.")
+        return false
+      }
+
       setState((prev) => {
         const updatedRequester = {
           ...prev.currentUser!,
@@ -796,7 +847,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const requestDirectTrade = useCallback(
-    (targetBookId: string, offeredBookId: string): boolean => {
+    async (targetBookId: string, offeredBookId: string): Promise<boolean> => {
       if (!state.currentUser) return false
       const targetBook = state.books.find((b) => b.id === targetBookId)
       const offeredBook = state.books.find((b) => b.id === offeredBookId)
@@ -810,7 +861,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      const tradeId = "trade-" + Date.now()
+      const tradeId = crypto.randomUUID()
       const newTrade: TradeRequest = {
         id: tradeId,
         type: "DIRECTO",
@@ -838,6 +889,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         linkData: { tradeId, bookId: targetBook.id },
       }
 
+      try {
+        await saveSolicitudIntercambio(
+          createSolicitudIntercambio(tradeId, "DIRECTO", "PENDIENTE", targetBook, offeredBook, state.currentUser),
+        )
+      } catch (error) {
+        console.error("[Supabase] Error guardando propuesta de trueque:", error)
+        showToast(error instanceof Error ? `No se pudo guardar la propuesta: ${error.message}` : "No se pudo guardar la propuesta en Supabase.")
+        return false
+      }
+
       setState((prev) => ({
         ...prev,
         books: prev.books.map((b) =>
@@ -854,9 +915,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const acceptTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "ACEPTAR")
+      } catch (error) {
+        console.error("[Supabase] Error aceptando solicitud:", error)
+        showToast(error instanceof Error ? `No se pudo aceptar la solicitud: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const notif: NotificationItem = {
         id: "notif-" + Date.now(),
@@ -882,9 +950,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const rejectTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "RECHAZAR")
+      } catch (error) {
+        console.error("[Supabase] Error rechazando solicitud:", error)
+        showToast(error instanceof Error ? `No se pudo rechazar la solicitud: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const movements: PointMovement[] = []
       if (trade.type === "PUNTOS" && trade.points > 0) {
@@ -956,9 +1031,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const cancelTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "CANCELAR")
+      } catch (error) {
+        console.error("[Supabase] Error cancelando intercambio:", error)
+        showToast(error instanceof Error ? `No se pudo cancelar el intercambio: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const isRequester = state.currentUser.id === trade.requesterId
       const otherUserId = isRequester ? trade.ownerId : trade.requesterId
@@ -1036,7 +1118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const confirmTradeReceipt = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
 
@@ -1112,6 +1194,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           date: new Date().toISOString(),
           tradeId,
         })
+      }
+
+      try {
+        await updateSolicitudIntercambio(tradeId, "CONFIRMAR")
+      } catch (error) {
+        console.error("[Supabase] Error confirmando recepción:", error)
+        showToast(error instanceof Error ? `No se pudo registrar la confirmación: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
       }
 
       setState((prev) => {

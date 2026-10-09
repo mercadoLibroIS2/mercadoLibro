@@ -55,6 +55,8 @@ async function mockSupabase(page: Page, options: { reservedIsbn?: string } = {})
       email: user.email,
       nombre: user.name,
       nombre_usuario: user.username,
+      saldo_total: user.availablePoints,
+      saldo_reservado: user.reservedPoints,
       reputacion_promedio: user.rating,
     })),
     categories: SEED_BOOKS.map((book) => ({
