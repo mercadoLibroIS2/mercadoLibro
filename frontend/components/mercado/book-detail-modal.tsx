@@ -105,6 +105,21 @@ export function BookDetailModal() {
                 )}
               </div>
 
+              {(book.edition || book.description) && (
+                <div className="mt-3 space-y-2 text-sm md:text-lg text-stone-600">
+                  {book.edition && (
+                    <p>
+                      <span className="font-semibold text-stone-800">Edición:</span> {book.edition}
+                    </p>
+                  )}
+                  {book.description && (
+                    <p className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                      {book.description}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Price & Semáforo */}
               <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <div className="flex items-center justify-between">

@@ -10,6 +10,7 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Event.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
@@ -18,11 +19,11 @@ import com.ingenieriaSoftware2.Repository.*;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -42,11 +43,16 @@ public class ReseniaServiceImpl implements ReseniaService {
     @Autowired
     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
 
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
     private Long puntosResenia = 50L;
 
     @Override
+    @Transactional
     public ReseniaResponseDTO crearResenia(ReseniaRequestDTO dto, UUID usuarioId) {
-        if (dto.calificacion()>5||dto.calificacion()<0||dto.comentario().length()>500){
+        if (dto.calificacion() == null || dto.calificacion() > 5 || dto.calificacion() < 1
+                || (dto.comentario() != null && dto.comentario().length() > 500)) {
             throw new AtributoFueraDeRangoException();
         }
 
@@ -59,16 +65,19 @@ public class ReseniaServiceImpl implements ReseniaService {
         } else if (email.equals(intercambio.getId().getPropietarioIdOfrecida())) {
             solicitanteReviewer = false;
         } else {
-            throw new NoInvolucradoException();
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "El usuario no participa en el intercambio");
         }
 
         if (intercambio.getEstado() != EstadoIntercambio.COMPLETADO) {
-            throw new ReseniaIntercambioIncompletoException();
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Solo se pueden reseñar intercambios completados");
         }
 
         ReseniaId reseniaId = new ReseniaId(intercambio.getId(), solicitanteReviewer);
         if (reseniaRepository.existsById(reseniaId)) {
-            throw new ReseniaExistenteException();
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El usuario ya realizó una reseña de este intercambio");
         }
 
         Resenia resenia = new Resenia();
@@ -111,9 +120,9 @@ public class ReseniaServiceImpl implements ReseniaService {
         Usuario evaluado = usuarioRepository.findByEmail(emailEvaluado)
                 .orElseThrow(UsuarioNoEncontrado::new);
 
-        float promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
+        Double promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
 
-        evaluado.setReputacionPromedio(promedio);
+        evaluado.setReputacionPromedio(promedio != null ? promedio.floatValue() : 0f);
         usuarioRepository.save(evaluado);
     }
 }
