@@ -20,12 +20,12 @@ export function BookDetailModal() {
     books,
     selectedBookId,
     setSelectedBookId,
+    startEditingBook,
     currentUser,
     deleteBook,
     addToTracker,
     setTradeModalBook,
     viewUserProfile,
-    setScreen,
   } = useStore()
 
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -104,6 +104,21 @@ export function BookDetailModal() {
                   </span>
                 )}
               </div>
+
+              {(book.edition || book.description) && (
+                <div className="mt-3 space-y-2 text-sm md:text-lg text-stone-600">
+                  {book.edition && (
+                    <p>
+                      <span className="font-semibold text-stone-800">Edición:</span> {book.edition}
+                    </p>
+                  )}
+                  {book.description && (
+                    <p className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                      {book.description}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Price & Semáforo */}
               <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
@@ -209,8 +224,7 @@ export function BookDetailModal() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
-                        setSelectedBookId(null)
-                        setScreen("publicar")
+                        startEditingBook(book.id)
                       }}
                       className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-base md:text-lg font-semibold text-white hover:bg-stone-800 transition-colors"
                     >
@@ -220,9 +234,10 @@ export function BookDetailModal() {
 
                     {confirmDelete ? (
                       <button
-                        onClick={() => {
-                          deleteBook(book.id)
-                          setSelectedBookId(null)
+                        onClick={async () => {
+                          if (await deleteBook(book.id)) {
+                            setSelectedBookId(null)
+                          }
                         }}
                         className="flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-3 text-base md:text-lg font-semibold text-white hover:bg-red-700 transition-colors"
                       >

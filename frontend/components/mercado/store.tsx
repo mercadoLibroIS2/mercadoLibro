@@ -13,6 +13,7 @@ import type {
   Condition,
   NotificationItem,
   PointMovement,
+  PublicationInput,
   Review,
   Screen,
   TrackedBook,
@@ -34,6 +35,19 @@ import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluato
 import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import {
+  databaseCondition,
+  databaseBook,
+  databasePublicationId,
+  findDatabaseBook,
+  loadDatabasePublications,
+} from "@/lib/publicaciones-db"
+import {
+  createSolicitudIntercambio,
+  loadSolicitudesIntercambio,
+  saveSolicitudIntercambio,
+  updateSolicitudIntercambio,
+} from "@/lib/intercambios-db"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -52,6 +66,10 @@ interface AppState {
 interface StoreContextValue extends AppState {
   screen: Screen
   setScreen: (s: Screen) => void
+  editingBookId: string | null
+  setEditingBookId: (id: string | null) => void
+  startPublishing: () => void
+  startEditingBook: (bookId: string) => void
   selectedBookId: string | null
   setSelectedBookId: (id: string | null) => void
   selectedProfileUserId: string | null
@@ -79,17 +97,17 @@ interface StoreContextValue extends AppState {
   viewUserProfile: (userId: string) => void
 
   // Books
-  publishBook: (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => void
-  updateBook: (bookId: string, data: Partial<Book>) => void
-  deleteBook: (bookId: string) => void
+  publishBook: (data: PublicationInput) => Promise<boolean>
+  updateBook: (bookId: string, data: PublicationInput) => Promise<boolean>
+  deleteBook: (bookId: string) => Promise<boolean>
 
   // Trades
-  requestTradeWithPoints: (bookId: string) => boolean
-  requestDirectTrade: (targetBookId: string, offeredBookId: string) => boolean
-  acceptTrade: (tradeId: string) => void
-  rejectTrade: (tradeId: string) => void
-  cancelTrade: (tradeId: string) => void
-  confirmTradeReceipt: (tradeId: string) => void
+  requestTradeWithPoints: (bookId: string) => Promise<boolean>
+  requestDirectTrade: (targetBookId: string, offeredBookId: string) => Promise<boolean>
+  acceptTrade: (tradeId: string) => Promise<void>
+  rejectTrade: (tradeId: string) => Promise<void>
+  cancelTrade: (tradeId: string) => Promise<void>
+  confirmTradeReceipt: (tradeId: string) => Promise<void>
 
   // Reviews
   addReview: (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => void
@@ -128,6 +146,7 @@ function getInitialState(): AppState {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState)
   const [screen, setScreen] = useState<Screen>("login")
+  const [editingBookId, setEditingBookId] = useState<string | null>(null)
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
   const [tradeModalBook, setTradeModalBookState] = useState<Book | null>(null)
@@ -141,6 +160,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setTradeModalBook = useCallback((b: Book | null, type: TradeType = "PUNTOS") => {
     setTradeModalBookState(b)
     setTradeModalInitialType(type)
+  }, [])
+
+  const startPublishing = useCallback(() => {
+    setEditingBookId(null)
+    setSelectedBookId(null)
+    setScreen("publicar")
   }, [])
 
   // Load from local storage
@@ -188,6 +213,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ;(showToast as unknown as { _t?: number })._t = t
   }, [])
 
+  const startEditingBook = useCallback((bookId: string) => {
+    const book = state.books.find((candidate) => candidate.id === bookId)
+    if (!book || book.ownerId !== state.currentUser?.id) {
+      showToast("Solo el dueño puede editar esta publicación.")
+      return
+    }
+    if (book.availability !== "DISPONIBLE") {
+      showToast("No se puede editar una publicación que no está disponible.")
+      return
+    }
+
+    setEditingBookId(bookId)
+    setSelectedBookId(null)
+    setScreen("publicar")
+  }, [showToast, state.books, state.currentUser])
+
   const resetToInitialData = useCallback(() => {
     const init = getInitialState()
     setState(init)
@@ -199,61 +240,76 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser) => {
     try {
       let profileData: Partial<User> | null = null
-      // Intentar leer de la tabla 'usuario' (diseño oficial de MercadoLibro) o 'profiles'
-    try {
-        const { data: uData, error: uErr } = await supabase
-          .from("usuario")
-          .select("*")
-          .eq("email", sbUser.email)
-          .maybeSingle()
+      const { data: uData, error: uErr } = await supabase
+        .from("usuario")
+        .select("*")
+        .eq("email", sbUser.email)
+        .maybeSingle()
 
-        if (!uErr && uData) {
-          profileData = {
-            id: sbUser.id,
-            name: sbUser.user_metadata?.name || uData.nombre_usuario || sbUser.email?.split("@")[0],
-            username: uData.nombre_usuario || sbUser.user_metadata?.username,
-            email: uData.email || sbUser.email,
-            avatar: sbUser.user_metadata?.avatar,
-            availablePoints: Number(uData.saldo_total) ?? 100,
-            reservedPoints: Number(uData.saldo_reservado) ?? 0,
-            rating: Number(uData.reputacion_promedio) || 5.0,
-            totalReviews: 0,
-            totalTrades: 0,
-            joinedDate: uData.created_at || sbUser.created_at,
-          }
-        } else {
-          // Fallback a 'profiles' si existiera
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", sbUser.id)
-            .maybeSingle()
-          if (!error && data) {
-            profileData = {
-              id: data.id,
-              name: data.name,
-              username: data.username,
-              email: data.email || sbUser.email,
-              avatar: data.avatar,
-              bio: data.bio,
-              city: data.city,
-              availablePoints: data.available_points ?? 100,
-              reservedPoints: data.reserved_points ?? 0,
-              rating: Number(data.rating) || 5.0,
-              totalReviews: data.total_reviews || 0,
-              totalTrades: data.total_trades || 0,
-              joinedDate: data.created_at,
-            }
-          }
+      if (!uErr && uData) {
+        if (uData.saldo_total == null || uData.saldo_reservado == null) {
+          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
         }
-      } catch {
-        // Ignorar si aún no hay tablas creadas o permisos
+        const availablePoints = Number(uData.saldo_total)
+        const reservedPoints = Number(uData.saldo_reservado)
+        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
+          throw new Error("El saldo guardado en Supabase no es válido.")
+        }
+        profileData = {
+          id: sbUser.id,
+          name: sbUser.user_metadata?.name || uData.nombre_usuario || uData.nombre || sbUser.email?.split("@")[0],
+          username: uData.nombre_usuario || uData.nombre || sbUser.user_metadata?.username,
+          email: uData.email || sbUser.email,
+          avatar: sbUser.user_metadata?.avatar,
+          availablePoints,
+          reservedPoints,
+          rating: Number(uData.reputacion_promedio) || 5.0,
+          totalReviews: 0,
+          totalTrades: 0,
+          joinedDate: uData.created_at || sbUser.created_at,
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", sbUser.id)
+          .maybeSingle()
+        if (error) throw uErr || error
+        if (!data) {
+          throw new Error("No se encontró el perfil con saldo en Supabase. Verificá que la migración de usuario esté aplicada.")
+        }
+        if (data.available_points == null || data.reserved_points == null) {
+          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
+        }
+        const availablePoints = Number(data.available_points)
+        const reservedPoints = Number(data.reserved_points)
+        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
+          throw new Error("El saldo guardado en Supabase no es válido.")
+        }
+        profileData = {
+          id: data.id,
+          name: data.name,
+          username: data.username,
+          email: data.email || sbUser.email,
+          avatar: data.avatar,
+          bio: data.bio,
+          city: data.city,
+          availablePoints,
+          reservedPoints,
+          rating: Number(data.rating) || 5.0,
+          totalReviews: data.total_reviews || 0,
+          totalTrades: data.total_trades || 0,
+          joinedDate: data.created_at,
+        }
       }
 
       const meta = sbUser.user_metadata || {}
       const rawEmail = sbUser.email || ""
       const defaultUsername = rawEmail.split("@")[0] || "usuario"
       const defaultName = meta.name || defaultUsername.charAt(0).toUpperCase() + defaultUsername.slice(1)
+      if (profileData?.availablePoints === undefined || profileData.reservedPoints === undefined) {
+        throw new Error("No se pudo leer el saldo persistido del usuario.")
+      }
 
       const appUser: User = {
         id: sbUser.id,
@@ -266,8 +322,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rating: profileData?.rating ?? 5.0,
         totalReviews: profileData?.totalReviews ?? 0,
         totalTrades: profileData?.totalTrades ?? 0,
-        availablePoints: profileData?.availablePoints ?? 100,
-        reservedPoints: profileData?.reservedPoints ?? 0,
+        availablePoints: profileData.availablePoints,
+        reservedPoints: profileData.reservedPoints,
         joinedDate: profileData?.joinedDate || sbUser.created_at || new Date().toISOString(),
       }
 
@@ -281,12 +337,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return { ...prev, users, currentUser: appUser }
       })
 
+      let persistedBooks: Book[] = []
+      try {
+        persistedBooks = await loadDatabasePublications(appUser, [...SEED_USERS, appUser])
+        setState((prev) => ({
+          ...prev,
+          books: [
+            ...persistedBooks,
+            ...prev.books.filter((book) => {
+              if (persistedBooks.some((saved) => saved.isbn === book.isbn && saved.ownerId === book.ownerId)) {
+                return false
+              }
+              try {
+                databasePublicationId(book)
+                return false
+              } catch {
+                return true
+              }
+            }),
+          ],
+        }))
+      } catch (error) {
+        console.error("[Supabase] Error cargando publicaciones:", error)
+        showToast("No se pudieron cargar las publicaciones guardadas. Revisá la conexión y las políticas de Supabase.")
+      }
+
+      try {
+        const persistedTrades = await loadSolicitudesIntercambio(appUser, persistedBooks, [...SEED_USERS, appUser])
+        setState((prev) => ({
+          ...prev,
+          trades: [
+            ...persistedTrades,
+            ...prev.trades.filter((trade) => trade.requesterId === appUser.id || trade.ownerId === appUser.id)
+              .filter((trade) => !persistedTrades.some((saved) => saved.id === trade.id)),
+          ],
+        }))
+      } catch (error) {
+        console.error("[Supabase] Error cargando solicitudes de intercambio:", error)
+        showToast("No se pudieron cargar los intercambios guardados. Ejecutá la migración y revisá las políticas de Supabase.")
+      }
+
       return appUser
     } catch (err) {
       console.error("[Supabase] Error sincronizando usuario:", err)
+      showToast(err instanceof Error ? `No se pudo cargar el saldo desde Supabase: ${err.message}` : "No se pudo cargar el saldo desde Supabase.")
       return null
     }
-  }, [])
+  }, [showToast])
 
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
@@ -304,7 +401,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
-        syncSupabaseUser(session.user)
+        queueMicrotask(() => {
+          void syncSupabaseUser(session.user)
+        })
       } else if (event === "SIGNED_OUT") {
         setState((prev) => ({ ...prev, currentUser: null }))
       }
@@ -361,8 +460,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (data.user) {
           const u = await syncSupabaseUser(data.user)
+          if (!u) {
+            return { success: false, error: "No se pudo cargar tu perfil y saldo desde Supabase." }
+          }
           setScreen("bienvenida")
-          showToast(`¡Bienvenido/a de nuevo, ${u?.name || "lector"}!`)
+          showToast(`¡Bienvenido/a de nuevo, ${u.name || "lector"}!`)
           return { success: true }
         }
 
@@ -513,93 +615,151 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // --- Books CRUD & Matching (RF01-RF04, RF35) ---
   const publishBook = useCallback(
-    (data: Omit<Book, "id" | "ownerId" | "ownerName" | "ownerRating" | "ownerTrades" | "availability" | "createdAt">) => {
-      if (!state.currentUser) return
+    async (data: PublicationInput): Promise<boolean> => {
+      const currentUser = state.currentUser
+      if (!currentUser) return false
 
-      const id = "book-" + Date.now()
-      const refPrice = calculateReferencePrice(data.category, data.condition, data.externalRating || 4.5)
+      try {
+        const book = await findDatabaseBook(data.isbn.trim())
+        const timestamp = new Date().toISOString()
+        const { data: publication, error } = await supabase
+          .from("publicacion")
+          .insert({
+            isbn: data.isbn.trim(),
+            email_propietario: currentUser.email,
+            hora_publicacion: timestamp,
+            estado_fisico: databaseCondition(data.condition),
+            valor_puntos_solicitado: data.points,
+            comentario: data.description || null,
+            estado_publicacion: "DISPONIBLE",
+          })
+          .select("*")
+          .single()
+        if (error) throw error
+        if (!publication) throw new Error("Supabase no devolvió la publicación creada.")
 
-      const newBook: Book = {
-        ...data,
-        id,
-        ownerId: state.currentUser.id,
-        ownerName: state.currentUser.name,
-        ownerRating: state.currentUser.rating,
-        ownerTrades: state.currentUser.totalTrades,
-        availability: "DISPONIBLE",
-        referencePrice: refPrice,
-        createdAt: new Date().toISOString(),
+        const { data: category, error: categoryError } = await supabase
+          .from("libro_categoria")
+          .select("*")
+          .eq("isbn", data.isbn.trim())
+          .maybeSingle()
+        if (categoryError) throw categoryError
+
+        const newBook = databaseBook(
+          publication as Record<string, unknown>,
+          book,
+          { email: currentUser.email, nombre: currentUser.name, reputacion_promedio: currentUser.rating },
+          category as Record<string, unknown> | null || undefined,
+          state.users,
+          currentUser,
+        )
+        setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
+        showToast(`"${newBook.title}" se publicó y guardó en Supabase.`)
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al guardar la publicación."
+        console.error("[Supabase] Error creando publicación:", error)
+        showToast(`No se pudo guardar la publicación: ${message}`)
+        return false
       }
-
-      // Check tracker matches for other users (RF35, RF36)
-      const newNotifs: NotificationItem[] = []
-      state.trackedBooks.forEach((tb) => {
-        if (tb.userId !== state.currentUser?.id) {
-          const matchTitle = newBook.title.toLowerCase().includes(tb.title.toLowerCase())
-          const matchAuthor = tb.author ? newBook.author.toLowerCase().includes(tb.author.toLowerCase()) : true
-          const matchPoints = tb.maxPoints ? newBook.points <= tb.maxPoints : true
-          const matchCond = tb.acceptableConditions?.length
-            ? tb.acceptableConditions.includes(newBook.condition)
-            : true
-
-          if (matchTitle && matchAuthor && matchPoints && matchCond) {
-            newNotifs.push({
-              id: "notif-track-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5),
-              userId: tb.userId,
-              type: "TRACKER_MATCH",
-              title: "¡Coincidencia en tu Tracker!",
-              message: `Se publicó "${newBook.title}" por ${newBook.points} pts (dentro de tus criterios).`,
-              read: false,
-              date: new Date().toISOString(),
-              linkScreen: "inicio",
-              linkData: { bookId: newBook.id },
-            })
-          }
-        }
-      })
-
-      setState((prev) => ({
-        ...prev,
-        books: [newBook, ...prev.books],
-        notifications: [...newNotifs, ...prev.notifications],
-      }))
-
-      showToast(`"${newBook.title}" se publicó con éxito en el catálogo.`)
-      setScreen("inicio")
     },
-    [state.currentUser, state.trackedBooks, showToast]
+    [state.currentUser, state.users, showToast]
   )
 
   const updateBook = useCallback(
-    (bookId: string, patch: Partial<Book>) => {
-      setState((prev) => ({
-        ...prev,
-        books: prev.books.map((b) => (b.id === bookId ? { ...b, ...patch } : b)),
-      }))
-      showToast("Publicación actualizada.")
+    async (bookId: string, patch: PublicationInput): Promise<boolean> => {
+      const book = state.books.find((candidate) => candidate.id === bookId)
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede editar esta publicación.")
+        return false
+      }
+      if (book.availability !== "DISPONIBLE") {
+        showToast("No se puede editar una publicación que no está disponible.")
+        return false
+      }
+
+      try {
+        const [isbn, email, timestamp] = databasePublicationId(book)
+        const { data, error } = await supabase
+          .from("publicacion")
+          .update({
+            estado_fisico: databaseCondition(patch.condition),
+            valor_puntos_solicitado: patch.points,
+            comentario: patch.description || null,
+          })
+          .eq("isbn", isbn)
+          .eq("email_propietario", email)
+          .eq("hora_publicacion", timestamp)
+          .select("*")
+          .single()
+        if (error) throw error
+        if (!data) throw new Error("Supabase no devolvió la publicación actualizada.")
+
+        setState((prev) => ({
+          ...prev,
+          books: prev.books.map((candidate) =>
+            candidate.id === bookId
+              ? { ...candidate, ...patch, referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5) }
+              : candidate,
+          ),
+        }))
+        showToast("Publicación actualizada en Supabase.")
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al actualizar la publicación."
+        console.error("[Supabase] Error actualizando publicación:", error)
+        showToast(`No se pudo actualizar la publicación: ${message}`)
+        return false
+      }
     },
-    [showToast]
+    [showToast, state.books, state.currentUser]
   )
 
   const deleteBook = useCallback(
-    (bookId: string) => {
+    async (bookId: string): Promise<boolean> => {
       const book = state.books.find((b) => b.id === bookId)
-      if (book && book.availability === "RESERVADO") {
-        showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
-        return
+      if (!book || book.ownerId !== state.currentUser?.id) {
+        showToast("Solo el dueño puede eliminar esta publicación.")
+        return false
       }
-      setState((prev) => ({
-        ...prev,
-        books: prev.books.filter((b) => b.id !== bookId),
-      }))
-      showToast("Publicación eliminada.")
+      if (book.availability === "RESERVADO") {
+        showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
+        return false
+      }
+      if (book.availability !== "DISPONIBLE") {
+        showToast("No se puede eliminar una publicación que no está disponible.")
+        return false
+      }
+
+      try {
+        const [isbn, email, timestamp] = databasePublicationId(book)
+        const { data, error } = await supabase
+          .from("publicacion")
+          .update({ estado_publicacion: "ELIMINADA" })
+          .eq("isbn", isbn)
+          .eq("email_propietario", email)
+          .eq("hora_publicacion", timestamp)
+          .select("isbn")
+          .single()
+        if (error) throw error
+        if (!data) throw new Error("No se encontró la publicación para eliminar.")
+
+        setState((prev) => ({ ...prev, books: prev.books.filter((candidate) => candidate.id !== bookId) }))
+        showToast("Publicación eliminada de Supabase.")
+        return true
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error inesperado al eliminar la publicación."
+        console.error("[Supabase] Error eliminando publicación:", error)
+        showToast(`No se pudo eliminar la publicación: ${message}`)
+        return false
+      }
     },
-    [state.books, showToast]
+    [state.books, state.currentUser, showToast]
   )
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
   const requestTradeWithPoints = useCallback(
-    (bookId: string): boolean => {
+    async (bookId: string): Promise<boolean> => {
       if (!state.currentUser) return false
       const book = state.books.find((b) => b.id === bookId)
       if (!book || book.availability !== "DISPONIBLE") {
@@ -615,7 +775,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      const tradeId = "trade-" + Date.now()
+      const tradeId = crypto.randomUUID()
       const newTrade: TradeRequest = {
         id: tradeId,
         type: "PUNTOS",
@@ -653,6 +813,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         linkData: { tradeId, bookId: book.id },
       }
 
+      try {
+        await saveSolicitudIntercambio(
+          createSolicitudIntercambio(tradeId, "PUNTOS", "PENDIENTE", book, undefined, state.currentUser),
+        )
+      } catch (error) {
+        console.error("[Supabase] Error guardando solicitud por puntos:", error)
+        showToast(error instanceof Error ? `No se pudo guardar la solicitud: ${error.message}` : "No se pudo guardar la solicitud en Supabase.")
+        return false
+      }
+
       setState((prev) => {
         const updatedRequester = {
           ...prev.currentUser!,
@@ -677,7 +847,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const requestDirectTrade = useCallback(
-    (targetBookId: string, offeredBookId: string): boolean => {
+    async (targetBookId: string, offeredBookId: string): Promise<boolean> => {
       if (!state.currentUser) return false
       const targetBook = state.books.find((b) => b.id === targetBookId)
       const offeredBook = state.books.find((b) => b.id === offeredBookId)
@@ -691,7 +861,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      const tradeId = "trade-" + Date.now()
+      const tradeId = crypto.randomUUID()
       const newTrade: TradeRequest = {
         id: tradeId,
         type: "DIRECTO",
@@ -719,6 +889,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         linkData: { tradeId, bookId: targetBook.id },
       }
 
+      try {
+        await saveSolicitudIntercambio(
+          createSolicitudIntercambio(tradeId, "DIRECTO", "PENDIENTE", targetBook, offeredBook, state.currentUser),
+        )
+      } catch (error) {
+        console.error("[Supabase] Error guardando propuesta de trueque:", error)
+        showToast(error instanceof Error ? `No se pudo guardar la propuesta: ${error.message}` : "No se pudo guardar la propuesta en Supabase.")
+        return false
+      }
+
       setState((prev) => ({
         ...prev,
         books: prev.books.map((b) =>
@@ -735,9 +915,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const acceptTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "ACEPTAR")
+      } catch (error) {
+        console.error("[Supabase] Error aceptando solicitud:", error)
+        showToast(error instanceof Error ? `No se pudo aceptar la solicitud: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const notif: NotificationItem = {
         id: "notif-" + Date.now(),
@@ -763,9 +950,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const rejectTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "RECHAZAR")
+      } catch (error) {
+        console.error("[Supabase] Error rechazando solicitud:", error)
+        showToast(error instanceof Error ? `No se pudo rechazar la solicitud: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const movements: PointMovement[] = []
       if (trade.type === "PUNTOS" && trade.points > 0) {
@@ -837,9 +1031,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const cancelTrade = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
+      try {
+        await updateSolicitudIntercambio(tradeId, "CANCELAR")
+      } catch (error) {
+        console.error("[Supabase] Error cancelando intercambio:", error)
+        showToast(error instanceof Error ? `No se pudo cancelar el intercambio: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
+      }
 
       const isRequester = state.currentUser.id === trade.requesterId
       const otherUserId = isRequester ? trade.ownerId : trade.requesterId
@@ -917,7 +1118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const confirmTradeReceipt = useCallback(
-    (tradeId: string) => {
+    async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
 
@@ -993,6 +1194,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           date: new Date().toISOString(),
           tradeId,
         })
+      }
+
+      try {
+        await updateSolicitudIntercambio(tradeId, "CONFIRMAR")
+      } catch (error) {
+        console.error("[Supabase] Error confirmando recepción:", error)
+        showToast(error instanceof Error ? `No se pudo registrar la confirmación: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
       }
 
       setState((prev) => {
@@ -1190,6 +1399,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (chainId: string) => {
       if (!state.currentUser) return
 
+      const chain = state.chains.find((item) => item.id === chainId)
+      const currentStep = chain?.steps.find((step) => step.userId === state.currentUser?.id)
+      if (
+        !chain ||
+        !currentStep ||
+        currentStep.confirmed ||
+        (chain.status !== "PROPUESTA" && chain.status !== "EN_CURSO")
+      ) {
+        return
+      }
+
       setState((prev) => {
         const updatedChains = prev.chains.map((chain) => {
           if (chain.id !== chainId) return chain
@@ -1208,18 +1428,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       showToast("Confirmaste tu participación en la cadena de intercambio.")
     },
-    [state.currentUser, showToast]
+    [state.currentUser, state.chains, showToast]
   )
 
   const rejectChain = useCallback(
     (chainId: string) => {
+      const chain = state.chains.find((item) => item.id === chainId)
+      if (
+        !state.currentUser ||
+        !chain?.steps.some((step) => step.userId === state.currentUser?.id) ||
+        (chain.status !== "PROPUESTA" && chain.status !== "EN_CURSO")
+      ) {
+        return
+      }
+
       setState((prev) => ({
         ...prev,
         chains: prev.chains.map((c) => (c.id === chainId ? { ...c, status: "CANCELADA" } : c)),
       }))
       showToast("Cadena de intercambio rechazada.")
     },
-    [showToast]
+    [state.currentUser, state.chains, showToast]
   )
 
   return (
@@ -1228,6 +1457,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...state,
         screen,
         setScreen,
+        editingBookId,
+        setEditingBookId,
+        startPublishing,
+        startEditingBook,
         selectedBookId,
         setSelectedBookId,
         selectedProfileUserId,

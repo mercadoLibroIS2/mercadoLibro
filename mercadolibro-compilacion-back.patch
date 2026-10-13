@@ -1,0 +1,295 @@
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/DTO/Response/NotificacionResponseDTO.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/DTO/Response/NotificacionResponseDTO.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1ded8510aa14b1e36a5a38ce67fc73698be5060c
+--- /dev/null
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/DTO/Response/NotificacionResponseDTO.java
+@@ -0,0 +1,25 @@
++package com.ingenieriaSoftware2.DTO.Response;
++
++import com.ingenieriaSoftware2.Entity.Notificacion;
++import com.ingenieriaSoftware2.Enums.TipoNotificacion;
++
++import java.time.LocalDateTime;
++import java.util.UUID;
++
++public record NotificacionResponseDTO(
++        UUID id,
++        TipoNotificacion tipo,
++        boolean leida,
++        boolean archivada,
++        LocalDateTime fechaCreacion
++) {
++    public static NotificacionResponseDTO from(Notificacion notificacion) {
++        return new NotificacionResponseDTO(
++                notificacion.getId(),
++                notificacion.getTipo(),
++                Boolean.TRUE.equals(notificacion.getLeida()),
++                Boolean.TRUE.equals(notificacion.getArchivada()),
++                notificacion.getFechaCreacion()
++        );
++    }
++}
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Event/ReseniaCreadaEvent.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Event/ReseniaCreadaEvent.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..37c3233df96e600a5ff2f146e686758a1f3da3f9
+--- /dev/null
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Event/ReseniaCreadaEvent.java
+@@ -0,0 +1,4 @@
++package com.ingenieriaSoftware2.Event;
++
++public record ReseniaCreadaEvent(String emailEvaluado, short calificacion) {
++}
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Exception/GlobalExceptionHandler.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Exception/GlobalExceptionHandler.java
+index c510ac5afd39be6dbeb9a965426a80780f894c81..b8768a92603ee83ff930d4ee62cfc3d367ec6f61 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Exception/GlobalExceptionHandler.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Exception/GlobalExceptionHandler.java
+@@ -8,6 +8,7 @@ import org.springframework.security.authentication.BadCredentialsException;
+ import org.springframework.web.bind.MethodArgumentNotValidException;
+ import org.springframework.web.bind.annotation.ExceptionHandler;
+ import org.springframework.web.bind.annotation.RestControllerAdvice;
++import org.springframework.web.server.ResponseStatusException;
+ 
+ import java.util.HashMap;
+ import java.util.Map;
+@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
+         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+     }
+ 
++    @ExceptionHandler(ResponseStatusException.class)
++    public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException e) {
++        Map<String, Object> body = new HashMap<>();
++        body.put("status", e.getStatusCode().value());
++        body.put("error", e.getClass().getSimpleName());
++        body.put("message", e.getReason() != null ? e.getReason() : e.getMessage());
++        return ResponseEntity.status(e.getStatusCode()).body(body);
++    }
++
+     @ExceptionHandler(Exception.class)
+     public ResponseEntity<Map<String, Object>> handleAll(Exception e) {
+         log.error("Excepción no controlada en controlador: ", e);
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/NotificacionRepository.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/NotificacionRepository.java
+index 1e928569182e8ad59d5aa6cae2f2fe0fe8dd1fd0..a9b2c3fda20532ba62e8c6f04ab81517ba5b4161 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/NotificacionRepository.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/NotificacionRepository.java
+@@ -1,9 +1,24 @@
+ package com.ingenieriaSoftware2.Repository;
+ 
+ import com.ingenieriaSoftware2.Entity.Notificacion;
++import org.springframework.data.domain.Page;
++import org.springframework.data.domain.Pageable;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Modifying;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ 
+ import java.util.UUID;
+ 
+ public interface NotificacionRepository extends JpaRepository<Notificacion, UUID> {
++    Page<Notificacion> findByUsuarioEmailAndLeidaFalseOrderByFechaCreacionDesc(
++            String email, Pageable pageable);
++
++    Page<Notificacion> findByUsuarioEmailOrderByFechaCreacionDesc(String email, Pageable pageable);
++
++    long countByUsuarioEmailAndLeidaFalse(String email);
++
++    @Modifying(clearAutomatically = true, flushAutomatically = true)
++    @Query("UPDATE Notificacion n SET n.leida = true WHERE n.usuario.email = :email AND n.leida = false")
++    int marcarTodasLeidas(@Param("email") String email);
+ }
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/ReseniaRepository.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/ReseniaRepository.java
+index ba8ed586f2972f3fd1bb97149c7bb3df5028e9d0..b4ca0d59e0fdc338e958608f317eed9afd743227 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/ReseniaRepository.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Repository/ReseniaRepository.java
+@@ -3,8 +3,17 @@ package com.ingenieriaSoftware2.Repository;
+ import com.ingenieriaSoftware2.Entity.Ids.ReseniaId;
+ import com.ingenieriaSoftware2.Entity.Resenia;
+ import org.springframework.data.jpa.repository.JpaRepository;
+-
+-import java.util.UUID;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ 
+ public interface ReseniaRepository extends JpaRepository<Resenia, ReseniaId> {
++    @Query("""
++            SELECT AVG(r.calificacion)
++            FROM Resenia r
++            WHERE (r.id.solicitanteReviewer = true
++                   AND r.id.intercambioId.propietarioIdOfrecida = :email)
++               OR (r.id.solicitanteReviewer = false
++                   AND r.id.intercambioId.propietarioIdSolicitante = :email)
++            """)
++    Double calcularPromedioRecibido(@Param("email") String email);
+ }
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/NotificacionServiceImpl.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/NotificacionServiceImpl.java
+index d8193992254c5ba2b714a265fd58bb16015210c1..b83245ca0fa1d965e303e33985a0519bffb9c6cd 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/NotificacionServiceImpl.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/NotificacionServiceImpl.java
+@@ -1,9 +1,22 @@
+ package com.ingenieriaSoftware2.Service.Implementations;
+ 
++import com.ingenieriaSoftware2.DTO.Response.NotificacionResponseDTO;
++import com.ingenieriaSoftware2.Entity.Notificacion;
++import com.ingenieriaSoftware2.Entity.Usuario;
++import com.ingenieriaSoftware2.Enums.TipoNotificacion;
++import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
+ import com.ingenieriaSoftware2.Repository.NotificacionRepository;
++import com.ingenieriaSoftware2.Repository.UsuarioRepository;
+ import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.data.domain.Page;
++import org.springframework.data.domain.Pageable;
++import org.springframework.http.HttpStatus;
+ import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++import org.springframework.web.server.ResponseStatusException;
++
++import java.util.UUID;
+ 
+ @Service
+ public class NotificacionServiceImpl implements NotificacionService {
+@@ -15,18 +28,17 @@ public class NotificacionServiceImpl implements NotificacionService {
+ 
+     @Override
+     @Transactional
+-    public void crear(String emailDestinatario, TipoNotificacion tipo, String mensaje) {
++    public void crear(String emailDestinatario, TipoNotificacion tipo) {
+         Usuario usuario = usuarioRepository.findByEmail(emailDestinatario).orElseThrow(()-> new UsuarioNoEncontrado());
+ 
+         Notificacion notificacion = new Notificacion();
+         notificacion.setUsuario(usuario);
+         notificacion.setTipo(tipo);
+-        notificacion.setMensaje(mensaje);
+         notificacionRepository.save(notificacion);
+     }
+ 
+     @Override
+-    @Transactional
++    @Transactional(readOnly = true)
+     public Page<NotificacionResponseDTO> listar(UUID usuarioId, boolean soloNoLeidas, Pageable pageable) {
+         String email = obtenerEmail(usuarioId);
+         Page<Notificacion> page = soloNoLeidas
+@@ -36,7 +48,7 @@ public class NotificacionServiceImpl implements NotificacionService {
+     }
+ 
+     @Override
+-    @Transactional
++    @Transactional(readOnly = true)
+     public long contarNoLeidas(UUID usuarioId) {
+         return notificacionRepository.countByUsuarioEmailAndLeidaFalse(obtenerEmail(usuarioId));
+     }
+@@ -45,7 +57,9 @@ public class NotificacionServiceImpl implements NotificacionService {
+     @Transactional
+     public void marcarLeida(UUID notificacionId, UUID usuarioId) {
+         String email = obtenerEmail(usuarioId);
+-        Notificacion notificacion = notificacionRepository.findById(notificacionId).filter(notif -> notif.getUsuario().getEmail().equals(email)).orElseThrow(()-> new NotificacionNoEncontradaException());
++        Notificacion notificacion = notificacionRepository.findById(notificacionId)
++                .filter(notif -> notif.getUsuario().getEmail().equals(email))
++                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notificación no encontrada"));
+         notificacion.setLeida(true);
+     }
+ 
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/ReseniaServiceImpl.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/ReseniaServiceImpl.java
+index d8efa1039cf74dffca7b7f796fc9319b9f68dc8d..5c042a896bb1a6a8d9b45b4b4cdcac2fc2489cde 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/ReseniaServiceImpl.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Implementations/ReseniaServiceImpl.java
+@@ -10,6 +10,7 @@ import com.ingenieriaSoftware2.Entity.Resenia;
+ import com.ingenieriaSoftware2.Entity.Usuario;
+ import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
+ import com.ingenieriaSoftware2.Enums.TipoMovimiento;
++import com.ingenieriaSoftware2.Event.ReseniaCreadaEvent;
+ import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
+ import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+ import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
+@@ -18,11 +19,11 @@ import com.ingenieriaSoftware2.Repository.*;
+ import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
+ import jakarta.transaction.Transactional;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.context.ApplicationEventPublisher;
+ import org.springframework.http.HttpStatus;
+ import org.springframework.stereotype.Service;
+ import org.springframework.web.server.ResponseStatusException;
+ 
+-import java.time.LocalDate;
+ import java.util.UUID;
+ 
+ @Service
+@@ -42,11 +43,16 @@ public class ReseniaServiceImpl implements ReseniaService {
+     @Autowired
+     private MovimientoPuntosReseniaRepository movimientoPuntosReseniaRepository;
+ 
++    @Autowired
++    private ApplicationEventPublisher eventPublisher;
++
+     private Long puntosResenia = 50L;
+ 
+     @Override
++    @Transactional
+     public ReseniaResponseDTO crearResenia(ReseniaRequestDTO dto, UUID usuarioId) {
+-        if (dto.calificacion()>5||dto.calificacion()<0||dto.comentario().length()>500){
++        if (dto.calificacion() == null || dto.calificacion() > 5 || dto.calificacion() < 1
++                || (dto.comentario() != null && dto.comentario().length() > 500)) {
+             throw new AtributoFueraDeRangoException();
+         }
+ 
+@@ -59,16 +65,19 @@ public class ReseniaServiceImpl implements ReseniaService {
+         } else if (email.equals(intercambio.getId().getPropietarioIdOfrecida())) {
+             solicitanteReviewer = false;
+         } else {
+-            throw new NoInvolucradoException();
++            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
++                    "El usuario no participa en el intercambio");
+         }
+ 
+         if (intercambio.getEstado() != EstadoIntercambio.COMPLETADO) {
+-            throw new ReseniaIntercambioIncompletoException();
++            throw new ResponseStatusException(HttpStatus.CONFLICT,
++                    "Solo se pueden reseñar intercambios completados");
+         }
+ 
+         ReseniaId reseniaId = new ReseniaId(intercambio.getId(), solicitanteReviewer);
+         if (reseniaRepository.existsById(reseniaId)) {
+-            throw new ReseniaExistenteException();
++            throw new ResponseStatusException(HttpStatus.CONFLICT,
++                    "El usuario ya realizó una reseña de este intercambio");
+         }
+ 
+         Resenia resenia = new Resenia();
+@@ -111,9 +120,9 @@ public class ReseniaServiceImpl implements ReseniaService {
+         Usuario evaluado = usuarioRepository.findByEmail(emailEvaluado)
+                 .orElseThrow(UsuarioNoEncontrado::new);
+ 
+-        float promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
++        Double promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
+ 
+-        evaluado.setReputacionPromedio(promedio);
++        evaluado.setReputacionPromedio(promedio != null ? promedio.floatValue() : 0f);
+         usuarioRepository.save(evaluado);
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Interfaces/NotificacionService.java b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Interfaces/NotificacionService.java
+index a083ba3ce4e9291d87539a1b7164db36ff7d6354..b2ad5324e25828e5345d406964153137696c244f 100644
+--- a/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Interfaces/NotificacionService.java
++++ b/ingenieriaSoftware2/src/main/java/com/ingenieriaSoftware2/Service/Interfaces/NotificacionService.java
+@@ -1,4 +1,20 @@
+ package com.ingenieriaSoftware2.Service.Interfaces;
+ 
++import com.ingenieriaSoftware2.DTO.Response.NotificacionResponseDTO;
++import com.ingenieriaSoftware2.Enums.TipoNotificacion;
++import org.springframework.data.domain.Page;
++import org.springframework.data.domain.Pageable;
++
++import java.util.UUID;
++
+ public interface NotificacionService {
++    void crear(String emailDestinatario, TipoNotificacion tipo);
++
++    Page<NotificacionResponseDTO> listar(UUID usuarioId, boolean soloNoLeidas, Pageable pageable);
++
++    long contarNoLeidas(UUID usuarioId);
++
++    void marcarLeida(UUID notificacionId, UUID usuarioId);
++
++    void marcarTodasLeidas(UUID usuarioId);
+ }

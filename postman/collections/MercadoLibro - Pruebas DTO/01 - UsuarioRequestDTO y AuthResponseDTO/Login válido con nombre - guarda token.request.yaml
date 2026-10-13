@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "nombreOEmail": "{{testUsername}}",
+      "contrasenia": "{{testPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login responde HTTP 200', function () { pm.response.to.have.status(200); });
+      pm.test('AuthResponseDTO de login conserva la identidad', function () {
+        const body = pm.response.json();
+        pm.expect(body.id).to.eql(pm.collectionVariables.get('userId'));
+        pm.expect(body.username).to.eql(pm.collectionVariables.get('testUsername'));
+        pm.expect(body.email).to.eql(pm.collectionVariables.get('testEmail'));
+        pm.expect(body.token).to.be.a('string').and.not.empty;
+        pm.collectionVariables.set('token', body.token);
+      });
+    language: text/javascript
+order: 5000

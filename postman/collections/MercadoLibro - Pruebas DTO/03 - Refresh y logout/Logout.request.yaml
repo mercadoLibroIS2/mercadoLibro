@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/logout"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Logout responde HTTP 200', function () { pm.response.to.have.status(200); });
+      pm.test('Logout no devuelve contenido', function () { pm.expect(pm.response.text()).to.be.empty; });
+    language: text/javascript
+order: 2000

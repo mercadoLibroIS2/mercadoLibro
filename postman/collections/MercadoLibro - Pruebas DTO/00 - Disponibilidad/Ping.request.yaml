@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/api/test/ping"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Responde HTTP 200', function () { pm.response.to.have.status(200); });
+      pm.test('El endpoint confirma disponibilidad', function () {
+        const body = pm.response.json();
+        pm.expect(body.status).to.eql('ok');
+        pm.expect(body.message).to.eql('pong');
+      });
+    language: text/javascript
+order: 1000

@@ -67,6 +67,9 @@ export interface Book {
   createdAt: string
 }
 
+export type PublicationInput = Pick<Book, "isbn" | "condition" | "points"> &
+  Pick<Book, "description">
+
 export interface User {
   id: string
   name: string

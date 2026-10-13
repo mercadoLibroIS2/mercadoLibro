@@ -96,8 +96,8 @@ CREATE TABLE IF NOT EXISTS categoria (
 
 CREATE TABLE IF NOT EXISTS libro (
     isbn                      VARCHAR(255) PRIMARY KEY,
-    google_books_id           VARCHAR(255) NOT NULL UNIQUE,
-    titulo                    VARCHAR(255) NOT NULL,
+    google_books_id           VARCHAR(255) UNIQUE,
+    titulo                    VARCHAR(255),
     autores                   VARCHAR(255),
     puntuacion_externa        NUMERIC(3, 2) CHECK (puntuacion_externa BETWEEN 0 AND 5),
     valor_referencia          INTEGER,

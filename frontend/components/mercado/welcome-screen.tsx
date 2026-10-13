@@ -12,7 +12,7 @@ import {
 import { useStore } from "./store"
 
 export function WelcomeScreen() {
-  const { currentUser, setScreen } = useStore()
+  const { currentUser, setScreen, startPublishing } = useStore()
 
   if (!currentUser) {
     return (
@@ -90,7 +90,7 @@ export function WelcomeScreen() {
                 title="Publicar un Ejemplar"
                 description="Poné a disposición un libro que ya leíste para recibir solicitudes y sumar trueques."
                 cta="Publicar libro"
-                onClick={() => setScreen("publicar")}
+                onClick={startPublishing}
               />
 
               <ActionCard

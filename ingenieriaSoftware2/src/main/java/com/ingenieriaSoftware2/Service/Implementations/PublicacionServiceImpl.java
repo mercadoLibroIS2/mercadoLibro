@@ -83,6 +83,30 @@ public class PublicacionServiceImpl implements PublicacionService {
 
     @Override
     @Transactional
+    public List<PublicacionResponseDTO> listarPublicaciones() {
+        return publicacionRepository.listarNoEliminadas(EstadoPublicacion.ELIMINADA).stream()
+                .map(publicacionMapper::toDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public List<PublicacionResponseDTO> listarMisPublicaciones(String email) {
+        return publicacionRepository.listarPorPropietario(email, EstadoPublicacion.ELIMINADA).stream()
+                .map(publicacionMapper::toDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public List<PublicacionResponseDTO> listarPublicacionesDisponibles() {
+        return publicacionRepository.listarPorEstado(EstadoPublicacion.DISPONIBLE).stream()
+                .map(publicacionMapper::toDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
     public PublicacionResponseDTO verDetallesPublicacion(PublicacionId id) {
         Publicacion publicacion = publicacionRepository.findById(id).orElseThrow(() -> new PublicacionNoExisteException());
         return publicacionMapper.toDTO(publicacion);
@@ -98,10 +122,13 @@ public class PublicacionServiceImpl implements PublicacionService {
         Publicacion publicacion = publicacionRepository.findByIdParaActualizar(id)
                 .orElseThrow(() -> new PublicacionNoExisteException());
 
+        if (publicacion.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE) {
+            throw new PublicacionNoDisponibleException();
+        }
+
         boolean tieneIntercambioActivo = intercambioRepository.existeIntercambioActivo(
                 id.getIsbn(), id.getEmailPropietario(), id.getHoraPublicacion(), ESTADOS_INTERCAMBIO_ACTIVOS);
-
-        if (publicacion.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE || tieneIntercambioActivo) {
+        if (tieneIntercambioActivo) {
             throw new PublicacionNoDisponibleException();
         }
 
@@ -113,5 +140,28 @@ public class PublicacionServiceImpl implements PublicacionService {
         Integer valorRef = calculadora.calcular(id.getIsbn(), dto.estadoFisico());
         publicacion.setValorReferenciaCalculado(valorRef);
         publicacion.setColorSemaforo(calculadora.calculadoraColor(dto.valorPuntosSolicitado(), valorRef));
+    }
+
+    @Override
+    @Transactional
+    public void eliminarPublicacion(PublicacionId id, String emailUsuario) {
+        if (!id.getEmailPropietario().equals(emailUsuario)) {
+            throw new AccionNoPermitidaException("Solo el dueño puede eliminar la publicación");
+        }
+
+        Publicacion publicacion = publicacionRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new PublicacionNoExisteException());
+
+        if (publicacion.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE) {
+            throw new PublicacionNoDisponibleException();
+        }
+
+        boolean tieneIntercambioActivo = intercambioRepository.existeIntercambioActivo(
+                id.getIsbn(), id.getEmailPropietario(), id.getHoraPublicacion(), ESTADOS_INTERCAMBIO_ACTIVOS);
+        if (tieneIntercambioActivo) {
+            throw new PublicacionNoDisponibleException();
+        }
+
+        publicacion.setEstadoPublicacion(EstadoPublicacion.ELIMINADA);
     }
 }
