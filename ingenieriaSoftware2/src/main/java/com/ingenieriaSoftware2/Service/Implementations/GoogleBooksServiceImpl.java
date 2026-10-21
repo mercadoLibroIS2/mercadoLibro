@@ -1,0 +1,162 @@
+package com.ingenieriaSoftware2.Service.Implementations;
+
+import com.ingenieriaSoftware2.DTO.Response.GoogleBookVolumeDTO;
+import com.ingenieriaSoftware2.Service.Interfaces.GoogleBooksService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Slf4j
+@Service
+public class GoogleBooksServiceImpl implements GoogleBooksService {
+
+    private final RestClient restClient;
+
+    public GoogleBooksServiceImpl() {
+        this.restClient = RestClient.builder()
+                .baseUrl("https://www.googleapis.com/books/v1")
+                .build();
+    }
+
+    @Override
+    public Optional<GoogleBookVolumeDTO> buscarPorIsbn(String isbn) {
+        String cleanIsbn = normalizeIsbn(isbn);
+        if (cleanIsbn.isEmpty()) {
+            return Optional.empty();
+        }
+
+        try {
+            Map<String, Object> response = getVolumes("isbn:" + cleanIsbn, 1);
+            List<Map<String, Object>> items = items(response);
+            if (!items.isEmpty()) {
+                return Optional.of(toDto(items.get(0), cleanIsbn));
+            }
+        } catch (Exception exception) {
+            log.warn("No se pudo consultar Google Books para ISBN {}: {}", cleanIsbn, exception.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<GoogleBookVolumeDTO> buscarPorTexto(String query, int limite) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            int maxResults = Math.min(Math.max(limite, 1), 20);
+            List<Map<String, Object>> items = items(getVolumes(query.trim(), maxResults));
+            List<GoogleBookVolumeDTO> results = new ArrayList<>();
+            for (Map<String, Object> item : items) {
+                results.add(toDto(item, null));
+            }
+            return results;
+        } catch (Exception exception) {
+            log.warn("No se pudo buscar '{}' en Google Books: {}", query, exception.getMessage());
+            return List.of();
+        }
+    }
+
+    private Map<String, Object> getVolumes(String query, int maxResults) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/volumes")
+                        .queryParam("q", query)
+                        .queryParam("maxResults", maxResults)
+                        .build())
+                .retrieve()
+                .body(Map.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> items(Map<String, Object> response) {
+        if (response == null || !(response.get("items") instanceof List<?> rawItems)) {
+            return List.of();
+        }
+        return (List<Map<String, Object>>) rawItems;
+    }
+
+    @SuppressWarnings("unchecked")
+    private GoogleBookVolumeDTO toDto(Map<String, Object> item, String fallbackIsbn) {
+        Map<String, Object> info = item.get("volumeInfo") instanceof Map<?, ?> volumeInfo
+                ? (Map<String, Object>) volumeInfo
+                : Map.of();
+
+        String isbn = fallbackIsbn;
+        if (info.get("industryIdentifiers") instanceof List<?> identifiers) {
+            for (Object identifier : identifiers) {
+                if (identifier instanceof Map<?, ?> value) {
+                    String type = String.valueOf(value.get("type"));
+                    String candidate = String.valueOf(value.get("identifier"));
+                    if ("ISBN_13".equals(type)) {
+                        isbn = candidate;
+                        break;
+                    }
+                    if (isbn == null && "ISBN_10".equals(type)) {
+                        isbn = candidate;
+                    }
+                }
+            }
+        }
+
+        List<String> authors = strings(info.get("authors"));
+        List<String> categories = strings(info.get("categories"));
+        String title = string(info.get("title"));
+        String subtitle = string(info.get("subtitle"));
+        if (!subtitle.isBlank()) {
+            title += ": " + subtitle;
+        }
+
+        String cover = "";
+        if (info.get("imageLinks") instanceof Map<?, ?> imageLinks) {
+            Object thumbnail = imageLinks.get("thumbnail");
+            Object smallThumbnail = imageLinks.get("smallThumbnail");
+            cover = thumbnail != null ? thumbnail.toString() : smallThumbnail != null ? smallThumbnail.toString() : "";
+            if (cover.startsWith("http://")) {
+                cover = "https://" + cover.substring(7);
+            }
+        }
+
+        return new GoogleBookVolumeDTO(
+                item.get("id") == null ? "" : item.get("id").toString(),
+                isbn == null ? "" : isbn,
+                title,
+                String.join(", ", authors),
+                string(info.get("description")),
+                cover,
+                string(info.get("publisher")),
+                string(info.get("publishedDate")),
+                categories,
+                number(info.get("pageCount")),
+                decimal(info.get("averageRating"))
+        );
+    }
+
+    private String normalizeIsbn(String isbn) {
+        return isbn == null ? "" : isbn.replaceAll("[^0-9Xx]", "").toUpperCase();
+    }
+
+    private String string(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    private List<String> strings(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        return values.stream().filter(item -> item != null).map(Object::toString).toList();
+    }
+
+    private Integer number(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private Double decimal(Object value) {
+        return value instanceof Number number ? number.doubleValue() : null;
+    }
+}

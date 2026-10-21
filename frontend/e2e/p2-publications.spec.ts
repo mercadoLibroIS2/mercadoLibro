@@ -184,7 +184,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   await signIn(page)
   await openPublishForm(page)
 
-  await expect(page.getByText("INTEGRACIÓN GOOGLE BOOKS NO IMPLEMENTADA TODAVÍA")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Buscar", exact: true })).toBeVisible()
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("El ISBN es obligatorio")).toBeVisible()
   await expect(page.getByText("Ingresá el valor en puntos")).toBeVisible()

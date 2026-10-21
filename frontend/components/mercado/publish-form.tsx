@@ -5,6 +5,8 @@ import {
   BookPlus,
   Coins,
   ArrowLeft,
+  Loader2,
+  Search,
 } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
@@ -13,6 +15,8 @@ import {
   type Condition,
 } from "@/lib/mercado-types"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { findGoogleBookByIsbn } from "@/lib/google-books"
+import type { GoogleBookVolume } from "@/lib/mercado-types"
 
 interface FormState {
   isbn: string
@@ -47,6 +51,9 @@ export function PublishForm() {
   } : EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [saving, setSaving] = useState(false)
+  const [googleBook, setGoogleBook] = useState<GoogleBookVolume | null>(null)
+  const [searchingGoogleBooks, setSearchingGoogleBooks] = useState(false)
+  const [googleBooksError, setGoogleBooksError] = useState("")
 
   if (!currentUser) {
     return null
@@ -54,6 +61,29 @@ export function PublishForm() {
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  async function handleGoogleBooksSearch() {
+    setGoogleBooksError("")
+    setGoogleBook(null)
+    if (!form.isbn.trim()) {
+      setGoogleBooksError("Ingresá un ISBN para consultar Google Books.")
+      return
+    }
+
+    setSearchingGoogleBooks(true)
+    try {
+      const result = await findGoogleBookByIsbn(form.isbn)
+      if (!result) {
+        setGoogleBooksError("No se encontró ese ISBN en Google Books.")
+        return
+      }
+      setGoogleBook(result)
+    } catch (error) {
+      setGoogleBooksError(error instanceof Error ? error.message : "No se pudo consultar Google Books.")
+    } finally {
+      setSearchingGoogleBooks(false)
+    }
   }
 
   const pointsNum = Number(form.points)
@@ -78,6 +108,7 @@ export function PublishForm() {
       condition: form.condition,
       points: pointsNum,
       description: form.description.trim() || undefined,
+      googleBook: googleBook || undefined,
     }
 
     setSaving(true)
@@ -124,24 +155,46 @@ export function PublishForm() {
         noValidate
         className="space-y-4 sm:space-y-6 rounded-2xl sm:rounded-3xl border border-stone-200 bg-white p-4 sm:p-8 shadow-xs"
       >
-        {!editingBook && (
-          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">
-            <p className="font-bold">INTEGRACIÓN GOOGLE BOOKS NO IMPLEMENTADA TODAVÍA</p>
-            <p className="mt-1 text-sm">
-              El título y el autor no se guardan desde esta pantalla. Ingresá el ISBN de un libro que ya esté registrado en el catálogo.
-            </p>
+        <div>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Field
+                id="pub-isbn"
+                label="ISBN del libro *"
+                placeholder="Ej. 978-84-204-7183-9"
+                value={form.isbn}
+                onChange={(e) => set("isbn", e.target.value)}
+                readOnly={Boolean(editingBook)}
+                error={errors.isbn}
+              />
+            </div>
+            {!editingBook && (
+              <button
+                type="button"
+                onClick={handleGoogleBooksSearch}
+                disabled={searchingGoogleBooks}
+                className="mb-0.5 inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-purple-700 px-3 text-sm font-bold text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {searchingGoogleBooks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {searchingGoogleBooks ? "Buscando..." : "Buscar"}
+              </button>
+            )}
           </div>
-        )}
-
-        <Field
-          id="pub-isbn"
-          label="ISBN del libro *"
-          placeholder="Ingresá un ISBN que ya esté en el catálogo"
-          value={form.isbn}
-          onChange={(e) => set("isbn", e.target.value)}
-          readOnly={Boolean(editingBook)}
-          error={errors.isbn}
-        />
+          {googleBooksError && <p className="mt-1 text-sm font-semibold text-red-600">{googleBooksError}</p>}
+          {googleBook && (
+            <div className="mt-3 flex gap-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
+              {googleBook.portadaUrl && (
+                <img src={googleBook.portadaUrl} alt="" className="h-20 w-14 rounded object-cover" />
+              )}
+              <div className="min-w-0 text-sm text-stone-700">
+                <p className="font-bold text-stone-900">{googleBook.titulo}</p>
+                <p>{googleBook.autor || "Autor no disponible"}</p>
+                {googleBook.editorial && <p className="text-stone-500">{googleBook.editorial}</p>}
+                <p className="mt-1 text-xs text-purple-800">Los datos se guardarán junto con la publicación.</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Condition */}

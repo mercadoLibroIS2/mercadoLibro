@@ -1,4 +1,4 @@
-import type { Book, Condition, User } from "./mercado-types"
+import type { Book, Condition, GoogleBookVolume, User } from "./mercado-types"
 import { CATEGORIES } from "./mercado-types"
 import { calculateReferencePrice } from "./price-evaluator"
 import { supabase } from "./supabase"
@@ -126,14 +126,32 @@ export async function loadDatabasePublications(currentUser: User, users: User[])
   })
 }
 
-export async function findDatabaseBook(isbn: string): Promise<DatabaseRow> {
+export async function findDatabaseBook(isbn: string, googleBook?: GoogleBookVolume): Promise<DatabaseRow> {
   const { data, error } = await supabase.from("libro").select("*").eq("isbn", isbn).maybeSingle()
   if (error) throw error
-  if (data) return data as DatabaseRow
+  const metadata = googleBook
+    ? {
+        google_books_id: googleBook.googleBooksId || null,
+        titulo: googleBook.titulo || null,
+        autores: googleBook.autor || null,
+      }
+    : undefined
+
+  if (data) {
+    if (!metadata) return data as DatabaseRow
+    const { data: updatedBook, error: updateError } = await supabase
+      .from("libro")
+      .update(metadata)
+      .eq("isbn", isbn)
+      .select("*")
+      .single()
+    if (updateError) throw updateError
+    return (updatedBook || data) as DatabaseRow
+  }
 
   const { data: createdBook, error: insertError } = await supabase
     .from("libro")
-    .insert({ isbn, google_books_id: null, titulo: null, autores: null })
+    .insert({ isbn, ...metadata })
     .select("*")
     .single()
   if (insertError) throw insertError

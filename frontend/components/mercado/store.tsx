@@ -620,7 +620,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!currentUser) return false
 
       try {
-        const book = await findDatabaseBook(data.isbn.trim())
+        const book = await findDatabaseBook(data.isbn.trim(), data.googleBook)
         const timestamp = new Date().toISOString()
         const { data: publication, error } = await supabase
           .from("publicacion")
