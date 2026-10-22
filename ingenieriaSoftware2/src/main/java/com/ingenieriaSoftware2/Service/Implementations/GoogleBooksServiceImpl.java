@@ -41,24 +41,7 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
             return Optional.empty();
         }
 
-        try {
-            Map<String, Object> response = getVolumesConReintentos("isbn:" + cleanIsbn, 1);
-            List<Map<String, Object>> items = items(response);
-            if (!items.isEmpty()) {
-                return Optional.of(toDto(items.get(0), cleanIsbn));
-            }
-
-            // Fallback 1: búsqueda directa por ISBN sin prefijo si "isbn:" no arrojó resultados
-            Map<String, Object> fallbackResponse = getVolumesConReintentos(cleanIsbn, 1);
-            List<Map<String, Object>> fallbackItems = items(fallbackResponse);
-            if (!fallbackItems.isEmpty()) {
-                return Optional.of(toDto(fallbackItems.get(0), cleanIsbn));
-            }
-        } catch (Exception exception) {
-            log.warn("Consulta search de Google Books falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
-        }
-
-        // Fallback 2 (Resiliente a 503): resolver ID directo de Google Books y consultar volumen por ID con API Key
+        // 1. Intento por ViewAPI + VolumeId (vía rápida y 100% confiable con API Key frente a caídas 503 del search)
         try {
             String volumeId = resolverVolumeIdPorViewApi(cleanIsbn);
             if (volumeId != null && !volumeId.isBlank()) {
@@ -70,6 +53,24 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
             }
         } catch (Exception exception) {
             log.warn("Consulta por volumeId falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
+        }
+
+        // 2. Intento clásico por search query
+        try {
+            Map<String, Object> response = getVolumesConReintentos("isbn:" + cleanIsbn, 1);
+            List<Map<String, Object>> items = items(response);
+            if (!items.isEmpty()) {
+                return Optional.of(toDto(items.get(0), cleanIsbn));
+            }
+
+            // Fallback: búsqueda directa por ISBN sin prefijo si "isbn:" no arrojó resultados
+            Map<String, Object> fallbackResponse = getVolumesConReintentos(cleanIsbn, 1);
+            List<Map<String, Object>> fallbackItems = items(fallbackResponse);
+            if (!fallbackItems.isEmpty()) {
+                return Optional.of(toDto(fallbackItems.get(0), cleanIsbn));
+            }
+        } catch (Exception exception) {
+            log.warn("Consulta search de Google Books falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
         }
 
         return Optional.empty();
@@ -95,14 +96,12 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
     }
 
     private Map<String, Object> getVolumeById(String volumeId) {
+        String path = "/volumes/" + volumeId;
+        if (apiKey != null && !apiKey.isBlank()) {
+            path += "?key=" + apiKey;
+        }
         return restClient.get()
-                .uri(uriBuilder -> {
-                    var builder = uriBuilder.path("/volumes/{id}");
-                    if (apiKey != null && !apiKey.isBlank()) {
-                        builder.queryParam("key", apiKey);
-                    }
-                    return builder.build(volumeId);
-                })
+                .uri(path)
                 .retrieve()
                 .body(Map.class);
     }
