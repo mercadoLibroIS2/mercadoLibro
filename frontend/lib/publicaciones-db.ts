@@ -149,9 +149,15 @@ export async function findDatabaseBook(isbn: string, googleBook?: GoogleBookVolu
     return (updatedBook || data) as DatabaseRow
   }
 
+  const insertMetadata = {
+    google_books_id: googleBook?.googleBooksId || null,
+    titulo: googleBook?.titulo || null,
+    autores: googleBook?.autor || null,
+  }
+
   const { data: createdBook, error: insertError } = await supabase
     .from("libro")
-    .insert({ isbn, ...metadata })
+    .insert({ isbn, ...insertMetadata })
     .select("*")
     .single()
   if (insertError) throw insertError
