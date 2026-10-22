@@ -4,4 +4,8 @@ public class LibroNoExisteException extends RuntimeException {
     public LibroNoExisteException() {
         super("El libro no existe.");
     }
+
+    public LibroNoExisteException(String mensaje) {
+        super(mensaje);
+    }
 }
