@@ -48,16 +48,63 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
                 return Optional.of(toDto(items.get(0), cleanIsbn));
             }
 
-            // Fallback: búsqueda directa por ISBN sin prefijo si "isbn:" no arrojó resultados
+            // Fallback 1: búsqueda directa por ISBN sin prefijo si "isbn:" no arrojó resultados
             Map<String, Object> fallbackResponse = getVolumesConReintentos(cleanIsbn, 1);
             List<Map<String, Object>> fallbackItems = items(fallbackResponse);
             if (!fallbackItems.isEmpty()) {
                 return Optional.of(toDto(fallbackItems.get(0), cleanIsbn));
             }
         } catch (Exception exception) {
-            log.warn("No se pudo consultar Google Books para ISBN {}: {}", cleanIsbn, exception.getMessage());
+            log.warn("Consulta search de Google Books falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
         }
+
+        // Fallback 2 (Resiliente a 503): resolver ID directo de Google Books y consultar volumen por ID con API Key
+        try {
+            String volumeId = resolverVolumeIdPorViewApi(cleanIsbn);
+            if (volumeId != null && !volumeId.isBlank()) {
+                Map<String, Object> item = getVolumeById(volumeId);
+                if (item != null && !item.isEmpty()) {
+                    log.info("Libro resuelto exitosamente vía volumeId ({}) para ISBN {}", volumeId, cleanIsbn);
+                    return Optional.of(toDto(item, cleanIsbn));
+                }
+            }
+        } catch (Exception exception) {
+            log.warn("Consulta por volumeId falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
+        }
+
         return Optional.empty();
+    }
+
+    private String resolverVolumeIdPorViewApi(String isbn) {
+        try {
+            String url = "https://books.google.com/books?jscmd=viewapi&bibkeys=ISBN:" + isbn;
+            String body = RestClient.create().get()
+                    .uri(url)
+                    .retrieve()
+                    .body(String.class);
+            if (body != null) {
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("id=([a-zA-Z0-9_-]+)").matcher(body);
+                if (matcher.find()) {
+                    return matcher.group(1);
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("No se pudo resolver ID desde ViewAPI para ISBN {}: {}", isbn, ex.getMessage());
+        }
+        return null;
+    }
+
+    private Map<String, Object> getVolumeById(String volumeId) {
+        return restClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path("/volumes/{id}");
+                    if (apiKey != null && !apiKey.isBlank()) {
+                        builder.queryParam("key", apiKey);
+                    }
+                    return builder.build(volumeId);
+                })
+                .retrieve()
+                .body(Map.class);
     }
 
     @Override
