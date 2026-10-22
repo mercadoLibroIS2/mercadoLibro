@@ -20,4 +20,11 @@ class GoogleBooksServiceTest {
         assertTrue(googleBooksService.buscarPorTexto(null, 10).isEmpty());
         assertTrue(googleBooksService.buscarPorTexto("   ", 10).isEmpty());
     }
+
+    @Test
+    void constructorConApiKeyYBaseUrl() {
+        GoogleBooksServiceImpl service = new GoogleBooksServiceImpl("https://www.googleapis.com/books/v1", "test-key");
+        assertTrue(service.buscarPorIsbn(null).isEmpty());
+        assertTrue(service.buscarPorTexto("", 5).isEmpty());
+    }
 }

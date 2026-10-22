@@ -3,7 +3,9 @@ package com.ingenieriaSoftware2.Service.Implementations;
 import com.ingenieriaSoftware2.DTO.Response.GoogleBookVolumeDTO;
 import com.ingenieriaSoftware2.Service.Interfaces.GoogleBooksService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
@@ -16,10 +18,19 @@ import java.util.Optional;
 public class GoogleBooksServiceImpl implements GoogleBooksService {
 
     private final RestClient restClient;
+    private final String apiKey;
 
     public GoogleBooksServiceImpl() {
+        this("https://www.googleapis.com/books/v1", System.getenv().getOrDefault("GOOGLE_BOOKS_API_KEY", ""));
+    }
+
+    public GoogleBooksServiceImpl(
+            @Value("${google.books.api.url:https://www.googleapis.com/books/v1}") String baseUrl,
+            @Value("${google.books.api.key:}") String apiKey
+    ) {
+        this.apiKey = apiKey != null ? apiKey.trim() : "";
         this.restClient = RestClient.builder()
-                .baseUrl("https://www.googleapis.com/books/v1")
+                .baseUrl(baseUrl != null && !baseUrl.isBlank() ? baseUrl : "https://www.googleapis.com/books/v1")
                 .build();
     }
 
@@ -31,10 +42,17 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
         }
 
         try {
-            Map<String, Object> response = getVolumes("isbn:" + cleanIsbn, 1);
+            Map<String, Object> response = getVolumesConReintentos("isbn:" + cleanIsbn, 1);
             List<Map<String, Object>> items = items(response);
             if (!items.isEmpty()) {
                 return Optional.of(toDto(items.get(0), cleanIsbn));
+            }
+
+            // Fallback: búsqueda directa por ISBN sin prefijo si "isbn:" no arrojó resultados
+            Map<String, Object> fallbackResponse = getVolumesConReintentos(cleanIsbn, 1);
+            List<Map<String, Object>> fallbackItems = items(fallbackResponse);
+            if (!fallbackItems.isEmpty()) {
+                return Optional.of(toDto(fallbackItems.get(0), cleanIsbn));
             }
         } catch (Exception exception) {
             log.warn("No se pudo consultar Google Books para ISBN {}: {}", cleanIsbn, exception.getMessage());
@@ -50,7 +68,7 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
 
         try {
             int maxResults = Math.min(Math.max(limite, 1), 20);
-            List<Map<String, Object>> items = items(getVolumes(query.trim(), maxResults));
+            List<Map<String, Object>> items = items(getVolumesConReintentos(query.trim(), maxResults));
             List<GoogleBookVolumeDTO> results = new ArrayList<>();
             for (Map<String, Object> item : items) {
                 results.add(toDto(item, null));
@@ -62,13 +80,52 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
         }
     }
 
+    private Map<String, Object> getVolumesConReintentos(String query, int maxResults) {
+        int maxRetries = 3;
+        long backoffMs = 500;
+
+        for (int intento = 1; intento <= maxRetries; intento++) {
+            try {
+                return getVolumes(query, maxResults);
+            } catch (HttpStatusCodeException ex) {
+                if (intento < maxRetries && ex.getStatusCode().value() == 503) {
+                    log.warn("Google Books 503 (backendFailed) en intento {}/{}. Reintentando...", intento, maxRetries);
+                    dormir(backoffMs * intento);
+                    continue;
+                }
+                throw ex;
+            } catch (Exception ex) {
+                if (intento < maxRetries && ex.getMessage() != null && ex.getMessage().contains("503")) {
+                    log.warn("Error 503 en intento {}/{}. Reintentando...", intento, maxRetries);
+                    dormir(backoffMs * intento);
+                    continue;
+                }
+                throw ex;
+            }
+        }
+        return Map.of();
+    }
+
+    private void dormir(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private Map<String, Object> getVolumes(String query, int maxResults) {
         return restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/volumes")
-                        .queryParam("q", query)
-                        .queryParam("maxResults", maxResults)
-                        .build())
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder
+                            .path("/volumes")
+                            .queryParam("q", query)
+                            .queryParam("maxResults", maxResults);
+                    if (apiKey != null && !apiKey.isBlank()) {
+                        builder.queryParam("key", apiKey);
+                    }
+                    return builder.build();
+                })
                 .retrieve()
                 .body(Map.class);
     }
