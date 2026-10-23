@@ -14,7 +14,7 @@ import {
   CONDITIONS,
   type Condition,
 } from "@/lib/mercado-types"
-import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
 import type { GoogleBookVolume } from "@/lib/mercado-types"
 
@@ -63,22 +63,33 @@ export function PublishForm() {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  async function handleGoogleBooksSearch() {
+  async function handleGoogleBooksSearch(isbnToSearch?: string) {
     setGoogleBooksError("")
     setGoogleBook(null)
-    if (!form.isbn.trim()) {
-      setGoogleBooksError("Ingresá un ISBN para consultar Google Books.")
+    const targetIsbn = (isbnToSearch ?? form.isbn).trim()
+    if (!targetIsbn) {
+      setGoogleBooksError("Ingresá un código ISBN para consultar Google Books.")
+      return
+    }
+
+    const clean = targetIsbn.replace(/[^0-9X]/gi, "")
+    if (clean.length !== 10 && clean.length !== 13) {
+      setGoogleBooksError("Google Books requiere un ISBN de 10 o 13 dígitos (ej: 978-84-204-7183-9).")
       return
     }
 
     setSearchingGoogleBooks(true)
     try {
-      const result = await findGoogleBookByIsbn(form.isbn)
+      const result = await findGoogleBookByIsbn(clean)
       if (!result) {
-        setGoogleBooksError("No se encontró ese ISBN en Google Books.")
+        setGoogleBooksError("No se encontró ningún libro con ese ISBN en Google Books.")
         return
       }
       setGoogleBook(result)
+      if (!form.points || form.points === "0") {
+        const suggested = calculateReferencePrice("Ficción", form.condition)
+        set("points", String(suggested))
+      }
     } catch (error) {
       setGoogleBooksError(error instanceof Error ? error.message : "No se pudo consultar Google Books.")
     } finally {
@@ -171,7 +182,7 @@ export function PublishForm() {
             {!editingBook && (
               <button
                 type="button"
-                onClick={handleGoogleBooksSearch}
+                onClick={() => handleGoogleBooksSearch()}
                 disabled={searchingGoogleBooks}
                 className="mb-0.5 inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-purple-700 px-3 text-sm font-bold text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -180,6 +191,42 @@ export function PublishForm() {
               </button>
             )}
           </div>
+
+          {!editingBook && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-stone-600">
+              <span className="font-semibold text-stone-500">Probar ejemplos:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  set("isbn", "978-84-204-7183-9")
+                  handleGoogleBooksSearch("978-84-204-7183-9")
+                }}
+                className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 font-medium text-purple-900 hover:bg-purple-100 transition-colors"
+              >
+                Cien años de soledad
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  set("isbn", "978-0-14-103614-4")
+                  handleGoogleBooksSearch("978-0-14-103614-4")
+                }}
+                className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 font-medium text-purple-900 hover:bg-purple-100 transition-colors"
+              >
+                1984
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  set("isbn", "978-987-738-286-0")
+                  handleGoogleBooksSearch("978-987-738-286-0")
+                }}
+                className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 font-medium text-purple-900 hover:bg-purple-100 transition-colors"
+              >
+                Fábula Asiática
+              </button>
+            </div>
+          )}
           {googleBooksError && <p className="mt-1 text-sm font-semibold text-red-600">{googleBooksError}</p>}
           {googleBook && (
             <div className="mt-3 flex gap-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
