@@ -67,6 +67,24 @@ async function mockSupabase(page: Page) {
   })
 
   await page.route("**/rest/v1/**", async (route) => {
+    const url = new URL(route.request().url())
+    const table = url.pathname.split("/").pop()
+    if (table === "usuario" || table === "profiles") {
+      const email = url.searchParams.get("email")?.replace(/^eq\./, "")
+      const user = SEED_USERS.find((u) => u.email === email) || SEED_USERS[0]
+      await route.fulfill({
+        json: {
+          id: user.id,
+          email: user.email,
+          nombre: user.name,
+          nombre_usuario: user.username,
+          saldo_total: user.availablePoints ?? 100,
+          saldo_reservado: user.reservedPoints ?? 0,
+          reputacion_promedio: user.rating ?? 5.0,
+        },
+      })
+      return
+    }
     await route.fulfill({ json: [] })
   })
 }

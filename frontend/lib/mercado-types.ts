@@ -67,8 +67,24 @@ export interface Book {
   createdAt: string
 }
 
+export interface GoogleBookVolume {
+  googleBooksId: string
+  isbn: string
+  titulo: string
+  autor: string
+  descripcion: string
+  portadaUrl: string
+  editorial: string
+  anioPublicacion: string
+  categorias: string[]
+  paginas: number | null
+  ratingExterno: number | null
+}
+
 export type PublicationInput = Pick<Book, "isbn" | "condition" | "points"> &
-  Pick<Book, "description">
+  Pick<Book, "description"> & {
+    googleBook?: GoogleBookVolume
+  }
 
 export interface User {
   id: string
