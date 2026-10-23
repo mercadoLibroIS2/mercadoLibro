@@ -21,14 +21,14 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
     private final String apiKey;
 
     public GoogleBooksServiceImpl() {
-        this("https://www.googleapis.com/books/v1", System.getenv().getOrDefault("GOOGLE_BOOKS_API_KEY", "AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI"));
+        this("https://www.googleapis.com/books/v1", System.getenv("GOOGLE_BOOKS_API_KEY"));
     }
 
     public GoogleBooksServiceImpl(
             @Value("${google.books.api.url:https://www.googleapis.com/books/v1}") String baseUrl,
-            @Value("${google.books.api.key:AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI}") String apiKey
+            @Value("${google.books.api.key:}") String apiKey
     ) {
-        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : "AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI";
+        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : null;
         this.apiKey = key;
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl != null && !baseUrl.isBlank() ? baseUrl : "https://www.googleapis.com/books/v1")
