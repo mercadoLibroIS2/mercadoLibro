@@ -3,6 +3,53 @@
 -- Ejecutar en el SQL Editor de Supabase
 -- ==============================================================================
 
+-- 0. Crear tablas base si no existen
+create table if not exists public.usuario (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  nombre text unique not null,
+  contrasenia text,
+  saldo_total integer default 100,
+  saldo_reservado integer default 0,
+  reputacion_promedio numeric default 5.0,
+  rol text default 'USUARIO',
+  es_activo boolean default true,
+  created_at timestamp with time zone default now()
+);
+
+create table if not exists public.libro (
+  isbn text primary key,
+  titulo text,
+  autores text,
+  editorial text,
+  google_books_id text,
+  puntuacion_externa numeric,
+  fecha_cache_bibliografico timestamp with time zone default now()
+);
+
+create table if not exists public.categoria (
+  nombre_categoria text primary key
+);
+
+create table if not exists public.libro_categoria (
+  isbn text references public.libro(isbn) on delete cascade,
+  nombre_categoria text references public.categoria(nombre_categoria) on delete cascade,
+  primary key (isbn, nombre_categoria)
+);
+
+create table if not exists public.publicacion (
+  isbn text references public.libro(isbn) on delete cascade,
+  email_propietario text references public.usuario(email) on delete cascade,
+  hora_publicacion timestamp with time zone default now(),
+  estado_fisico text not null,
+  valor_puntos_solicitado integer not null,
+  valor_referencia_calculado integer,
+  comentario text,
+  estado_publicacion text default 'DISPONIBLE',
+  color_semaforo text default 'SIN_REFERENCIA',
+  primary key (isbn, email_propietario, hora_publicacion)
+);
+
 -- 1. Habilitar Row Level Security (RLS) en la tabla usuario
 alter table public.usuario enable row level security;
 
