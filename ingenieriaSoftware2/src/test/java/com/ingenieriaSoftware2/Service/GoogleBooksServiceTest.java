@@ -1,6 +1,7 @@
 package com.ingenieriaSoftware2.Service;
 
 import com.ingenieriaSoftware2.Service.Implementations.GoogleBooksServiceImpl;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,9 +32,14 @@ class GoogleBooksServiceTest {
 
     @Test
     void consultarLibroRealPorIsbn() {
+        String apiKey = System.getenv("GOOGLE_BOOKS_API_KEY");
+        Assumptions.assumeTrue(
+                apiKey != null && !apiKey.isBlank(),
+                "Saltando test contra API externa porque no hay GOOGLE_BOOKS_API_KEY configurada en el entorno"
+        );
         GoogleBooksServiceImpl service = new GoogleBooksServiceImpl(
                 "https://www.googleapis.com/books/v1",
-                "AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI"
+                apiKey
         );
         var resultado = service.buscarPorIsbn("9780132350884");
         assertTrue(resultado.isPresent(), "El libro debería encontrarse en Google Books");
