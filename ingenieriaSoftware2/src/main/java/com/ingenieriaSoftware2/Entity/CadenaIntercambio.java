@@ -22,6 +22,7 @@ public class CadenaIntercambio {
     private Integer puntosBonus;
 
     @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(50)")
     private EstadoCadena estado;
 
     @OneToMany(mappedBy = "cadena")

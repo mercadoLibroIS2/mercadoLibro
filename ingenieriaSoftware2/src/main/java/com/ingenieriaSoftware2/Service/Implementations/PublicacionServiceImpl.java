@@ -19,11 +19,13 @@ import com.ingenieriaSoftware2.Repository.LibroRepository;
 import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.Calculadora;
+import com.ingenieriaSoftware2.Service.Interfaces.GoogleBooksService;
 import com.ingenieriaSoftware2.Service.Interfaces.PublicacionService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -55,11 +57,14 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Autowired
     private IntercambioRepository intercambioRepository;
 
+    @Autowired
+    private GoogleBooksService googleBooksService;
+
     @Override
     @Transactional
     public PublicacionResponseDTO publicarLibro(PublicacionRequestDTO request, String email) {
         Usuario propietario = usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
-        Libro libro = libroRepository.findByIsbn(request.isbn()).orElseThrow(() -> new LibroNoExisteException());
+        Libro libro = libroRepository.findByIsbn(request.isbn()).orElseGet(() -> importarLibro(request.isbn()));
 
         // Postgres guarda microsegundos: si no se trunca, la hora que devuelve la API
         // no coincide con la guardada y la publicación no se encuentra después
@@ -79,6 +84,22 @@ public class PublicacionServiceImpl implements PublicacionService {
         publicacion.setColorSemaforo(calculadora.calculadoraColor(request.valorPuntosSolicitado(), valorRef));
 
         return publicacionMapper.toDTO(publicacionRepository.save(publicacion));
+    }
+
+    // Si el libro todavia no esta en la base (p. ej. H2 recien levantada), se trae de Google Books / Open Library
+    private Libro importarLibro(String isbn) {
+        var datos = googleBooksService.buscarPorIsbn(isbn).orElseThrow(() -> new LibroNoExisteException());
+
+        Libro libro = new Libro();
+        libro.setIsbn(isbn);
+        libro.setGoogleBooksId(datos.googleBooksId() == null || datos.googleBooksId().isBlank() ? null : datos.googleBooksId());
+        libro.setTitulo(datos.titulo());
+        libro.setAutores(datos.autor());
+        if (datos.ratingExterno() != null) {
+            libro.setPuntuacionExterna(BigDecimal.valueOf(datos.ratingExterno()));
+        }
+        libro.setFechaCacheBibliografico(LocalDateTime.now());
+        return libroRepository.save(libro);
     }
 
     @Override

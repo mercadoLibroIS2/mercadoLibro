@@ -45,7 +45,7 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public UserDetails loadUserByUsername(String nombre){
-        Usuario usuario = usuarioRepository.findByNombre(nombre).orElseThrow(() -> new UsuarioNoEncontrado());
+        Usuario usuario = usuarioRepository.findByNombreOrEmail(nombre, nombre).orElseThrow(() -> new UsuarioNoEncontrado());
         return usuario;
     }
 
