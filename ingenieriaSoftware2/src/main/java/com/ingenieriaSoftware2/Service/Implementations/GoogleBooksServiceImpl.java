@@ -4,10 +4,13 @@ import com.ingenieriaSoftware2.DTO.Response.GoogleBookVolumeDTO;
 import com.ingenieriaSoftware2.Service.Interfaces.GoogleBooksService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,21 +21,36 @@ import java.util.Optional;
 public class GoogleBooksServiceImpl implements GoogleBooksService {
 
     private final RestClient restClient;
-    private final String apiKey;
+    // Cliente sin baseUrl para ViewAPI y Open Library. Con timeouts para que una API caida no cuelgue la request.
+    private final RestClient externalClient;
+    // Se vacia si Google rechaza la key (vencida/invalida); la API publica funciona sin key.
+    private volatile String apiKey;
 
     public GoogleBooksServiceImpl() {
-        this("https://www.googleapis.com/books/v1", System.getenv().getOrDefault("GOOGLE_BOOKS_API_KEY", "AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI"));
+        this("https://www.googleapis.com/books/v1", System.getenv().getOrDefault("GOOGLE_BOOKS_API_KEY", ""));
     }
 
     public GoogleBooksServiceImpl(
             @Value("${google.books.api.url:https://www.googleapis.com/books/v1}") String baseUrl,
-            @Value("${google.books.api.key:AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI}") String apiKey
+            @Value("${google.books.api.key:}") String apiKey
     ) {
-        String key = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : "AIzaSyCVzUDKyyxw_QRFShH6BEuEuhL9LHh4NDI";
-        this.apiKey = key;
+        this.apiKey = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : null;
         this.restClient = RestClient.builder()
+                .requestFactory(requestFactoryConTimeouts())
                 .baseUrl(baseUrl != null && !baseUrl.isBlank() ? baseUrl : "https://www.googleapis.com/books/v1")
                 .build();
+        this.externalClient = RestClient.builder()
+                .requestFactory(requestFactoryConTimeouts())
+                .build();
+    }
+
+    private static JdkClientHttpRequestFactory requestFactoryConTimeouts() {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(Duration.ofSeconds(8));
+        return factory;
     }
 
     @Override
@@ -74,13 +92,15 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
             log.warn("Consulta search de Google Books falló para ISBN {}: {}", cleanIsbn, exception.getMessage());
         }
 
-        return Optional.empty();
+        // 3. Respaldo: Open Library (sin key ni cuota diaria)
+        List<GoogleBookVolumeDTO> openLibrary = buscarEnOpenLibrary("isbn", cleanIsbn, 1, cleanIsbn);
+        return openLibrary.isEmpty() ? Optional.empty() : Optional.of(openLibrary.get(0));
     }
 
     private String resolverVolumeIdPorViewApi(String isbn) {
         try {
             String url = "https://books.google.com/books?jscmd=viewapi&bibkeys=ISBN:" + isbn;
-            String body = RestClient.create().get()
+            String body = externalClient.get()
                     .uri(url)
                     .retrieve()
                     .body(String.class);
@@ -97,6 +117,10 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
     }
 
     private Map<String, Object> getVolumeById(String volumeId) {
+        return sinKeySiEsRechazada(() -> getVolumeByIdConKeyActual(volumeId));
+    }
+
+    private Map<String, Object> getVolumeByIdConKeyActual(String volumeId) {
         String path = "/volumes/" + volumeId;
         if (apiKey != null && !apiKey.isBlank()) {
             path += "?key=" + apiKey;
@@ -113,18 +137,80 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
             return List.of();
         }
 
+        int maxResults = Math.min(Math.max(limite, 1), 20);
         try {
-            int maxResults = Math.min(Math.max(limite, 1), 20);
             List<Map<String, Object>> items = items(getVolumesConReintentos(query.trim(), maxResults));
             List<GoogleBookVolumeDTO> results = new ArrayList<>();
             for (Map<String, Object> item : items) {
                 results.add(toDto(item, null));
             }
-            return results;
+            if (!results.isEmpty()) {
+                return results;
+            }
         } catch (Exception exception) {
             log.warn("No se pudo buscar '{}' en Google Books: {}", query, exception.getMessage());
+        }
+        return buscarEnOpenLibrary("q", query.trim(), maxResults, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<GoogleBookVolumeDTO> buscarEnOpenLibrary(String parametro, String valor, int limite, String fallbackIsbn) {
+        try {
+            Map<String, Object> response = externalClient.get()
+                    .uri("https://openlibrary.org/search.json?{p}={v}&limit={l}&fields={f}",
+                            parametro, valor, limite,
+                            "title,subtitle,author_name,isbn,first_publish_year,cover_i,subject,number_of_pages_median,publisher,ratings_average")
+                    .retrieve()
+                    .body(Map.class);
+            if (response == null || !(response.get("docs") instanceof List<?> docs)) {
+                return List.of();
+            }
+            List<GoogleBookVolumeDTO> results = new ArrayList<>();
+            for (Object doc : docs) {
+                if (doc instanceof Map<?, ?> value) {
+                    results.add(openLibraryToDto((Map<String, Object>) value, fallbackIsbn));
+                }
+            }
+            return results;
+        } catch (Exception exception) {
+            log.warn("No se pudo buscar {}='{}' en Open Library: {}", parametro, valor, exception.getMessage());
             return List.of();
         }
+    }
+
+    private GoogleBookVolumeDTO openLibraryToDto(Map<String, Object> doc, String fallbackIsbn) {
+        List<String> isbns = strings(doc.get("isbn"));
+        String isbn = fallbackIsbn;
+        if (isbn == null) {
+            isbn = isbns.stream().filter(value -> value.length() == 13).findFirst()
+                    .orElse(isbns.isEmpty() ? "" : isbns.get(0));
+        }
+
+        String title = string(doc.get("title"));
+        String subtitle = string(doc.get("subtitle"));
+        if (!subtitle.isBlank()) {
+            title += ": " + subtitle;
+        }
+
+        String cover = doc.get("cover_i") instanceof Number coverId
+                ? "https://covers.openlibrary.org/b/id/" + coverId.longValue() + "-M.jpg"
+                : "";
+        List<String> publishers = strings(doc.get("publisher"));
+        List<String> subjects = strings(doc.get("subject"));
+
+        return new GoogleBookVolumeDTO(
+                "",
+                isbn,
+                title,
+                String.join(", ", strings(doc.get("author_name"))),
+                "",
+                cover,
+                publishers.isEmpty() ? "" : publishers.get(0),
+                string(doc.get("first_publish_year")),
+                subjects.size() > 5 ? subjects.subList(0, 5) : subjects,
+                number(doc.get("number_of_pages_median")),
+                decimal(doc.get("ratings_average"))
+        );
     }
 
     private Map<String, Object> getVolumesConReintentos(String query, int maxResults) {
@@ -162,6 +248,24 @@ public class GoogleBooksServiceImpl implements GoogleBooksService {
     }
 
     private Map<String, Object> getVolumes(String query, int maxResults) {
+        return sinKeySiEsRechazada(() -> getVolumesConKeyActual(query, maxResults));
+    }
+
+    private Map<String, Object> sinKeySiEsRechazada(java.util.function.Supplier<Map<String, Object>> request) {
+        try {
+            return request.get();
+        } catch (HttpStatusCodeException ex) {
+            int status = ex.getStatusCode().value();
+            if (apiKey != null && (status == 400 || status == 403) && ex.getResponseBodyAsString().contains("API_KEY")) {
+                log.warn("Google Books rechazo la API key ({}). Se sigue sin key.", status);
+                apiKey = null;
+                return request.get();
+            }
+            throw ex;
+        }
+    }
+
+    private Map<String, Object> getVolumesConKeyActual(String query, int maxResults) {
         return restClient.get()
                 .uri(uriBuilder -> {
                     var builder = uriBuilder
