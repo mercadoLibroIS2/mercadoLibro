@@ -36,6 +36,7 @@ export function BookCard({ book }: { book: Book }) {
           <img
             src={book.coverUrl}
             alt={book.title}
+            onError={(e) => { e.currentTarget.style.display = "none" }}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (

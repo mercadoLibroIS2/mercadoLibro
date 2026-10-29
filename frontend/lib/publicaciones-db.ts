@@ -61,8 +61,9 @@ function toBook(
     condition,
     points: number(publication, "valor_puntos_solicitado"),
     description: text(publication, "comentario") || undefined,
-    ownerId: isCurrentUser ? currentUser.id : knownUser?.id || email,
-    ownerName,
+    coverUrl: coverUrlForIsbn(isbn),
+    ownerId: isCurrentUser ? currentUser.id : knownUser?.id || text(owner || {}, "id") || email,
+    ownerName: isCurrentUser ? currentUser.name : knownUser?.name || ownerName,
     ownerRating: rating,
     ownerTrades: knownUser?.totalTrades || 0,
     availability: ({
@@ -76,6 +77,38 @@ function toBook(
     externalRating: number(book || {}, "puntuacion_externa", 4.5),
     createdAt: timestamp,
   }
+}
+
+// Portada pública de Open Library; devuelve 404 si no existe y la tarjeta muestra el placeholder.
+function coverUrlForIsbn(isbn: string): string | undefined {
+  const cleanIsbn = isbn.replace(/[^0-9X]/gi, "")
+  return cleanIsbn ? `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg?default=false` : undefined
+}
+
+// Perfiles de la tabla usuario, identificados por el mismo UUID que Supabase Auth,
+// para que notificaciones, reseñas y perfiles públicos apunten a la misma persona.
+export async function loadDatabaseUsers(): Promise<User[]> {
+  const { data, error } = await supabase.from("usuario").select("*")
+  if (error) throw error
+  return ((data || []) as DatabaseRow[])
+    .filter((row) => text(row, "id") && text(row, "email"))
+    .map((row) => {
+      const email = text(row, "email")
+      const username = text(row, "nombre_usuario", text(row, "nombre", email.split("@")[0]))
+      return {
+        id: text(row, "id"),
+        name: username.charAt(0).toUpperCase() + username.slice(1),
+        username,
+        email,
+        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(username)}`,
+        rating: number(row, "reputacion_promedio", 5),
+        totalReviews: 0,
+        totalTrades: 0,
+        availablePoints: number(row, "saldo_total"),
+        reservedPoints: number(row, "saldo_reservado"),
+        joinedDate: text(row, "created_at"),
+      }
+    })
 }
 
 export function databaseCondition(condition: Condition): string {

@@ -70,6 +70,7 @@ export function BookDetailModal() {
                 <img
                   src={book.coverUrl}
                   alt={book.title}
+                  onError={(e) => { e.currentTarget.style.display = "none" }}
                   className="h-full w-full object-cover"
                 />
               ) : (

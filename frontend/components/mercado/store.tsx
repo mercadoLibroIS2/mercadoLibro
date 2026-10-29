@@ -41,6 +41,7 @@ import {
   databasePublicationId,
   findDatabaseBook,
   loadDatabasePublications,
+  loadDatabaseUsers,
 } from "@/lib/publicaciones-db"
 import {
   createSolicitudIntercambio,
@@ -327,27 +328,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         joinedDate: profileData?.joinedDate || sbUser.created_at || new Date().toISOString(),
       }
 
-      setState((prev) => {
-        const exists = prev.users.some(
-          (u) => u.id === appUser.id || (u.email && u.email.toLowerCase() === appUser.email.toLowerCase())
+      let databaseUsers: User[] = []
+      try {
+        databaseUsers = (await loadDatabaseUsers()).filter(
+          (u) => u.email.toLowerCase() !== appUser.email.toLowerCase()
         )
-        const users = exists
-          ? prev.users.map((u) => (u.id === appUser.id || u.email.toLowerCase() === appUser.email.toLowerCase() ? appUser : u))
-          : [...prev.users, appUser]
+      } catch (error) {
+        console.error("[Supabase] Error cargando usuarios:", error)
+      }
+      const knownUsers = [...SEED_USERS, ...databaseUsers, appUser]
+
+      setState((prev) => {
+        const sameUser = (a: User, b: User) => a.id === b.id || a.email.toLowerCase() === b.email.toLowerCase()
+        const fresh = [...databaseUsers, appUser]
+        const users = [...prev.users.filter((u) => !fresh.some((f) => sameUser(u, f))), ...fresh]
         return { ...prev, users, currentUser: appUser }
       })
 
       let persistedBooks: Book[] = []
       try {
-        persistedBooks = await loadDatabasePublications(appUser, [...SEED_USERS, appUser])
+        persistedBooks = await loadDatabasePublications(appUser, knownUsers)
         setState((prev) => ({
           ...prev,
           books: [
             ...persistedBooks,
             ...prev.books.filter((book) => {
-              if (persistedBooks.some((saved) => saved.isbn === book.isbn && saved.ownerId === book.ownerId)) {
-                return false
-              }
+              // Con publicaciones reales, los libros de demostración locales no se pueden solicitar.
+              if (persistedBooks.length > 0) return false
               try {
                 databasePublicationId(book)
                 return false
@@ -363,7 +370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const persistedTrades = await loadSolicitudesIntercambio(appUser, persistedBooks, [...SEED_USERS, appUser])
+        const persistedTrades = await loadSolicitudesIntercambio(appUser, persistedBooks, knownUsers)
         setState((prev) => ({
           ...prev,
           trades: [
@@ -1289,7 +1296,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         type: "RECOMPENSA_RESEÑA",
         amount: 5,
         balanceAfter: state.currentUser.availablePoints + 5,
-        description: `Recompensa por dejar una reseña a ${toUserId} (+5 pts)`,
+        description: `Recompensa por dejar una reseña a ${state.users.find((u) => u.id === toUserId)?.name || toUserId} (+5 pts)`,
         date: new Date().toISOString(),
         tradeId,
       }
@@ -1331,7 +1338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast("¡Reseña publicada! Ganaste +5 puntos por colaborar con la comunidad.")
       setReviewTrade(null)
     },
-    [state.currentUser, state.trades, state.books, showToast]
+    [state.currentUser, state.trades, state.books, state.users, showToast]
   )
 
   const addToTracker = useCallback(
