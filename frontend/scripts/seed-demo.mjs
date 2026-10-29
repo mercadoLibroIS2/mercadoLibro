@@ -126,7 +126,14 @@ async function main() {
   }
 
   const existingTrades = check(await clients.lucia.from("solicitud_intercambio").select("*"), "lectura de solicitudes")
-  const hasTradeFor = (isbn) => existingTrades.some((t) => t.isbn_solicitada === isbn)
+  // Solo cuentan las solicitudes sobre la publicación vigente (tras un reset quedan las de publicaciones eliminadas).
+  const hasTradeFor = (isbn) =>
+    existingTrades.some(
+      (t) =>
+        t.isbn_solicitada === isbn &&
+        t.email_propietario_solicitada === publications[isbn].email_propietario &&
+        t.hora_publicacion_solicitada === publications[isbn].hora_publicacion,
+    )
 
   async function request(requester, isbn, tipo, offeredIsbn) {
     const requested = publications[isbn]
