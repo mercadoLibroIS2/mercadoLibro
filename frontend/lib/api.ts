@@ -148,28 +148,41 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${token}`)
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 6000)
 
-  if (response.status === 204) {
-    return null as unknown as T
-  }
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    })
+    clearTimeout(timeoutId)
 
-  if (!response.ok) {
-    let errorMsg = `Error HTTP ${response.status}`
-    try {
-      const errJson = await response.json()
-      errorMsg = errJson.message || errJson.error || JSON.stringify(errJson)
-    } catch {
-      const text = await response.text().catch(() => "")
-      if (text) errorMsg = text
+    if (response.status === 204) {
+      return null as unknown as T
     }
-    throw new Error(errorMsg)
-  }
 
-  return response.json() as Promise<T>
+    if (!response.ok) {
+      let errorMsg = `Error HTTP ${response.status}`
+      try {
+        const errJson = await response.json()
+        errorMsg = errJson.message || errJson.error || JSON.stringify(errJson)
+      } catch {
+        const text = await response.text().catch(() => "")
+        if (text) errorMsg = text
+      }
+      throw new Error(errorMsg)
+    }
+
+    return response.json() as Promise<T>
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    if (err.name === "AbortError") {
+      throw new Error("El servidor tardó demasiado en responder (tiempo de espera agotado)")
+    }
+    throw err
+  }
 }
 
 // -------------------------------------------------------------

@@ -57,8 +57,13 @@ export function LoginScreen() {
         }
         setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
       }
-    } catch {
-      setServerError("Ocurrió un error inesperado al conectar con el servidor.")
+    } catch (err: unknown) {
+      if (demoUser) {
+        login(demoUser)
+        return
+      }
+      const message = err instanceof Error ? err.message : "Ocurrió un error inesperado al conectar con el servidor."
+      setServerError(message)
     } finally {
       setLoading(false)
     }
@@ -91,7 +96,7 @@ export function LoginScreen() {
           <Field
             id="login-identifier"
             label="Email o nombre de usuario"
-            placeholder="franco@mercadolibro.com"
+            placeholder="lucia@mercadolibro.demo"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             error={errors.identifier}
@@ -123,6 +128,29 @@ export function LoginScreen() {
             )}
           </button>
         </form>
+
+        {/* Acceso Rápido para Demostración */}
+        <div className="mt-6 border-t border-stone-200 pt-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-stone-500 text-center mb-3">
+            Acceso Rápido Demo (1 click)
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {users.slice(0, 4).map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => login(u)}
+                className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 p-2 text-left hover:border-amber-700 hover:bg-amber-50 transition-colors"
+              >
+                <img src={u.avatar} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold text-stone-900">{u.name}</p>
+                  <p className="truncate text-[10px] text-stone-500">{u.availablePoints} pts</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <p className="mt-6 text-center text-sm md:text-base md:text-lg text-stone-600">
           ¿No tenés cuenta todavía?{" "}
