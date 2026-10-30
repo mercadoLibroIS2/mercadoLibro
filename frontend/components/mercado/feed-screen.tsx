@@ -24,6 +24,16 @@ export function FeedScreen() {
 
   // Filter books
   const filteredBooks = books.filter((book) => {
+    // Descartar publicaciones corruptas o de relleno de pruebas viejas
+    if (
+      (book.title.startsWith("Libro (") && book.author === "Autor desconocido") ||
+      book.author === "Autor desconocido" ||
+      book.ownerId.includes("testuser") ||
+      book.ownerId.includes("mail@gmail")
+    ) {
+      return false
+    }
+
     // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()

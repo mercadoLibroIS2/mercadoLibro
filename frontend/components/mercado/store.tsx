@@ -82,24 +82,80 @@ function publicacionResponseToBook(
   const email = pub.publicacionId?.emailPropietario || ""
   const hora = pub.publicacionId?.horaPublicacion || new Date().toISOString()
   const id = `${isbn}|${email}|${hora}`
+  const cleanIsbn = isbn.replace(/[^0-9X]/gi, "")
+  const seedMatch = SEED_BOOKS.find((s) => s.isbn.replace(/[^0-9X]/gi, "") === cleanIsbn)
+
   return {
     id,
     isbn,
-    title: pub.titulo || fallbackMeta?.title || `Libro (${isbn})`,
-    author: pub.autor || fallbackMeta?.author || "Autor desconocido",
-    category: fallbackMeta?.category || "General",
-    condition: ESTADO_TO_CONDITION[pub.estadoFisico] || "Bueno",
-    points: pub.valorPuntosSolicitado || 10,
-    referencePrice: pub.valorReferenciaCalculado,
-    description: pub.comentario || "",
-    coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || `https://covers.openlibrary.org/b/isbn/${isbn.replace(/[^0-9X]/gi, "")}-M.jpg`,
+    title: pub.titulo || fallbackMeta?.title || seedMatch?.title || `Libro (${isbn})`,
+    author: pub.autor || fallbackMeta?.author || seedMatch?.author || "Autor desconocido",
+    category: fallbackMeta?.category || seedMatch?.category || "General",
+    condition: ESTADO_TO_CONDITION[pub.estadoFisico] || seedMatch?.condition || "Bueno",
+    points: pub.valorPuntosSolicitado || seedMatch?.points || 10,
+    referencePrice: pub.valorReferenciaCalculado ?? seedMatch?.referencePrice,
+    description: pub.comentario || seedMatch?.description || "",
+    coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || seedMatch?.coverUrl || `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
     ownerId: email,
-    ownerName: email ? email.split("@")[0] : "Lector",
+    ownerName: seedMatch?.ownerName || (email ? email.split("@")[0] : "Lector"),
     ownerRating: 5.0,
     ownerTrades: 0,
     availability: "DISPONIBLE",
     createdAt: hora,
   }
+}
+
+function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionResponse[]): Book[] {
+  const seedByIsbn = new Map<string, Book>()
+  for (const b of SEED_BOOKS) {
+    seedByIsbn.set(b.isbn.replace(/[^0-9X]/gi, ""), b)
+  }
+
+  const backendBooks: Book[] = []
+  for (const pub of pubs) {
+    const rawIsbn = pub.publicacionId?.isbn || ""
+    const cleanIsbn = rawIsbn.replace(/[^0-9X]/gi, "")
+    const fallbackSeed = seedByIsbn.get(cleanIsbn)
+    const book = publicacionResponseToBook(pub, fallbackSeed)
+
+    const isJunkNoise =
+      (!pub.titulo && !fallbackSeed) ||
+      book.title.startsWith("Libro (") ||
+      book.author === "Autor desconocido" ||
+      book.ownerId.includes("testuser") ||
+      book.ownerId.includes("mail@gmail")
+
+    if (!isJunkNoise) {
+      backendBooks.push(book)
+    }
+  }
+
+  const result: Book[] = []
+  const usedIsbns = new Set<string>()
+
+  for (const bb of backendBooks) {
+    const cleanIsbn = bb.isbn.replace(/[^0-9X]/gi, "")
+    result.push(bb)
+    usedIsbns.add(cleanIsbn)
+  }
+
+  for (const sb of SEED_BOOKS) {
+    const cleanIsbn = sb.isbn.replace(/[^0-9X]/gi, "")
+    if (!usedIsbns.has(cleanIsbn)) {
+      result.push(sb)
+      usedIsbns.add(cleanIsbn)
+    }
+  }
+
+  for (const eb of existingBooks) {
+    const cleanIsbn = eb.isbn.replace(/[^0-9X]/gi, "")
+    if (!usedIsbns.has(cleanIsbn) && !eb.title.startsWith("Libro (") && eb.author !== "Autor desconocido") {
+      result.push(eb)
+      usedIsbns.add(cleanIsbn)
+    }
+  }
+
+  return result
 }
 
 function intercambioResponseToTrade(dto: IntercambioResponse): TradeRequest {
@@ -169,7 +225,7 @@ function compraResponseToTrade(dto: any): TradeRequest {
   }
 }
 
-const STORAGE_KEY = "mercadolibro_demo_clean_v3"
+const STORAGE_KEY = "mercadolibro_demo_clean_v4"
 
 interface AppState {
   users: User[]
@@ -293,11 +349,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.removeItem("mercadolibro_state_v1")
       localStorage.removeItem("mercadolibro_state_v2")
+      localStorage.removeItem("mercadolibro_demo_clean_v3")
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
         const hasLegacyNoise = parsed.books?.some((b: any) =>
-          b.ownerName?.includes("Camila") || b.ownerId?.startsWith("user-") || b.title?.includes("Cosmos") || b.title?.includes("Breve historia")
+          b.ownerName?.includes("Camila") ||
+          b.ownerId?.startsWith("user-") ||
+          b.title?.startsWith("Libro (") ||
+          b.author === "Autor desconocido" ||
+          b.ownerId?.includes("testuser") ||
+          b.ownerId?.includes("mail@gmail")
         )
         if (parsed.users && parsed.books && !hasLegacyNoise) {
           setState((prev) => ({
@@ -406,7 +468,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (pubs && pubs.length > 0) {
           setState((prev) => ({
             ...prev,
-            books: pubs.map((p) => publicacionResponseToBook(p)),
+            books: mergeBackendPublications(prev.books, pubs),
           }))
         }
       })
@@ -475,7 +537,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...prev,
           currentUser: updatedCurrentUser,
           users: updatedUsers,
-          books: pubs && pubs.length > 0 ? pubs.map(publicacionResponseToBook) : prev.books,
+          books: pubs && pubs.length > 0 ? mergeBackendPublications(prev.books, pubs) : prev.books,
           trades: backendTrades.length > 0 ? backendTrades : prev.trades,
           pointMovements: backendMovements.length > 0 ? backendMovements : prev.pointMovements,
           notifications: backendNotifs.length > 0 ? backendNotifs : prev.notifications,
@@ -559,7 +621,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (pubs && pubs.length > 0) {
             setState((prev) => ({
               ...prev,
-              books: pubs.map((p) => publicacionResponseToBook(p)),
+              books: mergeBackendPublications(prev.books, pubs),
             }))
           }
         } catch {
@@ -657,7 +719,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (pubs && pubs.length > 0) {
             setState((prev) => ({
               ...prev,
-              books: pubs.map((p) => publicacionResponseToBook(p)),
+              books: mergeBackendPublications(prev.books, pubs),
             }))
           }
         } catch {
