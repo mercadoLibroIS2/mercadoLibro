@@ -13,6 +13,7 @@ import { useStore } from "./store"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
 import type { PointMovementType } from "@/lib/mercado-types"
+import { isUserMatch } from "@/lib/mercado-types"
 
 type ProfileTab = "publicaciones" | "resenas" | "movimientos"
 
@@ -43,16 +44,19 @@ export function ProfileScreen() {
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
   const [editing, setEditing] = useState(false)
 
-  const isOwnProfile = screen === "perfil" || selectedProfileUserId === currentUser?.id
+  const isOwnProfile =
+    screen === "perfil" ||
+    isUserMatch(currentUser, selectedProfileUserId) ||
+    !selectedProfileUserId
   const targetUser = isOwnProfile
     ? currentUser
-    : users.find((u) => u.id === selectedProfileUserId) || currentUser
+    : users.find((u) => isUserMatch(u, selectedProfileUserId)) || currentUser
 
   if (!targetUser) return null
 
-  const userBooks = books.filter((b) => b.ownerId === targetUser.id)
-  const userReviews = reviews.filter((r) => r.toUserId === targetUser.id)
-  const userMovements = pointMovements.filter((m) => m.userId === targetUser.id)
+  const userBooks = books.filter((b) => isUserMatch(targetUser, b.ownerId))
+  const userReviews = reviews.filter((r) => isUserMatch(targetUser, r.toUserId))
+  const userMovements = pointMovements.filter((m) => isUserMatch(targetUser, m.userId))
 
   return (
     <div className="mx-auto max-w-5xl px-3 sm:px-6 lg:px-8 py-4 sm:py-8 overflow-x-hidden">

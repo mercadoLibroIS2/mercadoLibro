@@ -22,6 +22,7 @@ import type {
   TradeType,
   User,
 } from "@/lib/mercado-types"
+import { isUserMatch } from "@/lib/mercado-types"
 import {
   SEED_BOOKS,
   SEED_NOTIFICATIONS,
@@ -73,7 +74,10 @@ import {
   type IntercambioResponse,
 } from "@/lib/api"
 
-function publicacionResponseToBook(pub: PublicacionResponse): Book {
+function publicacionResponseToBook(
+  pub: PublicacionResponse,
+  fallbackMeta?: { title?: string; author?: string; coverUrl?: string; category?: string }
+): Book {
   const isbn = pub.publicacionId?.isbn || ""
   const email = pub.publicacionId?.emailPropietario || ""
   const hora = pub.publicacionId?.horaPublicacion || new Date().toISOString()
@@ -81,14 +85,14 @@ function publicacionResponseToBook(pub: PublicacionResponse): Book {
   return {
     id,
     isbn,
-    title: pub.titulo || `Libro (${isbn})`,
-    author: pub.autor || "Autor desconocido",
-    category: "General",
+    title: pub.titulo || fallbackMeta?.title || `Libro (${isbn})`,
+    author: pub.autor || fallbackMeta?.author || "Autor desconocido",
+    category: fallbackMeta?.category || "General",
     condition: ESTADO_TO_CONDITION[pub.estadoFisico] || "Bueno",
     points: pub.valorPuntosSolicitado || 10,
     referencePrice: pub.valorReferenciaCalculado,
     description: pub.comentario || "",
-    coverUrl: pub.portadaUrl || `https://covers.openlibrary.org/b/isbn/${isbn.replace(/[^0-9X]/gi, "")}-M.jpg`,
+    coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || `https://covers.openlibrary.org/b/isbn/${isbn.replace(/[^0-9X]/gi, "")}-M.jpg`,
     ownerId: email,
     ownerName: email ? email.split("@")[0] : "Lector",
     ownerRating: 5.0,
@@ -331,7 +335,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const startEditingBook = useCallback((bookId: string) => {
     const book = state.books.find((candidate) => candidate.id === bookId)
-    if (!book || book.ownerId !== state.currentUser?.id) {
+    if (!book || !isUserMatch(state.currentUser, book.ownerId)) {
       showToast("Solo el dueño puede editar esta publicación.")
       return
     }
@@ -397,7 +401,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (pubs && pubs.length > 0) {
           setState((prev) => ({
             ...prev,
-            books: pubs.map(publicacionResponseToBook),
+            books: pubs.map((p) => publicacionResponseToBook(p)),
           }))
         }
       })
@@ -550,7 +554,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (pubs && pubs.length > 0) {
             setState((prev) => ({
               ...prev,
-              books: pubs.map(publicacionResponseToBook),
+              books: pubs.map((p) => publicacionResponseToBook(p)),
             }))
           }
         } catch {
@@ -702,7 +706,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           comentario: data.description || "",
         })
 
-        const newBook = publicacionResponseToBook(pub)
+        const newBook = publicacionResponseToBook(pub, {
+          title: data.googleBook?.titulo,
+          author: data.googleBook?.autor,
+          coverUrl: data.googleBook?.portadaUrl,
+          category: data.googleBook?.categorias?.[0],
+        })
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó correctamente en el backend.`)
         return true
@@ -799,7 +808,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast("El libro no se encuentra disponible.")
         return false
       }
-      if (book.ownerId === state.currentUser.id) {
+      if (isUserMatch(state.currentUser, book.ownerId)) {
         showToast("No podés solicitar un libro de tu propia autoría/cuenta.")
         return false
       }

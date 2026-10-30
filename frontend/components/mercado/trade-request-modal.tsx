@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import type { TradeType } from "@/lib/mercado-types"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function TradeRequestModal() {
   const {
@@ -38,7 +39,7 @@ export function TradeRequestModal() {
   if (!tradeModalBook || !currentUser) return null
 
   const myAvailableBooks = books.filter(
-    (b) => b.ownerId === currentUser.id && b.availability === "DISPONIBLE"
+    (b) => isUserMatch(currentUser, b.ownerId) && b.availability === "DISPONIBLE"
   )
 
   const canAffordPoints = currentUser.availablePoints >= tradeModalBook.points

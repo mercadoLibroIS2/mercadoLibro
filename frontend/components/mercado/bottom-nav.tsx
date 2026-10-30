@@ -8,6 +8,7 @@ import {
   Bell,
 } from "lucide-react"
 import { useStore } from "./store"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function BottomNav() {
   const { screen, setScreen, startPublishing, currentUser, trades, notifications } = useStore()
@@ -15,11 +16,11 @@ export function BottomNav() {
   if (!currentUser) return null
 
   const pendingTrades = trades.filter(
-    (t) => t.ownerId === currentUser?.id && t.status === "PENDIENTE"
+    (t) => isUserMatch(currentUser, t.ownerId) && t.status === "PENDIENTE"
   ).length
 
   const unreadNotifs = notifications.filter(
-    (n) => n.userId === currentUser?.id && !n.read && !n.archived
+    (n) => isUserMatch(currentUser, n.userId) && !n.read && !n.archived
   ).length
 
   return (

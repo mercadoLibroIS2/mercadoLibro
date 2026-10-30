@@ -9,6 +9,7 @@ import {
   PanelLeftOpen,
 } from "lucide-react"
 import { useStore } from "./store"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function Navbar({
   sidebarOpen,
@@ -33,11 +34,11 @@ export function Navbar({
   const searchRef = useRef<HTMLDivElement>(null)
 
   const unreadNotifs = notifications.filter(
-    (n) => n.userId === currentUser?.id && !n.read && !n.archived
+    (n) => isUserMatch(currentUser, n.userId) && !n.read && !n.archived
   ).length
 
   const pendingTrades = trades.filter(
-    (t) => t.ownerId === currentUser?.id && t.status === "PENDIENTE"
+    (t) => isUserMatch(currentUser, t.ownerId) && t.status === "PENDIENTE"
   ).length
 
   const totalPending = unreadNotifs + pendingTrades

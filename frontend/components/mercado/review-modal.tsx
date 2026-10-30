@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { BookOpen, Star, X, Sparkles } from "lucide-react"
 import { useStore } from "./store"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function ReviewModal() {
   const { reviewTrade, setReviewTrade, currentUser, books, addReview } = useStore()
@@ -13,14 +14,13 @@ export function ReviewModal() {
 
   if (!reviewTrade || !currentUser) return null
 
-  const targetUserId =
-    reviewTrade.requesterId === currentUser.id
-      ? reviewTrade.ownerId
-      : reviewTrade.requesterId
-  const targetUserName =
-    reviewTrade.requesterId === currentUser.id
-      ? reviewTrade.ownerName
-      : reviewTrade.requesterName
+  const isRequester = isUserMatch(currentUser, reviewTrade.requesterId)
+  const targetUserId = isRequester
+    ? reviewTrade.ownerId
+    : reviewTrade.requesterId
+  const targetUserName = isRequester
+    ? reviewTrade.ownerName
+    : reviewTrade.requesterName
 
   const requestedBook = books.find((b) => b.id === reviewTrade.requestedBookId)
   const bookTitle = requestedBook?.title || "Libro intercambiado"

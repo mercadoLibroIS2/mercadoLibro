@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function BookDetailModal() {
   const {
@@ -35,7 +36,7 @@ export function BookDetailModal() {
   const book = books.find((b) => b.id === selectedBookId)
   if (!book) return null
 
-  const isOwner = currentUser?.id === book.ownerId
+  const isOwner = isUserMatch(currentUser, book.ownerId)
   const evaluation = evaluatePriceDeal(
     book.points,
     book.category,

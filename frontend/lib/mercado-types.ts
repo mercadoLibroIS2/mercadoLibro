@@ -231,3 +231,16 @@ export interface TradeChain {
   steps: ChainStep[]
   createdAt: string
 }
+
+export function isUserMatch(
+  user: { id?: string | null; email?: string | null } | null | undefined,
+  targetIdOrEmail: string | null | undefined
+): boolean {
+  if (!user || !targetIdOrEmail) return false
+  const target = targetIdOrEmail.toLowerCase().trim()
+  return Boolean(
+    (user.id && user.id.toLowerCase().trim() === target) ||
+    (user.email && user.email.toLowerCase().trim() === target)
+  )
+}
+

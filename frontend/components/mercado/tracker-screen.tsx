@@ -12,7 +12,7 @@ import {
   Tag,
 } from "lucide-react"
 import { useStore } from "./store"
-import { CATEGORIES, CONDITIONS, type Condition } from "@/lib/mercado-types"
+import { CATEGORIES, CONDITIONS, type Condition, isUserMatch } from "@/lib/mercado-types"
 
 export function TrackerScreen() {
   const {
@@ -229,7 +229,7 @@ export function TrackerScreen() {
             const matches = books.filter(
               (b) =>
                 b.availability === "DISPONIBLE" &&
-                b.ownerId !== currentUser.id &&
+                !isUserMatch(currentUser, b.ownerId) &&
                 b.title.toLowerCase().includes(item.title.toLowerCase()) &&
                 (!item.maxPoints || b.points <= item.maxPoints) &&
                 (!item.acceptableConditions?.length || item.acceptableConditions.includes(b.condition))

@@ -16,7 +16,8 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import { ChainsView } from "./chains-view"
-import type { TradeRequest } from "@/lib/mercado-types"
+import type { TradeRequest, User } from "@/lib/mercado-types"
+import { isUserMatch } from "@/lib/mercado-types"
 
 type TradeTab = "recibidas" | "enviadas" | "en_curso" | "historial" | "cadenas"
 
@@ -39,19 +40,19 @@ export function TradesScreen() {
   if (!currentUser) return null
 
   const receivedRequests = trades.filter(
-    (t) => t.ownerId === currentUser.id && t.status === "PENDIENTE"
+    (t) => isUserMatch(currentUser, t.ownerId) && t.status === "PENDIENTE"
   )
   const sentRequests = trades.filter(
-    (t) => t.requesterId === currentUser.id && t.status === "PENDIENTE"
+    (t) => isUserMatch(currentUser, t.requesterId) && t.status === "PENDIENTE"
   )
   const ongoingTrades = trades.filter(
     (t) =>
-      (t.ownerId === currentUser.id || t.requesterId === currentUser.id) &&
+      (isUserMatch(currentUser, t.ownerId) || isUserMatch(currentUser, t.requesterId)) &&
       t.status === "ACEPTADO"
   )
   const historyTrades = trades.filter(
     (t) =>
-      (t.ownerId === currentUser.id || t.requesterId === currentUser.id) &&
+      (isUserMatch(currentUser, t.ownerId) || isUserMatch(currentUser, t.requesterId)) &&
       (t.status === "COMPLETADO" || t.status === "RECHAZADO" || t.status === "CANCELADO")
   )
 
@@ -284,7 +285,7 @@ function TradeList({
   onBookClick: (id: string) => void
   onUserClick: (id: string) => void
 }) {
-  const { books } = useStore()
+  const { books, currentUser } = useStore()
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
 
   if (trades.length === 0) {
@@ -304,8 +305,8 @@ function TradeList({
       {trades.map((trade) => {
         const requestedBook = books.find((b) => b.id === trade.requestedBookId)
         const offeredBook = trade.offeredBookId ? books.find((b) => b.id === trade.offeredBookId) : null
-        const isRequester = currentUserId === trade.requesterId
-        const isOwner = currentUserId === trade.ownerId
+        const isRequester = isUserMatch(currentUser, trade.requesterId)
+        const isOwner = isUserMatch(currentUser, trade.ownerId)
         const hasReviewed = isRequester ? trade.reviewedByRequester : trade.reviewedByOwner
 
         return (
