@@ -10,9 +10,12 @@ import {
   Coins,
   ExternalLink,
   Tag,
+  Search,
+  Loader2,
 } from "lucide-react"
 import { useStore } from "./store"
 import { CATEGORIES, CONDITIONS, type Condition, isUserMatch } from "@/lib/mercado-types"
+import { findGoogleBookByIsbn } from "@/lib/google-books"
 
 export function TrackerScreen() {
   const {
@@ -25,16 +28,57 @@ export function TrackerScreen() {
   } = useStore()
 
   const [isAdding, setIsAdding] = useState(false)
+  const [isbn, setIsbn] = useState("")
   const [title, setTitle] = useState("")
   const [author, setAuthor] = useState("")
   const [category, setCategory] = useState("")
   const [maxPoints, setMaxPoints] = useState("")
   const [selectedConditions, setSelectedConditions] = useState<Condition[]>([])
   const [privateNotes, setPrivateNotes] = useState("")
+  const [searchingGoogleBooks, setSearchingGoogleBooks] = useState(false)
+  const [googleBooksError, setGoogleBooksError] = useState("")
+  const [googleBookPreview, setGoogleBookPreview] = useState<{
+    titulo: string
+    autor: string
+    portadaUrl: string
+  } | null>(null)
 
   if (!currentUser) return null
 
   const myTracked = trackedBooks.filter((t) => t.userId === currentUser.id)
+
+  async function handleGoogleBooksSearch() {
+    setGoogleBooksError("")
+    const clean = isbn.replace(/[^0-9X]/gi, "").trim()
+    if (!clean) {
+      setGoogleBooksError("Ingresá un código ISBN para buscar en Google Books.")
+      return
+    }
+
+    setSearchingGoogleBooks(true)
+    try {
+      const result = await findGoogleBookByIsbn(clean)
+      if (!result) {
+        setGoogleBooksError("No se encontró ningún libro con ese ISBN.")
+        return
+      }
+
+      setTitle(result.titulo || "")
+      setAuthor(result.autor || "")
+      if (result.categorias?.[0]) {
+        setCategory(result.categorias[0])
+      }
+      setGoogleBookPreview({
+        titulo: result.titulo,
+        autor: result.autor,
+        portadaUrl: result.portadaUrl,
+      })
+    } catch (err) {
+      setGoogleBooksError(err instanceof Error ? err.message : "Error al buscar el ISBN.")
+    } finally {
+      setSearchingGoogleBooks(false)
+    }
+  }
 
   function toggleCondition(c: Condition) {
     if (selectedConditions.includes(c)) {
@@ -46,10 +90,13 @@ export function TrackerScreen() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
+    if (!title.trim() && !isbn.trim()) return
+
+    const finalTitle = title.trim() || (isbn.trim() ? `Libro (${isbn.trim()})` : "Libro seguido")
 
     addToTracker({
-      title: title.trim(),
+      isbn: isbn.trim() || undefined,
+      title: finalTitle,
       author: author.trim() || undefined,
       category: category || undefined,
       maxPoints: maxPoints ? Number(maxPoints) : undefined,
@@ -57,12 +104,15 @@ export function TrackerScreen() {
       privateNotes: privateNotes.trim() || undefined,
     })
 
+    setIsbn("")
     setTitle("")
     setAuthor("")
     setCategory("")
     setMaxPoints("")
     setSelectedConditions([])
     setPrivateNotes("")
+    setGoogleBookPreview(null)
+    setGoogleBooksError("")
     setIsAdding(false)
   }
 
@@ -101,6 +151,48 @@ export function TrackerScreen() {
             Definir Criterios de Seguimiento
           </h3>
 
+          <div className="mb-3.5">
+            <label className="block text-base md:text-lg font-bold text-stone-700 mb-1">
+              ISBN del libro (opcional)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Ej. 978-84-204-7183-9"
+                value={isbn}
+                onChange={(e) => setIsbn(e.target.value)}
+                className="flex-1 rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-base md:text-lg outline-none focus:border-amber-700"
+              />
+              <button
+                type="button"
+                onClick={handleGoogleBooksSearch}
+                disabled={searchingGoogleBooks || !isbn.trim()}
+                className="flex items-center gap-1.5 rounded-xl bg-amber-800 px-4 py-2.5 text-sm md:text-base font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition-colors shadow-xs"
+              >
+                {searchingGoogleBooks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                <span>Buscar ISBN</span>
+              </button>
+            </div>
+            {googleBooksError && (
+              <p className="mt-1 text-sm font-semibold text-rose-600">{googleBooksError}</p>
+            )}
+            {googleBookPreview && (
+              <div className="mt-2.5 flex items-center gap-3 rounded-xl border border-amber-200 bg-white p-3 shadow-xs">
+                {googleBookPreview.portadaUrl && (
+                  <img
+                    src={googleBookPreview.portadaUrl}
+                    alt=""
+                    className="h-12 w-9 rounded object-cover ring-1 ring-stone-200 shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-stone-900 truncate">{googleBookPreview.titulo}</p>
+                  <p className="text-sm text-stone-500 truncate">{googleBookPreview.autor}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-base md:text-lg font-bold text-stone-700 mb-1">
@@ -108,7 +200,7 @@ export function TrackerScreen() {
               </label>
               <input
                 type="text"
-                required
+                required={!isbn.trim()}
                 placeholder="Ej. Ficciones"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -226,14 +318,32 @@ export function TrackerScreen() {
           </div>
         ) : (
           myTracked.map((item) => {
-            const matches = books.filter(
-              (b) =>
-                b.availability === "DISPONIBLE" &&
-                !isUserMatch(currentUser, b.ownerId) &&
-                b.title.toLowerCase().includes(item.title.toLowerCase()) &&
-                (!item.maxPoints || b.points <= item.maxPoints) &&
-                (!item.acceptableConditions?.length || item.acceptableConditions.includes(b.condition))
-            )
+            const normalize = (str?: string | null) =>
+              (str || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .trim()
+
+            const cleanItemIsbn = item.isbn ? item.isbn.replace(/[^0-9X]/gi, "").trim() : ""
+
+            const matches = books.filter((b) => {
+              if (b.availability !== "DISPONIBLE" || isUserMatch(currentUser, b.ownerId)) {
+                return false
+              }
+              const bIsbn = b.isbn ? b.isbn.replace(/[^0-9X]/gi, "").trim() : ""
+              const isbnMatches = Boolean(cleanItemIsbn && bIsbn && cleanItemIsbn === bIsbn)
+              const titleMatches = Boolean(
+                item.title &&
+                (normalize(b.title).includes(normalize(item.title)) ||
+                  normalize(item.title).includes(normalize(b.title)))
+              )
+
+              if (!isbnMatches && !titleMatches) return false
+              if (item.maxPoints && b.points > item.maxPoints) return false
+              if (item.acceptableConditions?.length && !item.acceptableConditions.includes(b.condition)) return false
+              return true
+            })
 
             return (
               <div
