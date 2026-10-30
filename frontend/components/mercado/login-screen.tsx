@@ -50,8 +50,8 @@ export function LoginScreen() {
       // Intentar autenticación con Supabase
       const res = await signInWithSupabase(targetEmail, password)
       if (!res.success) {
-        // Si falló en Supabase pero es un usuario Demo local, permitir acceso como fallback
-        if (demoUser && password === "demo") {
+        // Si falló en backend/Supabase pero es un usuario Demo del guión, permitir acceso sin bloquear la demo
+        if (demoUser) {
           login(demoUser)
           return
         }

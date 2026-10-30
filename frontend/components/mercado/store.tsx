@@ -169,7 +169,7 @@ function compraResponseToTrade(dto: any): TradeRequest {
   }
 }
 
-const STORAGE_KEY = "mercadolibro_v2_data"
+const STORAGE_KEY = "mercadolibro_demo_clean_v3"
 
 interface AppState {
   users: User[]
@@ -291,12 +291,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Load from local storage
   useEffect(() => {
     try {
+      localStorage.removeItem("mercadolibro_state_v1")
+      localStorage.removeItem("mercadolibro_state_v2")
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed.users && parsed.books) {
-          // Keep currentUser as null on initial page refresh if we want login screen first,
-          // or restore data smoothly.
+        const hasLegacyNoise = parsed.books?.some((b: any) =>
+          b.ownerName?.includes("Camila") || b.ownerId?.startsWith("user-") || b.title?.includes("Cosmos") || b.title?.includes("Breve historia")
+        )
+        if (parsed.users && parsed.books && !hasLegacyNoise) {
           setState((prev) => ({
             ...prev,
             users: parsed.users,
@@ -308,6 +311,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notifications: parsed.notifications || prev.notifications,
             chains: parsed.chains || prev.chains,
           }))
+        } else {
+          localStorage.removeItem(STORAGE_KEY)
         }
       }
     } catch {
