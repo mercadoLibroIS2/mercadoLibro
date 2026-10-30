@@ -36,12 +36,13 @@ export function RegisterScreen() {
 
     const next: Partial<FormState> = {}
     if (!form.name.trim()) next.name = "Ingresá tu nombre completo"
+    else if (form.name.trim().length < 3) next.name = "El nombre debe tener al menos 3 caracteres"
     if (!form.username.trim()) next.username = "Elegí un nombre de usuario"
     else if (form.username.includes(" ")) next.username = "El usuario no puede tener espacios"
     if (!form.email.trim()) next.email = "Ingresá tu email"
     else if (!emailRe.test(form.email)) next.email = "El email no tiene un formato válido"
     if (!form.password) next.password = "Creá una contraseña"
-    else if (form.password.length < 6) next.password = "Mínimo 6 caracteres"
+    else if (form.password.length < 8) next.password = "Mínimo 8 caracteres"
     if (!form.confirm) next.confirm = "Repetí la contraseña"
     else if (form.confirm !== form.password) next.confirm = "Las contraseñas no coinciden"
 

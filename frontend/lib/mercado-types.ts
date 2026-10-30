@@ -182,6 +182,7 @@ export interface TrackedBook {
   title: string
   author?: string
   category?: string
+  isbn?: string
   maxPoints?: number
   acceptableConditions?: Condition[]
   privateNotes?: string

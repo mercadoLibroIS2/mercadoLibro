@@ -1,11 +1,25 @@
 package com.ingenieriaSoftware2.Controller;
 
-import org.springframework.web.bind.annotation.CrossOrigin;
+import com.ingenieriaSoftware2.Entity.CadenaIntercambio;
+import com.ingenieriaSoftware2.Repository.CadenaIntercambioRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/cadenaIntercambio")
-@CrossOrigin(origins = "http://localhost:5173")
+@RequiredArgsConstructor
 public class CadenaIntercambioController {
+
+    private final CadenaIntercambioRepository cadenaIntercambioRepository;
+
+    @GetMapping
+    public ResponseEntity<List<CadenaIntercambio>> listarCadenas() {
+        return ResponseEntity.ok(cadenaIntercambioRepository.findAll());
+    }
 }
+

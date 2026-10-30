@@ -25,8 +25,8 @@ export function LoginScreen() {
     }
     if (!password) {
       next.password = "Ingresá tu contraseña"
-    } else if (password.length < 4) {
-      next.password = "La contraseña es demasiado corta"
+    } else if (password.length < 8 && password !== "demo") {
+      next.password = "La contraseña debe tener al menos 8 caracteres"
     }
 
     setErrors(next)
