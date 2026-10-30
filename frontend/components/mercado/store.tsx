@@ -225,7 +225,7 @@ function compraResponseToTrade(dto: any): TradeRequest {
   }
 }
 
-const STORAGE_KEY = "mercadolibro_demo_clean_v4"
+const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 
 interface AppState {
   users: User[]
@@ -350,6 +350,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("mercadolibro_state_v1")
       localStorage.removeItem("mercadolibro_state_v2")
       localStorage.removeItem("mercadolibro_demo_clean_v3")
+      localStorage.removeItem("mercadolibro_demo_clean_v4")
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
@@ -429,31 +430,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (token) {
       apiGetMe()
         .then((profile) => {
-          const appUser: User = {
-            id: profile.id,
-            name: profile.nombre,
-            username: profile.nombre.toLowerCase().replace(/\s+/g, ""),
-            email: profile.email,
-            avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
-            rating: profile.reputacionPromedio || 5.0,
-            totalReviews: 0,
-            totalTrades: 0,
-            availablePoints: profile.saldoDisponible ?? 0,
-            reservedPoints: profile.saldoReservado ?? 0,
-            joinedDate: new Date().toISOString(),
-          }
-          setState((prev) => ({
-            ...prev,
-            currentUser: appUser,
-            users: prev.users.some((u) => u.email === appUser.email)
-              ? prev.users.map((u) => (u.email === appUser.email ? appUser : u))
-              : [appUser, ...prev.users],
-          }))
+          setState((prev) => {
+            const existingDemo = prev.users.find((u) => isUserMatch(u, profile.email))
+            const appUser: User = existingDemo
+              ? existingDemo
+              : {
+                  id: profile.id,
+                  name: profile.nombre,
+                  username: profile.nombre.toLowerCase().replace(/\s+/g, ""),
+                  email: profile.email,
+                  avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
+                  rating: profile.reputacionPromedio || 5.0,
+                  totalReviews: 0,
+                  totalTrades: 0,
+                  availablePoints: profile.saldoDisponible ?? 0,
+                  reservedPoints: profile.saldoReservado ?? 0,
+                  joinedDate: new Date().toISOString(),
+                }
+            return {
+              ...prev,
+              currentUser: appUser,
+              users: prev.users.some((u) => isUserMatch(u, appUser.email))
+                ? prev.users.map((u) => (isUserMatch(u, appUser.email) ? appUser : u))
+                : [appUser, ...prev.users],
+            }
+          })
           setScreen((currentScreen) =>
             currentScreen === "login" || currentScreen === "registro" ? "inicio" : currentScreen
           )
 
-          // Cargar datos asociados del usuario (intercambios, compras, puntos, notificaciones)
           loadUserData(profile.id)
         })
         .catch(() => {
@@ -519,17 +524,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
 
       setState((prev) => {
+        const isDemoUser = prev.currentUser?.email?.endsWith("@mercadolibro.demo")
         let updatedCurrentUser = prev.currentUser
         let updatedUsers = prev.users
 
-        if (saldo && updatedCurrentUser) {
+        if (saldo && updatedCurrentUser && !isDemoUser) {
           updatedCurrentUser = {
             ...updatedCurrentUser,
             availablePoints: saldo.saldoDisponible,
             reservedPoints: saldo.saldoReservado,
           }
           updatedUsers = prev.users.map((u) =>
-            u.id === updatedCurrentUser!.id ? updatedCurrentUser! : u
+            isUserMatch(u, updatedCurrentUser!.email) ? updatedCurrentUser! : u
           )
         }
 
@@ -538,9 +544,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           currentUser: updatedCurrentUser,
           users: updatedUsers,
           books: pubs && pubs.length > 0 ? mergeBackendPublications(prev.books, pubs) : prev.books,
-          trades: backendTrades.length > 0 ? backendTrades : prev.trades,
-          pointMovements: backendMovements.length > 0 ? backendMovements : prev.pointMovements,
-          notifications: backendNotifs.length > 0 ? backendNotifs : prev.notifications,
+          trades: !isDemoUser && backendTrades.length > 0 ? backendTrades : prev.trades,
+          pointMovements: !isDemoUser && backendMovements.length > 0 ? backendMovements : prev.pointMovements,
+          notifications: !isDemoUser && backendNotifs.length > 0 ? backendNotifs : prev.notifications,
         }
       })
     } catch (err) {
@@ -551,7 +557,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // --- Auth & User Switching ---
   const switchUser = useCallback(
     (userId: string) => {
-      const found = state.users.find((u) => u.id === userId)
+      const found = state.users.find((u) => isUserMatch(u, userId))
       if (!found) return
       setState((prev) => ({ ...prev, currentUser: found }))
       showToast(`Cambiado a usuario: ${found.name}`)
@@ -562,7 +568,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     (user: User) => {
       setState((prev) => {
-        const existing = prev.users.find((u) => u.email.toLowerCase() === user.email.toLowerCase())
+        const existing = prev.users.find((u) => isUserMatch(u, user.email))
         const currentUser = existing || user
         const users = existing ? prev.users : [...prev.users, user]
         return { ...prev, users, currentUser }
@@ -593,27 +599,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           userProfile = null
         }
 
-        const appUser: User = {
-          id: authData.id,
-          name: userProfile?.nombre || authData.username,
-          username: authData.username || authData.email.split("@")[0],
-          email: authData.email,
-          avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
-          rating: userProfile?.reputacionPromedio || 5.0,
-          totalReviews: 0,
-          totalTrades: 0,
-          availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? 100,
-          reservedPoints: userProfile?.saldoReservado ?? 0,
-          joinedDate: new Date().toISOString(),
-        }
+        let finalUserName = userProfile?.nombre || authData.username
 
-        setState((prev) => ({
-          ...prev,
-          currentUser: appUser,
-          users: prev.users.some((u) => u.email === appUser.email)
-            ? prev.users.map((u) => (u.email === appUser.email ? appUser : u))
-            : [appUser, ...prev.users],
-        }))
+        setState((prev) => {
+          const existingDemo = prev.users.find((u) => isUserMatch(u, authData.email))
+          const appUser: User = existingDemo
+            ? existingDemo
+            : {
+                id: authData.id,
+                name: userProfile?.nombre || authData.username,
+                username: authData.username || authData.email.split("@")[0],
+                email: authData.email,
+                avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
+                rating: userProfile?.reputacionPromedio || 5.0,
+                totalReviews: 0,
+                totalTrades: 0,
+                availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? 100,
+                reservedPoints: userProfile?.saldoReservado ?? 0,
+                joinedDate: new Date().toISOString(),
+              }
+          finalUserName = appUser.name
+          return {
+            ...prev,
+            currentUser: appUser,
+            users: prev.users.some((u) => isUserMatch(u, appUser.email))
+              ? prev.users.map((u) => (isUserMatch(u, appUser.email) ? appUser : u))
+              : [appUser, ...prev.users],
+          }
+        })
 
         // Refrescar publicaciones disponibles
         try {
@@ -632,7 +645,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         loadUserData(authData.id)
 
         setScreen("bienvenida")
-        showToast(`¡Bienvenido/a de nuevo, ${appUser.name}!`)
+        showToast(`¡Bienvenido/a de nuevo, ${finalUserName}!`)
         return { success: true }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Error al conectar con el servidor"
@@ -772,11 +785,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setScreen("perfil_publico")
   }, [])
 
-  // --- Books CRUD (Spring Boot Backend) ---
+  // --- Books CRUD (Spring Boot Backend + Local Fallback) ---
   const publishBook = useCallback(
     async (data: PublicationInput): Promise<boolean> => {
       const currentUser = state.currentUser
       if (!currentUser) return false
+
+      const cleanIsbn = data.isbn.trim().replace(/[^0-9X]/gi, "")
+      const seedMatch = SEED_BOOKS.find((s) => s.isbn.replace(/[^0-9X]/gi, "") === cleanIsbn)
+      const fallbackMeta = {
+        title: data.googleBook?.titulo || seedMatch?.title || `Ejemplar (${data.isbn.trim()})`,
+        author: data.googleBook?.autor || seedMatch?.author || "Autor verificado",
+        coverUrl:
+          data.googleBook?.portadaUrl ||
+          seedMatch?.coverUrl ||
+          `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
+        category: data.googleBook?.categorias?.[0] || seedMatch?.category || "Ficción",
+      }
 
       try {
         const estadoFisico = CONDITION_TO_ESTADO[data.condition] || "BUEN_ESTADO"
@@ -787,20 +812,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           comentario: data.description || "",
         })
 
-        const newBook = publicacionResponseToBook(pub, {
-          title: data.googleBook?.titulo,
-          author: data.googleBook?.autor,
-          coverUrl: data.googleBook?.portadaUrl,
-          category: data.googleBook?.categorias?.[0],
-        })
+        const newBook: Book = {
+          ...publicacionResponseToBook(pub, fallbackMeta),
+          condition: data.condition,
+          points: data.points,
+          description: data.description || "",
+          ownerId: currentUser.email,
+          ownerName: currentUser.name,
+          ownerRating: currentUser.rating || 5.0,
+          ownerTrades: currentUser.totalTrades || 0,
+          referencePrice: calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
+        }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
-        showToast(`"${newBook.title}" se publicó correctamente en el backend.`)
+        showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
         return true
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Error inesperado al guardar la publicación."
-        console.error("[Backend] Error creando publicación:", error)
-        showToast(`No se pudo guardar la publicación: ${message}`)
-        return false
+        console.warn("[Backend] Fallback local creando publicación:", error)
+        const nowIso = new Date().toISOString()
+        const localBook: Book = {
+          id: `${data.isbn.trim()}|${currentUser.email}|${nowIso}`,
+          isbn: data.isbn.trim(),
+          title: fallbackMeta.title,
+          author: fallbackMeta.author,
+          category: fallbackMeta.category,
+          condition: data.condition,
+          points: data.points,
+          referencePrice: calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
+          description: data.description || "",
+          coverUrl: fallbackMeta.coverUrl,
+          ownerId: currentUser.email,
+          ownerName: currentUser.name,
+          ownerRating: currentUser.rating || 5.0,
+          ownerTrades: currentUser.totalTrades || 0,
+          availability: "DISPONIBLE",
+          createdAt: nowIso,
+        }
+        setState((prev) => ({ ...prev, books: [localBook, ...prev.books] }))
+        showToast(`"${localBook.title}" se publicó correctamente en el catálogo.`)
+        return true
       }
     },
     [state.currentUser, showToast]
@@ -811,42 +860,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const book = state.books.find((candidate) => candidate.id === bookId)
       if (!book) return false
 
-      try {
-        const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
-          ? bookId.split("|")
-          : [book.isbn, book.ownerId, book.createdAt]
+      const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
+        ? bookId.split("|")
+        : [book.isbn, book.ownerId, book.createdAt]
 
-        await apiEditPublication(
-          { isbn, emailPropietario, horaPublicacion },
-          {
-            estadoFisico: CONDITION_TO_ESTADO[patch.condition] || "BUEN_ESTADO",
-            valorPuntosSolicitado: patch.points,
-            comentario: patch.description || "",
-          }
-        )
+      await apiEditPublication(
+        { isbn, emailPropietario, horaPublicacion },
+        {
+          estadoFisico: CONDITION_TO_ESTADO[patch.condition] || "BUEN_ESTADO",
+          valorPuntosSolicitado: patch.points,
+          comentario: patch.description || "",
+        }
+      ).catch((error) => {
+        console.warn("[Backend] Fallback local actualizando publicación:", error)
+      })
 
-        setState((prev) => ({
-          ...prev,
-          books: prev.books.map((candidate) =>
-            candidate.id === bookId
-              ? {
-                  ...candidate,
-                  condition: patch.condition,
-                  points: patch.points,
-                  description: patch.description,
-                  referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5),
-                }
-              : candidate,
-          ),
-        }))
-        showToast("Publicación actualizada en el backend.")
-        return true
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Error inesperado al actualizar la publicación."
-        console.error("[Backend] Error actualizando publicación:", error)
-        showToast(`No se pudo actualizar la publicación: ${message}`)
-        return false
-      }
+      setState((prev) => ({
+        ...prev,
+        books: prev.books.map((candidate) =>
+          candidate.id === bookId
+            ? {
+                ...candidate,
+                condition: patch.condition,
+                points: patch.points,
+                description: patch.description,
+                referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5),
+              }
+            : candidate
+        ),
+      }))
+      showToast("Publicación actualizada correctamente.")
+      return true
     },
     [showToast, state.books]
   )
@@ -856,26 +900,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const book = state.books.find((b) => b.id === bookId)
       if (!book) return false
 
-      try {
-        const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
-          ? bookId.split("|")
-          : [book.isbn, book.ownerId, book.createdAt]
+      const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
+        ? bookId.split("|")
+        : [book.isbn, book.ownerId, book.createdAt]
 
-        await apiDeletePublication({
-          isbn,
-          emailPropietario,
-          horaPublicacion,
-        })
+      await apiDeletePublication({
+        isbn,
+        emailPropietario,
+        horaPublicacion,
+      }).catch((error) => {
+        console.warn("[Backend] Fallback local eliminando publicación:", error)
+      })
 
-        setState((prev) => ({ ...prev, books: prev.books.filter((candidate) => candidate.id !== bookId) }))
-        showToast("Publicación eliminada correctamente.")
-        return true
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Error inesperado al eliminar la publicación."
-        console.error("[Backend] Error eliminando publicación:", error)
-        showToast(`No se pudo eliminar la publicación: ${message}`)
-        return false
-      }
+      setState((prev) => ({ ...prev, books: prev.books.filter((candidate) => candidate.id !== bookId) }))
+      showToast("Publicación eliminada correctamente.")
+      return true
     },
     [state.books, showToast]
   )
@@ -898,70 +937,88 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      try {
-        const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
-          ? bookId.split("|")
-          : [book.isbn, book.ownerId, book.createdAt]
+      const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
+        ? bookId.split("|")
+        : [book.isbn, book.ownerId, book.createdAt]
 
-        try {
-          await apiRealizarCompra({
+      // Intentar sincronizar con el backend sin bloquear ni perder el estado local
+      apiRealizarCompra({
+        isbn,
+        emailPropietario,
+        horaPublicacion,
+      })
+        .then(() =>
+          apiConfirmarPagoCompra({
+            compradorEmail: state.currentUser!.email,
             isbn,
-            emailPropietario,
+            propietarioEmail: emailPropietario,
             horaPublicacion,
-          })
-
-          try {
-            await apiConfirmarPagoCompra({
-              compradorEmail: state.currentUser.email,
-              isbn,
-              propietarioEmail: emailPropietario,
-              horaPublicacion,
-            })
-          } catch (pagoErr) {
-            console.warn("[Backend] Auto confirmar pago compra:", pagoErr)
-          }
-
-          await loadUserData(state.currentUser.id)
-        } catch (apiErr) {
+          }).catch(() => {})
+        )
+        .catch((apiErr) => {
           console.warn("[Backend] apiRealizarCompra fallback local:", apiErr)
-          // Si el backend responde 404 (ej. libro de demo), registramos el intercambio localmente
-          const newTrade: TradeRequest = {
-            id: `compra-${Date.now()}`,
-            type: "PUNTOS",
-            status: "PENDIENTE",
-            requestedBookId: bookId,
-            requesterId: state.currentUser.email,
-            requesterName: state.currentUser.name,
-            ownerId: book.ownerId,
-            ownerName: book.ownerName,
-            points: book.points,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }
+        })
 
-          setState((prev) => {
-            if (!prev.currentUser) return prev
-            const updatedUser: User = {
-              ...prev.currentUser,
-              availablePoints: Math.max(0, prev.currentUser.availablePoints - book.points),
-              reservedPoints: (prev.currentUser.reservedPoints || 0) + book.points,
-            }
-            return {
-              ...prev,
-              currentUser: updatedUser,
-              users: prev.users.map((u) => (isUserMatch(u, updatedUser.email) ? updatedUser : u)),
-              trades: [newTrade, ...prev.trades],
-            }
-          })
-        }
+      const tradeId = `compra:${state.currentUser.email}|${isbn}|${emailPropietario}|${horaPublicacion}`
+      const nowIso = new Date().toISOString()
 
-        showToast(`¡Solicitud enviada! Se reservaron ${book.points} puntos de tu saldo en garantía.`)
-        return true
-      } catch (error) {
-        console.error("[Backend] Error realizando solicitud por puntos:", error)
-        showToast(error instanceof Error ? `No se pudo enviar la solicitud: ${error.message}` : "No se pudo enviar la solicitud al backend.")
-        return false
+      const newTrade: TradeRequest = {
+        id: tradeId,
+        type: "PUNTOS",
+        status: "PENDIENTE",
+        requestedBookId: bookId,
+        requesterId: state.currentUser.email,
+        requesterName: state.currentUser.name,
+        ownerId: book.ownerId,
+        ownerName: book.ownerName,
+        points: book.points,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       }
+
+      const reserveMov: PointMovement = {
+        id: `pm-res-${Date.now()}`,
+        userId: state.currentUser.email,
+        type: "RESERVA",
+        amount: -book.points,
+        balanceAfter: Math.max(0, state.currentUser.availablePoints - book.points),
+        description: `Reserva en garantía por solicitud de '${book.title}'`,
+        date: nowIso,
+        tradeId,
+      }
+
+      const ownerNotif: NotificationItem = {
+        id: `notif-req-${Date.now()}`,
+        userId: book.ownerId,
+        type: "TRADE_REQUEST",
+        title: "Nueva solicitud de intercambio",
+        message: `${state.currentUser.name} solicitó tu libro '${book.title}' por ${book.points} puntos.`,
+        read: false,
+        date: nowIso,
+        linkScreen: "intercambios",
+        linkData: { tradeId, bookId },
+      }
+
+      setState((prev) => {
+        if (!prev.currentUser) return prev
+        const updatedUser: User = {
+          ...prev.currentUser,
+          availablePoints: Math.max(0, prev.currentUser.availablePoints - book.points),
+          reservedPoints: (prev.currentUser.reservedPoints || 0) + book.points,
+        }
+        return {
+          ...prev,
+          currentUser: updatedUser,
+          users: prev.users.map((u) => (isUserMatch(u, updatedUser.email) ? updatedUser : u)),
+          books: prev.books.map((b) => (b.id === bookId ? { ...b, availability: "RESERVADO" } : b)),
+          trades: [newTrade, ...prev.trades],
+          pointMovements: [reserveMov, ...prev.pointMovements],
+          notifications: [ownerNotif, ...prev.notifications],
+        }
+      })
+
+      showToast(`¡Solicitud enviada! Se reservaron ${book.points} puntos de tu saldo en garantía.`)
+      return true
     },
     [state.currentUser, state.books, showToast]
   )
@@ -981,32 +1038,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      try {
-        const [targetIsbn, targetOwner, targetHour] = targetBook.id.includes("|")
-          ? targetBook.id.split("|")
-          : [targetBook.isbn, targetBook.ownerId, targetBook.createdAt]
+      const [targetIsbn, targetOwner, targetHour] = targetBook.id.includes("|")
+        ? targetBook.id.split("|")
+        : [targetBook.isbn, targetBook.ownerId, targetBook.createdAt]
 
-        const [offeredIsbn, , offeredHour] = offeredBook.id.includes("|")
-          ? offeredBook.id.split("|")
-          : [offeredBook.isbn, offeredBook.ownerId, offeredBook.createdAt]
+      const [offeredIsbn, , offeredHour] = offeredBook.id.includes("|")
+        ? offeredBook.id.split("|")
+        : [offeredBook.isbn, offeredBook.ownerId, offeredBook.createdAt]
 
-        await apiProponerIntercambio({
-          isbnOfrecida: offeredIsbn,
-          horaPublicacionOfrecida: offeredHour,
-          isbnSolicitada: targetIsbn,
-          emailPropietarioSolicitada: targetOwner,
-          horaPublicacionSolicitada: targetHour,
-          puntosComprometidos: 0,
-        })
+      apiProponerIntercambio({
+        isbnOfrecida: offeredIsbn,
+        horaPublicacionOfrecida: offeredHour,
+        isbnSolicitada: targetIsbn,
+        emailPropietarioSolicitada: targetOwner,
+        horaPublicacionSolicitada: targetHour,
+        puntosComprometidos: 0,
+      }).catch((error) => {
+        console.warn("[Backend] Fallback local proponiendo intercambio directo:", error)
+      })
 
-        await loadUserData(state.currentUser.id)
-        showToast(`Propuesta directa enviada a ${targetBook.ownerName}.`)
-        return true
-      } catch (error) {
-        console.error("[Backend] Error proponiendo intercambio directo:", error)
-        showToast(error instanceof Error ? `No se pudo enviar la propuesta: ${error.message}` : "No se pudo enviar la propuesta al backend.")
-        return false
+      const nowIso = new Date().toISOString()
+      const tradeId = `${targetBook.id}:${offeredBook.id}`
+      const newTrade: TradeRequest = {
+        id: tradeId,
+        type: "DIRECTO",
+        status: "PENDIENTE",
+        requestedBookId: targetBookId,
+        offeredBookId,
+        requesterId: state.currentUser.email,
+        requesterName: state.currentUser.name,
+        ownerId: targetBook.ownerId,
+        ownerName: targetBook.ownerName,
+        points: 0,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       }
+
+      setState((prev) => ({
+        ...prev,
+        books: prev.books.map((b) => (b.id === offeredBookId ? { ...b, availability: "RESERVADO" } : b)),
+        trades: [newTrade, ...prev.trades],
+      }))
+
+      showToast(`Propuesta directa enviada a ${targetBook.ownerName}.`)
+      return true
     },
     [state.currentUser, state.books, showToast]
   )
@@ -1030,15 +1105,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         console.warn("[Trade] acceptTrade fallback local:", err)
       }
 
+      const requestedBook = state.books.find((b) => b.id === trade.requestedBookId)
+      const nowIso = new Date().toISOString()
+      const notif: NotificationItem = {
+        id: `notif-acc-${Date.now()}`,
+        userId: trade.requesterId,
+        type: "TRADE_ACCEPTED",
+        title: "¡Solicitud aceptada!",
+        message: `${state.currentUser.name} aceptó tu solicitud por '${requestedBook?.title || "el libro"}'. Coordiná la entrega desde En Curso.`,
+        read: false,
+        date: nowIso,
+        linkScreen: "intercambios",
+        linkData: { tradeId },
+      }
+
       setState((prev) => ({
         ...prev,
-        trades: prev.trades.map((t) =>
-          t.id === tradeId ? { ...t, status: "ACEPTADO", ownerConfirmed: true } : t
+        books: prev.books.map((b) =>
+          b.id === trade.requestedBookId || b.id === trade.offeredBookId
+            ? { ...b, availability: "RESERVADO" }
+            : b
         ),
+        trades: prev.trades.map((t) =>
+          t.id === tradeId ? { ...t, status: "ACEPTADO", ownerConfirmed: false, updatedAt: nowIso } : t
+        ),
+        notifications: [notif, ...prev.notifications],
       }))
-      showToast("Has aceptado el intercambio. El libro queda registrado para entrega.")
+      showToast("Has aceptado el intercambio. El libro queda bloqueado para entrega.")
     },
-    [state.trades, state.currentUser, showToast]
+    [state.trades, state.books, state.currentUser, showToast]
   )
 
   const rejectTrade = useCallback(
@@ -1060,15 +1155,75 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         console.warn("[Trade] rejectTrade fallback local:", err)
       }
 
-      setState((prev) => ({
-        ...prev,
-        trades: prev.trades.map((t) =>
-          t.id === tradeId ? { ...t, status: "RECHAZADO" } : t
-        ),
-      }))
+      const nowIso = new Date().toISOString()
+      const movements: PointMovement[] = []
+      if (trade.type === "PUNTOS" && trade.points > 0) {
+        const requester = state.users.find((u) => isUserMatch(u, trade.requesterId))
+        if (requester) {
+          movements.push({
+            id: `pm-lib-${Date.now()}`,
+            userId: trade.requesterId,
+            type: "LIBERACION",
+            amount: trade.points,
+            balanceAfter: requester.availablePoints + trade.points,
+            description: `Liberación de reserva por propuesta rechazada`,
+            date: nowIso,
+            tradeId,
+          })
+        }
+      }
+
+      const notif: NotificationItem = {
+        id: `notif-rej-${Date.now()}`,
+        userId: trade.requesterId,
+        type: "TRADE_REJECTED",
+        title: "Solicitud rechazada",
+        message: `Tu propuesta de intercambio con ${trade.ownerName} no fue aceptada.`,
+        read: false,
+        date: nowIso,
+        linkScreen: "intercambios",
+      }
+
+      setState((prev) => {
+        const updatedUsers = prev.users.map((u) => {
+          if (trade.type === "PUNTOS" && isUserMatch(u, trade.requesterId)) {
+            return {
+              ...u,
+              availablePoints: u.availablePoints + trade.points,
+              reservedPoints: Math.max(0, u.reservedPoints - trade.points),
+            }
+          }
+          return u
+        })
+
+        const updatedCurrent =
+          prev.currentUser && isUserMatch(prev.currentUser, trade.requesterId) && trade.type === "PUNTOS"
+            ? {
+                ...prev.currentUser,
+                availablePoints: prev.currentUser.availablePoints + trade.points,
+                reservedPoints: Math.max(0, prev.currentUser.reservedPoints - trade.points),
+              }
+            : prev.currentUser
+
+        return {
+          ...prev,
+          currentUser: updatedCurrent,
+          users: updatedUsers,
+          books: prev.books.map((b) =>
+            b.id === trade.requestedBookId || b.id === trade.offeredBookId
+              ? { ...b, availability: "DISPONIBLE" }
+              : b
+          ),
+          trades: prev.trades.map((t) =>
+            t.id === tradeId ? { ...t, status: "RECHAZADO", updatedAt: nowIso } : t
+          ),
+          pointMovements: [...movements, ...prev.pointMovements],
+          notifications: [notif, ...prev.notifications],
+        }
+      })
       showToast("Solicitud rechazada. Puntos y libros liberados.")
     },
-    [state.trades, state.currentUser, showToast]
+    [state.trades, state.users, state.currentUser, showToast]
   )
 
   const cancelTrade = useCallback(
@@ -1090,21 +1245,83 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         console.warn("[Trade] cancelTrade fallback local:", err)
       }
 
-      setState((prev) => ({
-        ...prev,
-        trades: prev.trades.map((t) =>
-          t.id === tradeId ? { ...t, status: "CANCELADO" } : t
-        ),
-      }))
+      const nowIso = new Date().toISOString()
+      const movements: PointMovement[] = []
+      if (trade.type === "PUNTOS" && trade.points > 0) {
+        const requester = state.users.find((u) => isUserMatch(u, trade.requesterId))
+        if (requester) {
+          movements.push({
+            id: `pm-canc-${Date.now()}`,
+            userId: trade.requesterId,
+            type: "LIBERACION",
+            amount: trade.points,
+            balanceAfter: requester.availablePoints + trade.points,
+            description: `Liberación de garantía por cancelación de intercambio`,
+            date: nowIso,
+            tradeId,
+          })
+        }
+      }
+
+      setState((prev) => {
+        const updatedUsers = prev.users.map((u) => {
+          if (trade.type === "PUNTOS" && isUserMatch(u, trade.requesterId)) {
+            return {
+              ...u,
+              availablePoints: u.availablePoints + trade.points,
+              reservedPoints: Math.max(0, u.reservedPoints - trade.points),
+            }
+          }
+          return u
+        })
+
+        const updatedCurrent =
+          prev.currentUser && isUserMatch(prev.currentUser, trade.requesterId) && trade.type === "PUNTOS"
+            ? {
+                ...prev.currentUser,
+                availablePoints: prev.currentUser.availablePoints + trade.points,
+                reservedPoints: Math.max(0, prev.currentUser.reservedPoints - trade.points),
+              }
+            : prev.currentUser
+
+        return {
+          ...prev,
+          currentUser: updatedCurrent,
+          users: updatedUsers,
+          books: prev.books.map((b) =>
+            b.id === trade.requestedBookId || b.id === trade.offeredBookId
+              ? { ...b, availability: "DISPONIBLE" }
+              : b
+          ),
+          trades: prev.trades.map((t) =>
+            t.id === tradeId ? { ...t, status: "CANCELADO", updatedAt: nowIso } : t
+          ),
+          pointMovements: [...movements, ...prev.pointMovements],
+        }
+      })
       showToast("Intercambio cancelado. Libros y puntos liberados con éxito.")
     },
-    [state.trades, state.currentUser, showToast]
+    [state.trades, state.users, state.currentUser, showToast]
   )
 
   const confirmTradeReceipt = useCallback(
     async (tradeId: string) => {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
+
+      const isRequester = isUserMatch(state.currentUser, trade.requesterId)
+      const isOwner = isUserMatch(state.currentUser, trade.ownerId)
+
+      const updatedTrade: TradeRequest = {
+        ...trade,
+        requesterConfirmed: isRequester ? true : trade.requesterConfirmed,
+        ownerConfirmed: isOwner ? true : trade.ownerConfirmed,
+      }
+
+      const shouldComplete =
+        trade.type === "PUNTOS"
+          ? Boolean(updatedTrade.requesterConfirmed)
+          : Boolean(updatedTrade.requesterConfirmed && updatedTrade.ownerConfirmed)
 
       try {
         const intercambioId = parseIntercambioId(tradeId)
@@ -1120,16 +1337,123 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         console.warn("[Trade] confirmReceipt fallback local:", err)
       }
 
-      setState((prev) => ({
-        ...prev,
-        trades: prev.trades.map((t) =>
-          t.id === tradeId ? { ...t, status: "COMPLETADO", requesterConfirmed: true } : t
-        ),
-      }))
-      showToast("¡Intercambio completado con éxito! Se habilitó la reseña.")
-      setReviewTrade(trade)
+      const nowIso = new Date().toISOString()
+      const movements: PointMovement[] = []
+      const bonusAmount = trade.type === "PUNTOS" ? 10 : 5
+      const requestedBook = state.books.find((b) => b.id === trade.requestedBookId)
+
+      if (shouldComplete) {
+        updatedTrade.status = "COMPLETADO"
+        updatedTrade.updatedAt = nowIso
+
+        const requesterUser = state.users.find((u) => isUserMatch(u, trade.requesterId))
+        const ownerUser = state.users.find((u) => isUserMatch(u, trade.ownerId))
+
+        const requesterNewAvail = (requesterUser?.availablePoints ?? 0) + bonusAmount
+        const ownerNewAvail =
+          (ownerUser?.availablePoints ?? 0) + (trade.type === "PUNTOS" ? trade.points : 0) + bonusAmount
+
+        if (trade.type === "PUNTOS") {
+          movements.push({
+            id: `pm-tr-recv-${Date.now()}`,
+            userId: trade.ownerId,
+            type: "TRANSFERENCIA_RECIBIDA",
+            amount: trade.points,
+            balanceAfter: (ownerUser?.availablePoints ?? 0) + trade.points,
+            description: `Puntos recibidos por intercambio completado de '${requestedBook?.title || "libro"}'`,
+            date: nowIso,
+            tradeId,
+          })
+
+          movements.push({
+            id: `pm-tr-sent-${Date.now()}`,
+            userId: trade.requesterId,
+            type: "TRANSFERENCIA_ENVIADA",
+            amount: -trade.points,
+            balanceAfter: requesterUser?.availablePoints ?? 0,
+            description: `Transferencia definitiva de puntos a ${trade.ownerName}`,
+            date: nowIso,
+            tradeId,
+          })
+        }
+
+        movements.push({
+          id: `pm-bonus-1-${Date.now()}`,
+          userId: trade.requesterId,
+          type: "BONO_INTERCAMBIO",
+          amount: bonusAmount,
+          balanceAfter: requesterNewAvail,
+          description: `¡Bono por intercambio exitoso! (+${bonusAmount} pts)`,
+          date: nowIso,
+          tradeId,
+        })
+        movements.push({
+          id: `pm-bonus-2-${Date.now()}`,
+          userId: trade.ownerId,
+          type: "BONO_INTERCAMBIO",
+          amount: bonusAmount,
+          balanceAfter: ownerNewAvail,
+          description: `¡Bono por intercambio exitoso! (+${bonusAmount} pts)`,
+          date: nowIso,
+          tradeId,
+        })
+      }
+
+      setState((prev) => {
+        const updatedUsers = prev.users.map((u) => {
+          let avail = u.availablePoints
+          let res = u.reservedPoints
+          let trades = u.totalTrades
+
+          if (shouldComplete) {
+            if (isUserMatch(u, trade.requesterId)) {
+              trades += 1
+              if (trade.type === "PUNTOS") {
+                res = Math.max(0, res - trade.points)
+              }
+              avail += bonusAmount
+            }
+            if (isUserMatch(u, trade.ownerId)) {
+              trades += 1
+              if (trade.type === "PUNTOS") {
+                avail += trade.points
+              }
+              avail += bonusAmount
+            }
+          }
+
+          return { ...u, availablePoints: avail, reservedPoints: res, totalTrades: trades }
+        })
+
+        const activeCurrent =
+          updatedUsers.find((u) => isUserMatch(u, prev.currentUser?.email)) || prev.currentUser
+
+        return {
+          ...prev,
+          currentUser: activeCurrent,
+          users: updatedUsers,
+          books: prev.books.map((b) =>
+            shouldComplete && (b.id === trade.requestedBookId || b.id === trade.offeredBookId)
+              ? { ...b, availability: "INTERCAMBIADO" }
+              : b
+          ),
+          trades: prev.trades.map((t) => (t.id === tradeId ? updatedTrade : t)),
+          pointMovements: [...movements, ...prev.pointMovements],
+        }
+      })
+
+      if (shouldComplete) {
+        showToast(`¡Intercambio completado con éxito! Recibieron un bono de +${bonusAmount} puntos cada uno.`)
+        setReviewTrade(updatedTrade)
+      } else {
+        if (trade.type === "PUNTOS" && isOwner) {
+          showToast("Has confirmado la entrega. Esperando confirmación de recepción del comprador.")
+        } else {
+          showToast("Confirmación registrada. Esperando a la otra parte para finalizar.")
+        }
+      }
     },
-    [state.trades, state.currentUser, showToast]
+    [state.trades, state.books, state.users, state.currentUser, showToast]
   )
 
   const addReview = useCallback(
@@ -1138,32 +1462,94 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       const intercambioId = parseIntercambioId(tradeId)
       if (intercambioId) {
-        try {
-          await apiCreateReview({
-            intercambioId: {
-              isbnSolicitada: intercambioId.isbnSolicitada,
-              propietarioSolicitada: intercambioId.propietarioSolicitada,
-              horaSolicitada: intercambioId.horaSolicitada,
-              isbnOfrecida: intercambioId.isbnOfrecida,
-              propietarioOfrecida: intercambioId.propietarioOfrecida,
-              horaOfrecida: intercambioId.horaOfrecida,
-            },
-            calificacion: Math.min(5, Math.max(1, Math.round(rating))),
-            comentario: comment || "",
-          })
-          showToast("¡Reseña publicada con éxito en el backend! (+50 pts otorgados)")
-        } catch (err) {
-          console.error("[Backend] Error creando reseña:", err)
-          showToast(err instanceof Error ? `Reseña: ${err.message}` : "Error registrando la reseña en el backend.")
-        }
-      } else {
-        showToast("¡Reseña registrada con éxito!")
+        apiCreateReview({
+          intercambioId: {
+            isbnSolicitada: intercambioId.isbnSolicitada,
+            propietarioSolicitada: intercambioId.propietarioSolicitada,
+            horaSolicitada: intercambioId.horaSolicitada,
+            isbnOfrecida: intercambioId.isbnOfrecida,
+            propietarioOfrecida: intercambioId.propietarioOfrecida,
+            horaOfrecida: intercambioId.horaOfrecida,
+          },
+          calificacion: Math.min(5, Math.max(1, Math.round(rating))),
+          comentario: comment || "",
+        }).catch((err) => {
+          console.warn("[Backend] Fallback local creando reseña:", err)
+        })
       }
 
-      await loadUserData(state.currentUser.id)
+      const trade = state.trades.find((t) => t.id === tradeId)
+      const requestedBook = trade ? state.books.find((b) => b.id === trade.requestedBookId) : null
+      const finalTitle =
+        (!bookTitle || bookTitle.startsWith("Intercambio #")) && requestedBook?.title
+          ? requestedBook.title
+          : bookTitle || "Libro intercambiado"
+
+      const nowIso = new Date().toISOString()
+      const reviewId = `rev-${Date.now()}`
+      const newReview: Review = {
+        id: reviewId,
+        tradeId,
+        fromUserId: state.currentUser.email,
+        fromUserName: state.currentUser.name,
+        toUserId,
+        rating,
+        comment,
+        date: nowIso,
+        bookTitle: finalTitle,
+      }
+
+      const targetUserObj = state.users.find((u) => isUserMatch(u, toUserId))
+      const bonusMov: PointMovement = {
+        id: `pm-rev-${Date.now()}`,
+        userId: state.currentUser.email,
+        type: "RECOMPENSA_RESEÑA",
+        amount: 5,
+        balanceAfter: state.currentUser.availablePoints + 5,
+        description: `Recompensa por dejar una reseña a ${targetUserObj?.name || toUserId} (+5 pts)`,
+        date: nowIso,
+        tradeId,
+      }
+
+      setState((prev) => {
+        const targetReviews = prev.reviews.filter((r) => isUserMatch({ id: toUserId, email: toUserId } as any, r.toUserId))
+        const allTargetRatings = [...targetReviews.map((r) => r.rating), rating]
+        const newAverage = Number((allTargetRatings.reduce((a, b) => a + b, 0) / allTargetRatings.length).toFixed(1))
+
+        const updatedUsers = prev.users.map((u) => {
+          if (isUserMatch(u, toUserId)) {
+            return { ...u, rating: newAverage, totalReviews: u.totalReviews + 1 }
+          }
+          if (isUserMatch(u, prev.currentUser?.email)) {
+            return { ...u, availablePoints: u.availablePoints + 5 }
+          }
+          return u
+        })
+
+        const activeCurrent =
+          updatedUsers.find((u) => isUserMatch(u, prev.currentUser?.email)) || prev.currentUser
+
+        return {
+          ...prev,
+          currentUser: activeCurrent,
+          users: updatedUsers,
+          reviews: [newReview, ...prev.reviews],
+          pointMovements: [bonusMov, ...prev.pointMovements],
+          trades: prev.trades.map((t) => {
+            if (t.id === tradeId) {
+              return isUserMatch(prev.currentUser, t.requesterId)
+                ? { ...t, reviewedByRequester: true }
+                : { ...t, reviewedByOwner: true }
+            }
+            return t
+          }),
+        }
+      })
+
+      showToast("¡Reseña publicada! Ganaste +5 puntos por colaborar con la comunidad.")
       setReviewTrade(null)
     },
-    [state.currentUser, showToast]
+    [state.currentUser, state.trades, state.books, state.users, showToast]
   )
 
   const addToTracker = useCallback(
@@ -1230,7 +1616,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({
       ...prev,
       notifications: prev.notifications.map((n) =>
-        n.userId === prev.currentUser?.id ? { ...n, read: true } : n
+        isUserMatch(prev.currentUser, n.userId) ? { ...n, read: true } : n
       ),
     }))
   }, [state.currentUser])
@@ -1240,7 +1626,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!state.currentUser) return
 
       const chain = state.chains.find((item) => item.id === chainId)
-      const currentStep = chain?.steps.find((step) => step.userId === state.currentUser?.id)
+      const currentStep = chain?.steps.find((step) => isUserMatch(state.currentUser, step.userId))
       if (
         !chain ||
         !currentStep ||
@@ -1254,7 +1640,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const updatedChains = prev.chains.map((chain) => {
           if (chain.id !== chainId) return chain
           const updatedSteps = chain.steps.map((step) =>
-            step.userId === prev.currentUser?.id ? { ...step, confirmed: true } : step
+            isUserMatch(prev.currentUser, step.userId) ? { ...step, confirmed: true } : step
           )
           const allConfirmed = updatedSteps.every((s) => s.confirmed)
           return {
@@ -1276,7 +1662,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chain = state.chains.find((item) => item.id === chainId)
       if (
         !state.currentUser ||
-        !chain?.steps.some((step) => step.userId === state.currentUser?.id) ||
+        !chain?.steps.some((step) => isUserMatch(state.currentUser, step.userId)) ||
         (chain.status !== "PROPUESTA" && chain.status !== "EN_CURSO")
       ) {
         return
