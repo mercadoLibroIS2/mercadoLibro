@@ -23,9 +23,13 @@ public class Calculadora {
         Libro libro = libroRepository.findById(isbn)
                 .orElseThrow(() -> new LibroNoExisteException());
 
-        Integer valorBase = libro.getValorReferencia();
-        if (valorBase == null || estadoFisico == null) {
+        if (estadoFisico == null) {
             return null;
+        }
+
+        Integer valorBase = libro.getValorReferencia();
+        if (valorBase == null || valorBase <= 0) {
+            valorBase = 100;
         }
 
         return (int) Math.round(valorBase * factorPorEstado(estadoFisico));

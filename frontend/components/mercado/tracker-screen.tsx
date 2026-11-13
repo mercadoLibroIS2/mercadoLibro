@@ -45,7 +45,7 @@ export function TrackerScreen() {
 
   if (!currentUser) return null
 
-  const myTracked = trackedBooks.filter((t) => t.userId === currentUser.id)
+  const myTracked = trackedBooks.filter((t) => isUserMatch(currentUser, t.userId))
 
   async function handleGoogleBooksSearch() {
     setGoogleBooksError("")

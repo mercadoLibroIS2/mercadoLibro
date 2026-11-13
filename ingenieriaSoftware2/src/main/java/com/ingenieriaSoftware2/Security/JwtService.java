@@ -35,6 +35,14 @@ public class JwtService implements JwtServiceInterface {
     public String generarToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("nombreUsuario", userDetails.getUsername());
+        if (userDetails instanceof com.ingenieriaSoftware2.Entity.Usuario usuario) {
+            if (usuario.getEmail() != null) {
+                claims.put("email", usuario.getEmail());
+            }
+            if (usuario.getId() != null) {
+                claims.put("userId", usuario.getId().toString());
+            }
+        }
         return crearToken(claims, userDetails.getUsername());
     }
 
@@ -79,7 +87,18 @@ public class JwtService implements JwtServiceInterface {
     @Override
     public boolean validarToken(String token, UserDetails userDetails) {
         final String nombreUsuario = extraerNombreUsuario(token);
-        return (nombreUsuario.equals(userDetails.getUsername()) && !tokenExpirado(token));
+        boolean coincideUsuario = nombreUsuario.equals(userDetails.getUsername());
+        if (!coincideUsuario && userDetails instanceof com.ingenieriaSoftware2.Entity.Usuario usuario) {
+            try {
+                Claims claims = extraerTodosLosClaims(token);
+                String emailClaim = claims.get("email", String.class);
+                String userIdClaim = claims.get("userId", String.class);
+                coincideUsuario = (emailClaim != null && emailClaim.equals(usuario.getEmail()))
+                        || (userIdClaim != null && usuario.getId() != null && userIdClaim.equals(usuario.getId().toString()));
+            } catch (Exception ignored) {
+            }
+        }
+        return (coincideUsuario && !tokenExpirado(token));
     }
 
     @Override

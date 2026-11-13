@@ -50,7 +50,7 @@ public class NotificacionServiceImpl implements NotificacionService {
     @Override
     @Transactional(readOnly = true)
     public long contarNoLeidas(UUID usuarioId) {
-        return notificacionRepository.countByUsuarioEmailAndLeidaFalse(obtenerEmail(usuarioId));
+        return notificacionRepository.countByUsuarioEmailAndLeidaFalseAndArchivadaFalse(obtenerEmail(usuarioId));
     }
 
     @Override
@@ -61,6 +61,16 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .filter(notif -> notif.getUsuario().getEmail().equals(email))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notificación no encontrada"));
         notificacion.setLeida(true);
+    }
+
+    @Override
+    @Transactional
+    public void archivar(UUID notificacionId, UUID usuarioId) {
+        String email = obtenerEmail(usuarioId);
+        Notificacion notificacion = notificacionRepository.findById(notificacionId)
+                .filter(notif -> notif.getUsuario().getEmail().equals(email))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notificación no encontrada"));
+        notificacion.setArchivada(true);
     }
 
     @Override

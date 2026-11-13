@@ -23,6 +23,12 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.verPerfilPropio());
     }
 
+    @PutMapping("/me")
+    public ResponseEntity<PerfilResponseDTO> actualizarPerfilPropio(@RequestBody java.util.Map<String, String> body) {
+        String nombre = body != null ? body.get("nombre") : null;
+        return ResponseEntity.ok(usuarioService.actualizarPerfilPropio(nombre));
+    }
+
     @PutMapping("/me/contrasenia")
     public ResponseEntity<Void> cambiarContrasenia(@Valid @RequestBody CambiarContraseniaRequestDTO dto) {
         usuarioService.cambiarContrasenia(dto);
@@ -37,6 +43,12 @@ public class UsuarioController {
     @PostMapping("/{usuarioId}/libros-seguidos/{isbn}")
     public ResponseEntity<Void> seguirLibro(@PathVariable UUID usuarioId, @PathVariable String isbn) {
         usuarioService.seguirLibro(usuarioId, isbn);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{usuarioId}/libros-seguidos/{isbn}")
+    public ResponseEntity<Void> dejarDeSeguirLibro(@PathVariable UUID usuarioId, @PathVariable String isbn) {
+        usuarioService.dejarDeSeguirLibro(usuarioId, isbn);
         return ResponseEntity.noContent().build();
     }
 

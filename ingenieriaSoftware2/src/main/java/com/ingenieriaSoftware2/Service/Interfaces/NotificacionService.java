@@ -16,5 +16,7 @@ public interface NotificacionService {
 
     void marcarLeida(UUID notificacionId, UUID usuarioId);
 
+    void archivar(UUID notificacionId, UUID usuarioId);
+
     void marcarTodasLeidas(UUID usuarioId);
 }

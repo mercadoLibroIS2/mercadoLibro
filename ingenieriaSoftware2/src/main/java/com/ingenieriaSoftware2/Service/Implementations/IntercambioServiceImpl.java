@@ -13,6 +13,7 @@ import com.ingenieriaSoftware2.Enums.EstadoCompra;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Enums.TipoNotificacion;
 import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
 import com.ingenieriaSoftware2.Exception.Intercambio.EstadoIntercambioInvalidoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
@@ -27,6 +28,7 @@ import com.ingenieriaSoftware2.Repository.MovimientoPuntosIntercambioRepository;
 import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
+import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,16 @@ import java.util.UUID;
 public class IntercambioServiceImpl implements IntercambioService {
 
     private static final int PUNTOS_BONIFICACION = 100;
+    private static Instant ultimoInstanteMovimiento = Instant.MIN;
+
+    private static synchronized Instant obtenerInstanteUnico() {
+        Instant ahora = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        if (!ahora.isAfter(ultimoInstanteMovimiento)) {
+            ahora = ultimoInstanteMovimiento.plus(1, ChronoUnit.MICROS);
+        }
+        ultimoInstanteMovimiento = ahora;
+        return ahora;
+    }
 
     @Autowired
     private IntercambioRepository intercambioRepository;
@@ -59,6 +71,18 @@ public class IntercambioServiceImpl implements IntercambioService {
 
     @Autowired
     private IntercambioMapper intercambioMapper;
+
+    @Autowired(required = false)
+    private NotificacionService notificacionService;
+
+    private void notificarSeguro(String email, TipoNotificacion tipo) {
+        if (notificacionService != null) {
+            try {
+                notificacionService.crear(email, tipo);
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
     @Override
     @Transactional
@@ -116,6 +140,8 @@ public class IntercambioServiceImpl implements IntercambioService {
         if (diferencia > 0) {
             reservarPuntos(proponente, guardado);
         }
+
+        notificarSeguro(request.emailPropietarioSolicitada(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
 
         return intercambioMapper.toDTO(guardado);
     }
@@ -177,6 +203,8 @@ public class IntercambioServiceImpl implements IntercambioService {
         cancelarPendientesDePublicacion(solicitada.getId(), intercambio.getId());
         cancelarComprasPendientes(ofrecida);
         cancelarComprasPendientes(solicitada);
+
+        notificarSeguro(intercambio.getId().getPropietarioIdOfrecida(), TipoNotificacion.INTERCAMBIO_ACEPTADO);
 
         return intercambioMapper.toDTO(intercambio);
     }
@@ -257,6 +285,12 @@ public class IntercambioServiceImpl implements IntercambioService {
         bloquearPublicacion(idPublicacionOfrecida(intercambio)).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         bloquearPublicacion(idPublicacionSolicitada(intercambio)).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         intercambio.setEstado(EstadoIntercambio.COMPLETADO);
+
+        notificarSeguro(proponente.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
+        notificarSeguro(proponente.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
+        notificarSeguro(receptor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
+        notificarSeguro(receptor.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
+
         return intercambioMapper.toDTO(intercambio);
     }
 
@@ -372,7 +406,7 @@ public class IntercambioServiceImpl implements IntercambioService {
     private void registrarMovimiento(Intercambio intercambio, Usuario usuario, TipoMovimiento tipo, int monto) {
         MovimientoPuntosIntercambio movimiento = new MovimientoPuntosIntercambio();
         movimiento.setMovimientoPuntosIntercambioId(new MovimientoPuntosIntercambioId(
-                intercambio.getId(), usuario.getId(), tipo, Instant.now().truncatedTo(ChronoUnit.MICROS)));
+                intercambio.getId(), usuario.getId(), tipo, obtenerInstanteUnico()));
         movimiento.setIntercambio(intercambio);
         movimiento.setUsuario(usuario);
         movimiento.setMonto((long) monto);

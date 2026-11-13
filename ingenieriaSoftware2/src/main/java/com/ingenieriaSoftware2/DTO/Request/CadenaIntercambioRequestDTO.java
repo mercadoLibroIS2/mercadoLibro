@@ -1,4 +1,10 @@
 package com.ingenieriaSoftware2.DTO.Request;
 
-public record CadenaIntercambioRequestDTO() {
+import java.util.List;
+
+public record CadenaIntercambioRequestDTO(
+        List<String> participantesEmails,
+        Integer puntosBonus
+) {
 }
+

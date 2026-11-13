@@ -31,6 +31,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -39,6 +41,16 @@ import java.util.List;
 public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
     private static final int PUNTOS_INICIALES = 500;
+    private static LocalDateTime ultimaFechaEvento = LocalDateTime.MIN;
+
+    private static synchronized LocalDateTime obtenerFechaEventoUnica() {
+        LocalDateTime ahora = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        if (!ahora.isAfter(ultimaFechaEvento)) {
+            ahora = ultimaFechaEvento.plus(1, ChronoUnit.MICROS);
+        }
+        ultimaFechaEvento = ahora;
+        return ahora;
+    }
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -72,7 +84,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
         EventoSistemaId eventoId = new EventoSistemaId(
                 TipoEventoSistema.ALTA_INICIAL,
-                LocalDateTime.now()
+                obtenerFechaEventoUnica()
         );
 
         EventoSistema evento = new EventoSistema();
@@ -185,7 +197,12 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
                                 "COMPRA",
 
-                                null
+                                m.getMovimientoPuntosCompraId().getFecha() != null
+                                        ? LocalDateTime.ofInstant(
+                                                m.getMovimientoPuntosCompraId().getFecha(),
+                                                ZoneId.systemDefault()
+                                        )
+                                        : LocalDateTime.now()
                         )
                 )
         );
@@ -211,7 +228,12 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
                                 "INTERCAMBIO",
 
-                                null
+                                m.getMovimientoPuntosIntercambioId().getFecha() != null
+                                        ? LocalDateTime.ofInstant(
+                                                m.getMovimientoPuntosIntercambioId().getFecha(),
+                                                ZoneId.systemDefault()
+                                        )
+                                        : LocalDateTime.now()
                         )
                 )
         );
@@ -237,7 +259,7 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
                                 "RESENA",
 
-                                null
+                                LocalDateTime.now()
                         )
                 )
         );

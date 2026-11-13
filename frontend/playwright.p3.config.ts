@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test"
 
-const baseURL = process.env.P3_API_URL
+const baseURL = process.env.P3_API_URL || process.env.PLAYWRIGHT_BASE_URL
 
 if (!baseURL) {
   throw new Error("Definí P3_API_URL para ejecutar pruebas contra una base de datos exclusiva de pruebas.")

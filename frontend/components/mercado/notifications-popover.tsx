@@ -13,7 +13,7 @@ import {
   Archive,
 } from "lucide-react"
 import { useStore } from "./store"
-import type { NotificationItem, NotificationType } from "@/lib/mercado-types"
+import { isUserMatch, type NotificationItem, type NotificationType } from "@/lib/mercado-types"
 
 const TYPE_ICONS: Record<NotificationType, React.ReactNode> = {
   TRADE_REQUEST: <ArrowRightLeft className="h-4 w-4 text-amber-600" />,
@@ -39,7 +39,7 @@ export function NotificationsPopover({ onClose }: { onClose: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const userNotifs = notifications.filter(
-    (n) => n.userId === currentUser?.id && !n.archived
+    (n) => isUserMatch(currentUser, n.userId) && !n.archived
   )
 
   useEffect(() => {

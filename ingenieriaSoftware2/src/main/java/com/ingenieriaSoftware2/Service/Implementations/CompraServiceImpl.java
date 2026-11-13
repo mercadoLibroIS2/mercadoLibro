@@ -12,6 +12,7 @@ import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoCompra;
 import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Enums.TipoNotificacion;
 import com.ingenieriaSoftware2.Exception.Compra.CompraNoEncontradaException;
 import com.ingenieriaSoftware2.Exception.Compra.EstadoCompraInvalidoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
@@ -25,6 +26,7 @@ import com.ingenieriaSoftware2.Repository.PublicacionRepository;
 import com.ingenieriaSoftware2.Repository.UsuarioRepository;
 import com.ingenieriaSoftware2.Service.Interfaces.CompraService;
 import com.ingenieriaSoftware2.Service.Interfaces.IntercambioService;
+import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,17 @@ import java.util.UUID;
 
 @Service
 public class CompraServiceImpl implements CompraService {
+
+    private static Instant ultimoInstanteMovimiento = Instant.MIN;
+
+    private static synchronized Instant obtenerInstanteUnico() {
+        Instant ahora = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        if (!ahora.isAfter(ultimoInstanteMovimiento)) {
+            ahora = ultimoInstanteMovimiento.plus(1, ChronoUnit.MICROS);
+        }
+        ultimoInstanteMovimiento = ahora;
+        return ahora;
+    }
 
     @Autowired
     private CompraRepository compraRepository;
@@ -56,6 +69,18 @@ public class CompraServiceImpl implements CompraService {
 
     @Autowired
     private CompraMapper compraMapper;
+
+    @Autowired(required = false)
+    private NotificacionService notificacionService;
+
+    private void notificarSeguro(String email, TipoNotificacion tipo) {
+        if (notificacionService != null) {
+            try {
+                notificacionService.crear(email, tipo);
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
     @Override
     @Transactional
@@ -153,6 +178,7 @@ public class CompraServiceImpl implements CompraService {
         cancelarOtrasComprasPendientes(publicacion, compra.getId());
 
         compra.setEstado(EstadoCompra.PAGADA);
+        notificarSeguro(compra.getId().getPropietarioEmail(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
         return compraMapper.toDTO(compra);
     }
 
@@ -165,6 +191,7 @@ public class CompraServiceImpl implements CompraService {
 
         compra.setEstado(EstadoCompra.ENVIADA);
         compra.setInfoEnvio(infoEnvio);
+        notificarSeguro(compra.getId().getCompradorEmail(), TipoNotificacion.INTERCAMBIO_ACEPTADO);
         return compraMapper.toDTO(compra);
     }
 
@@ -181,6 +208,10 @@ public class CompraServiceImpl implements CompraService {
 
         bloquearPublicacion(compra).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         compra.setEstado(EstadoCompra.ENTREGADA);
+        notificarSeguro(vendedor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
+        notificarSeguro(vendedor.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
+        notificarSeguro(comprador.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
+        notificarSeguro(comprador.getEmail(), TipoNotificacion.PUNTOS_GASTADOS);
         return compraMapper.toDTO(compra);
     }
 
@@ -249,7 +280,7 @@ public class CompraServiceImpl implements CompraService {
     private void registrarMovimiento(Compra compra, Usuario usuario, TipoMovimiento tipo, int monto) {
         MovimientoPuntosCompra movimiento = new MovimientoPuntosCompra();
         movimiento.setMovimientoPuntosCompraId(new MovimientoPuntosCompraId(
-                compra.getId(), usuario.getId(), tipo, Instant.now().truncatedTo(ChronoUnit.MICROS)));
+                compra.getId(), usuario.getId(), tipo, obtenerInstanteUnico()));
         movimiento.setCompra(compra);
         movimiento.setUsuario(usuario);
         movimiento.setMonto((long) monto);

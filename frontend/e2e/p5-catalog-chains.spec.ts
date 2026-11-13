@@ -3,88 +3,67 @@ import { generateInitialChains } from "../lib/chain-detector"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 import type { Book, TradeChain, User } from "../lib/mercado-types"
 
-const STORAGE_KEY = "mercadolibro_v2_data"
+const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 
 const usersByEmail = new Map(SEED_USERS.map((user) => [user.email, user]))
 
-function authUser(user: User) {
-  return {
-    id: user.id,
-    aud: "authenticated",
-    role: "authenticated",
-    email: user.email,
-    email_confirmed_at: "2026-01-01T00:00:00.000Z",
-    phone: "",
-    app_metadata: { provider: "email", providers: ["email"] },
-    user_metadata: { name: user.name, username: user.username },
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:00:00.000Z",
-  }
-}
-
-async function mockSupabase(page: Page) {
-  await page.route("**/auth/v1/**", async (route: Route) => {
+async function mockBackend(page: Page) {
+  await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
-    const body = request.postDataJSON?.() as Record<string, unknown> | undefined
+    let body: Record<string, unknown> | undefined
+    try {
+      body = request.postDataJSON?.() as Record<string, unknown> | undefined
+    } catch {
+      body = undefined
+    }
 
-    if (url.pathname.endsWith("/auth/v1/token")) {
-      const user = usersByEmail.get(String(body?.email || ""))
+    if (url.pathname.endsWith("/api/auth/login")) {
+      const user = usersByEmail.get(String(body?.nombreOEmail || ""))
       if (!user) {
         await route.fulfill({
-          status: 400,
-          json: { code: "invalid_credentials", msg: "Invalid login credentials" },
+          status: 401,
+          json: { message: "Invalid login credentials" },
         })
         return
       }
-      const sbUser = authUser(user)
       await route.fulfill({
         json: {
-          access_token: `p5-token-${user.id}`,
-          refresh_token: `p5-refresh-${user.id}`,
-          expires_in: 3600,
-          token_type: "bearer",
-          user: sbUser,
+          id: user.id,
+          token: `p5-token-${user.id}`,
+          username: user.name,
+          email: user.email,
+          rol: "USUARIO",
+          puntos: user.availablePoints,
         },
       })
       return
     }
 
-    if (url.pathname.endsWith("/auth/v1/user")) {
+    if (url.pathname.endsWith("/api/usuario/me")) {
       const accessToken = request.headers().authorization?.replace(/^Bearer\s+/i, "")
       const userId = accessToken?.replace(/^p5-token-/, "")
-      const user = SEED_USERS.find((candidate) => candidate.id === userId)
-      await route.fulfill({ json: authUser(user || SEED_USERS[0]) })
+      const user = SEED_USERS.find((candidate) => candidate.id === userId) || SEED_USERS[0]
+      await route.fulfill({
+        json: {
+          id: user.id,
+          nombre: user.name,
+          email: user.email,
+          rol: "USUARIO",
+          saldoTotal: user.availablePoints,
+          saldoReservado: user.reservedPoints,
+          saldoDisponible: user.availablePoints,
+          reputacionPromedio: user.rating,
+        },
+      })
       return
     }
 
-    if (url.pathname.endsWith("/auth/v1/logout")) {
+    if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
       return
     }
 
-    await route.fulfill({ status: 404, json: { message: "Unexpected mocked Auth request" } })
-  })
-
-  await page.route("**/rest/v1/**", async (route) => {
-    const url = new URL(route.request().url())
-    const table = url.pathname.split("/").pop()
-    if (table === "usuario" || table === "profiles") {
-      const email = url.searchParams.get("email")?.replace(/^eq\./, "")
-      const user = SEED_USERS.find((u) => u.email === email) || SEED_USERS[0]
-      await route.fulfill({
-        json: {
-          id: user.id,
-          email: user.email,
-          nombre: user.name,
-          nombre_usuario: user.username,
-          saldo_total: user.availablePoints ?? 100,
-          saldo_reservado: user.reservedPoints ?? 0,
-          reputacion_promedio: user.rating ?? 5.0,
-        },
-      })
-      return
-    }
     await route.fulfill({ json: [] })
   })
 }
@@ -160,13 +139,13 @@ async function logout(page: Page) {
 }
 
 test("el catálogo muestra publicaciones y permite buscar por título, autor e ISBN", async ({ page }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
   await signIn(page)
   await openCatalog(page)
 
-  await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
-  await expect(page.locator("article")).toHaveCount(10)
+  await expect(page.getByText(`Mostrando ${SEED_BOOKS.length} libros`)).toBeVisible()
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
 
   const search = page.getByPlaceholder("Buscar título, autor o género...")
   await search.fill("Rayuela")
@@ -176,11 +155,10 @@ test("el catálogo muestra publicaciones y permite buscar por título, autor e I
 
   await search.fill("Jorge Luis Borges")
   await search.press("Enter")
-  await expect(page.getByText("Mostrando 2 libros")).toBeVisible()
-  await expect(bookCard(page, "Ficciones")).toBeVisible()
+  await expect(page.getByText("Mostrando 1 libros")).toBeVisible()
   await expect(bookCard(page, "El Aleph")).toBeVisible()
 
-  await search.fill("978-84-376-0457-2")
+  await search.fill("9788437604572")
   await search.press("Enter")
   await expect(page.getByText("Mostrando 1 libros")).toBeVisible()
   await expect(bookCard(page, "Rayuela")).toBeVisible()
@@ -189,20 +167,20 @@ test("el catálogo muestra publicaciones y permite buscar por título, autor e I
 test("el catálogo filtra por categoría, estado y límite de puntos y puede restablecerse", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
   await signIn(page)
   await openCatalog(page)
 
-  await page.getByRole("button", { name: "Ciencia", exact: true }).click()
-  await expect(page.getByText("Mostrando 2 libros")).toBeVisible()
-  await expect(bookCard(page, "Cosmos")).toBeVisible()
-  await expect(bookCard(page, "Una breve historia del tiempo")).toBeVisible()
+  await page.getByRole("button", { name: "Ficción", exact: true }).click()
+  await expect(page.getByText("Mostrando 4 libros")).toBeVisible()
+  await expect(bookCard(page, "Rayuela")).toBeVisible()
+  await expect(bookCard(page, "El Aleph")).toBeVisible()
 
   await page.getByRole("button", { name: "Limpiar filtros" }).click()
   await page.getByRole("button", { name: "Filtros", exact: true }).click()
-  await page.getByRole("button", { name: "Muy bueno", exact: true }).click()
-  await expect(page.getByText("Mostrando 4 libros")).toBeVisible()
+  await page.getByRole("button", { name: "Como nuevo", exact: true }).click()
+  await expect(page.getByText("Mostrando 2 libros")).toBeVisible()
 
   const maxPoints = page.locator('input[type="range"]')
   await maxPoints.evaluate((element: HTMLInputElement) => {
@@ -214,16 +192,17 @@ test("el catálogo filtra por categoría, estado y límite de puntos y puede res
     element.dispatchEvent(new Event("input", { bubbles: true }))
   })
   await expect(page.getByText("Hasta 50 pts")).toBeVisible()
-  await expect(page.getByText("Mostrando 2 libros")).toBeVisible()
+  await expect(page.getByText("Mostrando 1 libros")).toBeVisible()
+  await expect(bookCard(page, "El principito")).toBeVisible()
 
   await page.getByRole("button", { name: "Limpiar filtros" }).click()
-  await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
+  await expect(page.getByText(`Mostrando ${SEED_BOOKS.length} libros`)).toBeVisible()
 })
 
 test("búsqueda vacía muestra estado sin coincidencias y permite recuperar el catálogo", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
   await signIn(page)
   await openCatalog(page)
@@ -235,14 +214,14 @@ test("búsqueda vacía muestra estado sin coincidencias y permite recuperar el c
   await expect(page.locator("article")).toHaveCount(0)
 
   await page.getByRole("button", { name: "Restablecer todos los filtros" }).click()
-  await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
+  await expect(page.getByText(`Mostrando ${SEED_BOOKS.length} libros`)).toBeVisible()
 })
 
 test("la ficha del catálogo presenta metadatos y disponibilidad del ejemplar", async ({ page }) => {
   const books = SEED_BOOKS.map((book) =>
-    book.id === "book-2" ? { ...book, availability: "RESERVADO" as const } : book,
+    book.isbn === "9788420633114" ? { ...book, availability: "RESERVADO" as const } : book,
   )
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page, { books })
   await signIn(page)
   await openCatalog(page)
@@ -251,12 +230,12 @@ test("la ficha del catálogo presenta metadatos y disponibilidad del ejemplar", 
   const details = page.locator("div.fixed.inset-0")
   await expect(details.getByRole("heading", { name: "Rayuela" })).toBeVisible()
   await expect(details).toContainText("Julio Cortázar")
-  await expect(details).toContainText("ISBN: 978-84-376-0457-2")
-  await expect(details).toContainText("Edición Cátedra Conmemorativa 2021")
-  await expect(details).toContainText("Novela cumbre de la literatura")
+  await expect(details).toContainText("ISBN: 9788437604572")
+  await expect(details).toContainText("Cátedra")
+  await expect(details).toContainText("Edición Cátedra con notas. Tablero de dirección intacto.")
   await page.getByRole("button").filter({ has: page.locator("svg.lucide-x") }).click()
 
-  await bookCard(page, "Ficciones").click()
+  await bookCard(page, "El Aleph").click()
   const reservedDetails = page.locator("div.fixed.inset-0")
   await expect(reservedDetails).toContainText("Publicación reservada o intercambiada.")
   await expect(reservedDetails.getByRole("button", { name: /Solicitar/ })).toHaveCount(0)
@@ -266,9 +245,9 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
   page,
 }) => {
   const books = SEED_BOOKS.map((book) =>
-    book.id === "book-1" ? { ...book, availability: "RESERVADO" as const } : book,
+    book.isbn === "9788437604572" ? { ...book, availability: "RESERVADO" as const } : book,
   )
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page, { books })
   await signIn(page)
   await openCatalog(page)
@@ -283,20 +262,20 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
     page.getByRole("button", { name: /Rayuela/ }).filter({ hasText: "Julio Cortázar" }),
   ).toHaveCount(0)
 
-  await search.fill("Fic")
+  await search.fill("Ale")
   await expect(page.getByText("Sugerencias en el catálogo")).toBeVisible()
-  const suggestion = page.getByRole("button", { name: /Ficciones/ }).filter({
+  const suggestion = page.getByRole("button", { name: /El Aleph/ }).filter({
     hasText: "Jorge Luis Borges",
   })
   await expect(suggestion).toBeVisible()
   await suggestion.click()
-  await expect(page.locator("div.fixed.inset-0").getByRole("heading", { name: "Ficciones" })).toBeVisible()
+  await expect(page.locator("div.fixed.inset-0").getByRole("heading", { name: "El Aleph" })).toBeVisible()
 })
 
 test("la cadena propuesta forma un ciclo cerrado con participantes distintos y muestra confirmaciones", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
   await signIn(page)
   await openChains(page)
@@ -304,11 +283,11 @@ test("la cadena propuesta forma un ciclo cerrado con participantes distintos y m
   const card = chainCard(page)
   await expect(card).toBeVisible()
   await expect(card).toContainText("3 participantes coordinados")
-  await expect(card.getByText(/Franco Papa \(Vos\)/)).toBeVisible()
-  await expect(card.getByText("Miguel Bartesaghi")).toBeVisible()
-  await expect(card.getByText("Camila García")).toBeVisible()
+  await expect(card.getByText(/Lucía Fernández \(Vos\)/)).toBeVisible()
+  await expect(card.getByText("Mateo Gómez")).toBeVisible()
+  await expect(card.getByText("Tomás Rivero")).toBeVisible()
+  await expect(card.getByText("Clean Code")).toHaveCount(2)
   await expect(card.getByText("Rayuela")).toHaveCount(2)
-  await expect(card.getByText("Ficciones")).toHaveCount(2)
   await expect(card.getByText("Sapiens: De animales a dioses")).toHaveCount(2)
   await expect(card.getByRole("button", { name: "Aceptar mi parte del circuito" })).toBeVisible()
 
@@ -317,7 +296,7 @@ test("la cadena propuesta forma un ciclo cerrado con participantes distintos y m
   expect(new Set(chain.steps.map((step) => step.userId)).size).toBe(3)
   for (let index = 0; index < chain.steps.length; index += 1) {
     const nextStep = chain.steps[(index + 1) % chain.steps.length]
-    expect(chain.steps[index].receivesBook.id).toBe(nextStep.givesBook.id)
+    expect(chain.steps[index].givesBook.id).toBe(nextStep.receivesBook.id)
   }
 })
 
@@ -328,11 +307,14 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
     ...chain,
     steps: chain.steps.map((step) => ({ ...step, confirmed: false })),
   }))
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page, { chains })
 
-  for (let index = 0; index < 3; index += 1) {
-    const participant = SEED_USERS[index]
+  // Orden de los pasos en generateInitialChains: Lucía (0), Mateo (2), Tomás (1)
+  const orderedParticipants = [SEED_USERS[0], SEED_USERS[2], SEED_USERS[1]]
+
+  for (let index = 0; index < orderedParticipants.length; index += 1) {
+    const participant = orderedParticipants[index]
     await signIn(page, participant)
     await openChains(page)
 
@@ -361,7 +343,7 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
 test("rechazar una cadena la cancela de forma persistente y bloquea acciones posteriores", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
   await signIn(page)
   await openChains(page)
@@ -382,9 +364,9 @@ test("rechazar una cadena la cancela de forma persistente y bloquea acciones pos
 test("las cadenas se muestran solo a sus participantes y se maneja la ausencia de ciclos", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page)
-  await signIn(page, SEED_USERS[3])
+  await signIn(page, SEED_USERS[3]) // Valentina Sosa (no participa en la cadena de 3)
   await openChains(page)
   await expect(page.getByText("No hay cadenas activas en este momento")).toBeVisible()
   await expect(page.getByRole("heading", { name: /Cadena Triangular de Intercambio/ })).toHaveCount(0)
@@ -394,12 +376,12 @@ test("no detecta ni muestra una cadena si falta un libro disponible para cerrar 
   page,
 }) => {
   const noCycleBooks = SEED_BOOKS.map((book) =>
-    book.ownerId === "user-3" ? { ...book, availability: "INTERCAMBIADO" as const } : book,
+    book.ownerId === "mateo@mercadolibro.demo" ? { ...book, availability: "INTERCAMBIADO" as const } : book,
   )
   const noCycleChains = generateInitialChains(noCycleBooks, SEED_USERS)
   expect(noCycleChains).toHaveLength(0)
 
-  await mockSupabase(page)
+  await mockBackend(page)
   await loadSeedState(page, { books: noCycleBooks, chains: noCycleChains })
   await signIn(page)
   await openChains(page)

@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface ReseniaRepository extends JpaRepository<Resenia, ReseniaId> {
     @Query("""
             SELECT AVG(r.calificacion)
@@ -16,4 +18,14 @@ public interface ReseniaRepository extends JpaRepository<Resenia, ReseniaId> {
                    AND r.id.intercambioId.propietarioIdSolicitante = :email)
             """)
     Double calcularPromedioRecibido(@Param("email") String email);
+
+    @Query("""
+            SELECT r
+            FROM Resenia r
+            WHERE (r.id.solicitanteReviewer = true
+                   AND r.id.intercambioId.propietarioIdOfrecida = :email)
+               OR (r.id.solicitanteReviewer = false
+                   AND r.id.intercambioId.propietarioIdSolicitante = :email)
+            """)
+    List<Resenia> listarRecibidasPorEmail(@Param("email") String email);
 }

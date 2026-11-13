@@ -10,12 +10,14 @@ import com.ingenieriaSoftware2.Entity.Resenia;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
 import com.ingenieriaSoftware2.Enums.TipoMovimiento;
+import com.ingenieriaSoftware2.Enums.TipoNotificacion;
 import com.ingenieriaSoftware2.Event.ReseniaCreadaEvent;
 import com.ingenieriaSoftware2.Exception.AtributoFueraDeRangoException;
 import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Mapper.ReseniaMapper;
 import com.ingenieriaSoftware2.Repository.*;
+import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
 import com.ingenieriaSoftware2.Service.Interfaces.ReseniaService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -45,6 +48,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
+
+    @Autowired(required = false)
+    private NotificacionService notificacionService;
 
     private Long puntosResenia = 50L;
 
@@ -108,8 +114,28 @@ public class ReseniaServiceImpl implements ReseniaService {
                 : intercambio.getId().getPropietarioIdSolicitante();
         eventPublisher.publishEvent(new ReseniaCreadaEvent(emailEvaluado, dto.calificacion()));
 
+        if (notificacionService != null) {
+            try {
+                notificacionService.crear(emailEvaluado, TipoNotificacion.RESENIA_RECIBIDA);
+                notificacionService.crear(email, TipoNotificacion.PUNTOS_GANADOS);
+            } catch (Exception ignored) {
+            }
+        }
+
         return reseniaMapper.toDTO(resenia);
 
+    }
+
+    @Override
+    @Transactional
+    public List<ReseniaResponseDTO> listarTodas() {
+        return reseniaRepository.findAll().stream().map(reseniaMapper::toDTO).toList();
+    }
+
+    @Override
+    @Transactional
+    public List<ReseniaResponseDTO> listarPorUsuario(String email) {
+        return reseniaRepository.listarRecibidasPorEmail(email).stream().map(reseniaMapper::toDTO).toList();
     }
 
     private void calcularReputacion(Intercambio intercambio, boolean solicitanteReviewer){

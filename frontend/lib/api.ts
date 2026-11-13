@@ -230,6 +230,17 @@ export async function apiGetMe(): Promise<PerfilResponse> {
   return request<PerfilResponse>("/api/usuario/me")
 }
 
+export async function apiUpdateProfile(nombre: string): Promise<PerfilResponse> {
+  return request<PerfilResponse>("/api/usuario/me", {
+    method: "PUT",
+    body: JSON.stringify({ nombre }),
+  })
+}
+
+export async function apiGetPublicProfile(nombre: string): Promise<PerfilResponse> {
+  return request<PerfilResponse>(`/api/usuario/${encodeURIComponent(nombre)}`)
+}
+
 export async function apiChangePassword(dto: {
   contraseniaActual: string
   contraseniaNueva: string
@@ -416,9 +427,47 @@ export async function apiGetFollowedBooks(usuarioId: string): Promise<any[]> {
   return request<any[]>(`/api/usuario/${usuarioId}/libros-seguidos`)
 }
 
+export async function apiUnfollowBook(usuarioId: string, isbn: string): Promise<void> {
+  return request<void>(`/api/usuario/${usuarioId}/libros-seguidos/${encodeURIComponent(isbn)}`, {
+    method: "DELETE",
+  })
+}
+
 // -------------------------------------------------------------
 // RESEÑAS
 // -------------------------------------------------------------
+
+export interface ReseniaBackendResponse {
+  intercambioId: {
+    isbnSolicitante: string
+    propietarioIdSolicitante: string
+    horaDePublicacionSolicitante: string
+    isbnOfrecida: string
+    propietarioIdOfrecida: string
+    horaDePublicacionOfrecida: string
+  }
+  solicitanteReviewer: boolean
+  emailReviewer: string
+  emailReseniado: string
+  calificacion: number
+  comentario: string
+}
+
+export async function apiListReviews(): Promise<ReseniaBackendResponse[]> {
+  try {
+    return await request<ReseniaBackendResponse[]>("/api/resenia")
+  } catch {
+    return []
+  }
+}
+
+export async function apiListUserReviews(email: string): Promise<ReseniaBackendResponse[]> {
+  try {
+    return await request<ReseniaBackendResponse[]>(`/api/resenia/usuario/${encodeURIComponent(email)}`)
+  } catch {
+    return []
+  }
+}
 
 export async function apiCreateReview(dto: {
   intercambioId: any
@@ -572,6 +621,10 @@ export async function apiMarcarNotificacionLeida(id: string): Promise<void> {
   return request<void>(`/api/notificacion/${id}/leida`, { method: "PATCH" })
 }
 
+export async function apiArchivarNotificacion(id: string): Promise<void> {
+  return request<void>(`/api/notificacion/${id}/archivar`, { method: "PATCH" })
+}
+
 export async function apiMarcarTodasNotificacionesLeidas(): Promise<void> {
   return request<void>("/api/notificacion/marcar-todas", { method: "PATCH" })
 }
@@ -586,6 +639,18 @@ export async function apiListCadenas(): Promise<any[]> {
   } catch {
     return []
   }
+}
+
+export async function apiAceptarCadena(cadenaId: string): Promise<any> {
+  return request<any>(`/api/cadenaIntercambio/${encodeURIComponent(cadenaId)}/aceptar`, {
+    method: "PATCH",
+  })
+}
+
+export async function apiRechazarCadena(cadenaId: string): Promise<any> {
+  return request<any>(`/api/cadenaIntercambio/${encodeURIComponent(cadenaId)}/rechazar`, {
+    method: "PATCH",
+  })
 }
 
 
