@@ -43,7 +43,17 @@ public class AuthJwtFilter extends OncePerRequestFilter {
         nombreUsuario = jwtService.extraerNombreUsuario(jwt);
 
         if (nombreUsuario != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = usuarioService.loadUserByUsername(nombreUsuario);
+            UserDetails userDetails;
+            try {
+                userDetails = usuarioService.loadUserByUsername(nombreUsuario);
+            } catch (Exception ex) {
+                String emailClaim = jwtService.extraerTodosLosClaims(jwt).get("email", String.class);
+                if (emailClaim != null) {
+                    userDetails = usuarioService.loadUserByUsername(emailClaim);
+                } else {
+                    throw ex;
+                }
+            }
 
             if (jwtService.validarToken(jwt, userDetails)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(

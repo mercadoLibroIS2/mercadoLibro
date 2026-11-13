@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/api/libro/google-books/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/publicaciones/disponibles", "/api/publicaciones/detalle").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/publicaciones/disponibles", "/api/publicaciones/detalle", "/api/intercambios/estado", "/api/intercambios/detalle").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,6 +33,16 @@ public class ReseniaController {
 
     @Autowired
     private SecurityUtils securityUtils;
+
+    @GetMapping
+    public ResponseEntity<List<ReseniaResponseDTO>> listarTodas() {
+        return ResponseEntity.ok(reseniaService.listarTodas());
+    }
+
+    @GetMapping("/usuario/{email}")
+    public ResponseEntity<List<ReseniaResponseDTO>> listarPorUsuario(@PathVariable String email) {
+        return ResponseEntity.ok(reseniaService.listarPorUsuario(email));
+    }
 
     @PostMapping
     public ResponseEntity<ReseniaResponseDTO> crearResenia(@Valid @RequestBody ReseniaRequestDTO dto) {

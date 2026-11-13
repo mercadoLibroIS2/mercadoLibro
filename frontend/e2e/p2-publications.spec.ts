@@ -1,132 +1,171 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
+import { CONDITION_TO_ESTADO, type EstadoFisico } from "../lib/api"
 
-const testUser = {
-  id: "user-1",
-  aud: "authenticated",
-  role: "authenticated",
-  email: "franco@mercadolibro.com",
-  email_confirmed_at: "2026-01-01T00:00:00.000Z",
-  phone: "",
-  app_metadata: { provider: "email", providers: ["email"] },
-  user_metadata: { name: "Franco Papa", username: "francopapa" },
-  created_at: "2026-01-01T00:00:00.000Z",
-  updated_at: "2026-01-01T00:00:00.000Z",
-}
+const STORAGE_KEY = "mercadolibro_demo_clean_v5"
+const testUser = SEED_USERS[0] // Lucía Fernández (lucia@mercadolibro.demo)
 
-const testSession = {
-  access_token: "playwright-publications-access-token",
-  refresh_token: "playwright-publications-refresh-token",
-  expires_in: 3600,
-  token_type: "bearer",
-  user: testUser,
-}
-
-async function mockSupabase(page: Page, options: { reservedIsbn?: string } = {}) {
+async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: boolean } = {}) {
   const database = {
-    books: SEED_BOOKS.map((book) => ({
-      isbn: book.isbn,
-      google_books_id: `seed-${book.isbn}`,
-      titulo: book.title,
-      autores: book.author,
-      puntuacion_externa: book.externalRating || 4.5,
-      valor_referencia: book.referencePrice || 0,
-    })),
     publications: SEED_BOOKS.map((book) => ({
       isbn: book.isbn,
-      email_propietario: SEED_USERS.find((user) => user.id === book.ownerId)!.email,
+      email_propietario: book.ownerId,
       hora_publicacion: book.createdAt,
-      estado_fisico: ({
-        Nuevo: "NUEVO",
-        "Como nuevo": "COMO_NUEVO",
-        "Muy bueno": "BUEN_ESTADO",
-        Bueno: "BUEN_ESTADO",
-        Aceptable: "ACEPTABLE",
-        "Con marcas": "DETERIORADO",
-      } as Record<string, string>)[book.condition],
+      titulo: book.title,
+      autor: book.author,
+      portadaUrl: book.coverUrl || "",
+      estado_fisico: CONDITION_TO_ESTADO[book.condition] || "BUEN_ESTADO",
       valor_puntos_solicitado: book.points,
-      valor_referencia_calculado: book.referencePrice,
-      comentario: book.description,
-      estado_publicacion: book.isbn === options.reservedIsbn ? "RESERVADA" : "DISPONIBLE",
-      color_semaforo: "SIN_REFERENCIA",
-    })),
-    users: SEED_USERS.map((user) => ({
-      id: user.id,
-      email: user.email,
-      nombre: user.name,
-      nombre_usuario: user.username,
-      saldo_total: user.availablePoints,
-      saldo_reservado: user.reservedPoints,
-      reputacion_promedio: user.rating,
-    })),
-    categories: SEED_BOOKS.map((book) => ({
-      isbn: book.isbn,
-      nombre_categoria: book.category,
+      valor_referencia_calculado: book.referencePrice || 50,
+      comentario: book.description || "",
+      estado_publicacion: "DISPONIBLE",
+      color_semaforo: "VERDE",
     })),
   }
 
-  await page.route("**/auth/v1/**", async (route: Route) => {
-    const url = new URL(route.request().url())
+  await page.route("**/api/**", async (route: Route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const method = request.method()
 
-    if (url.pathname.endsWith("/auth/v1/token")) {
-      await route.fulfill({ json: testSession })
+    if (url.pathname.endsWith("/api/auth/login")) {
+      await route.fulfill({
+        json: {
+          id: testUser.id,
+          token: "playwright-publications-access-token",
+          username: testUser.name,
+          email: testUser.email,
+          rol: "USUARIO",
+          puntos: testUser.availablePoints,
+        },
+      })
       return
     }
-    if (url.pathname.endsWith("/auth/v1/user")) {
-      await route.fulfill({ json: testUser })
+
+    if (url.pathname.endsWith("/api/usuario/me")) {
+      await route.fulfill({
+        json: {
+          id: testUser.id,
+          nombre: testUser.name,
+          email: testUser.email,
+          rol: "USUARIO",
+          saldoTotal: testUser.availablePoints,
+          saldoReservado: testUser.reservedPoints,
+          saldoDisponible: testUser.availablePoints,
+          reputacionPromedio: testUser.rating,
+        },
+      })
       return
     }
-    if (url.pathname.endsWith("/auth/v1/logout")) {
+
+    if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
       return
     }
 
-    await route.fulfill({ status: 404, json: { message: "Unexpected mocked Auth request" } })
-  })
+    if (url.pathname.endsWith("/api/publicaciones/disponibles") && method === "GET") {
+      if (options.skipInitialAvailableFetch) {
+        await route.fulfill({ json: [] })
+        return
+      }
+      const available = database.publications
+        .filter((pub) => pub.estado_publicacion === "DISPONIBLE")
+        .map((pub) => ({
+          publicacionId: {
+            isbn: pub.isbn,
+            emailPropietario: pub.email_propietario,
+            horaPublicacion: pub.hora_publicacion,
+          },
+          titulo: pub.titulo,
+          autor: pub.autor,
+          portadaUrl: pub.portadaUrl,
+          estadoFisico: pub.estado_fisico,
+          valorPuntosSolicitado: pub.valor_puntos_solicitado,
+          valorReferenciaCalculado: pub.valor_referencia_calculado,
+          colorSemaforo: pub.color_semaforo,
+          comentario: pub.comentario,
+        }))
+      await route.fulfill({ json: available })
+      return
+    }
 
-  await page.route("**/rest/v1/**", async (route) => {
-    const url = new URL(route.request().url())
-    const table = url.pathname.split("/").pop()
-    const method = route.request().method()
-    const filters = url.searchParams
-    const matches = (row: Record<string, unknown>) =>
-      [...filters.entries()].every(([key, filter]) => {
-        if (key === "select" || key === "order" || key === "on_conflict") return true
-        if (key === "estado_publicacion" && filter.startsWith("neq.")) return row[key] !== filter.slice(4)
-        if (filter.startsWith("eq.")) return String(row[key]) === filter.slice(3)
-        if (filter.startsWith("in.(")) return filter.slice(4, -1).split(",").includes(String(row[key]))
-        return true
+    if (url.pathname.endsWith("/api/publicaciones/publicar") && method === "POST") {
+      const body = request.postDataJSON() as {
+        isbn: string
+        estadoFisico: EstadoFisico
+        valorPuntosSolicitado: number
+        comentario?: string
+      }
+      const nowIso = new Date().toISOString()
+      const seedMatch = SEED_BOOKS.find(
+        (b) => b.isbn.replace(/[^0-9X]/gi, "") === body.isbn.replace(/[^0-9X]/gi, "")
+      )
+      const created = {
+        isbn: body.isbn,
+        email_propietario: testUser.email,
+        hora_publicacion: nowIso,
+        titulo: seedMatch?.title || `Ejemplar (${body.isbn})`,
+        autor: seedMatch?.author || "Autor verificado",
+        portadaUrl: seedMatch?.coverUrl || "",
+        estado_fisico: body.estadoFisico,
+        valor_puntos_solicitado: body.valorPuntosSolicitado,
+        valor_referencia_calculado: seedMatch?.referencePrice || 50,
+        comentario: body.comentario || "",
+        estado_publicacion: "DISPONIBLE",
+        color_semaforo: "VERDE",
+      }
+      database.publications.unshift(created)
+
+      await route.fulfill({
+        json: {
+          publicacionId: {
+            isbn: created.isbn,
+            emailPropietario: created.email_propietario,
+            horaPublicacion: created.hora_publicacion,
+          },
+          titulo: created.titulo,
+          autor: created.autor,
+          portadaUrl: created.portadaUrl,
+          estadoFisico: created.estado_fisico,
+          valorPuntosSolicitado: created.valor_puntos_solicitado,
+          valorReferenciaCalculado: created.valor_referencia_calculado,
+          colorSemaforo: created.color_semaforo,
+          comentario: created.comentario,
+        },
       })
-    const fulfillRows = (rows: Record<string, unknown>[]) => {
-      const expectsObject = route.request().headers().accept?.includes("vnd.pgrst.object")
-      return route.fulfill({ json: expectsObject ? rows[0] || {} : rows })
+      return
     }
 
-    if (table === "publicacion" && method === "GET") {
-      await fulfillRows(database.publications.filter(matches))
-    } else if (table === "publicacion" && method === "POST") {
-      const row = route.request().postDataJSON() as Record<string, unknown>
-      database.publications.unshift(row as typeof database.publications[number])
-      await fulfillRows([row])
-    } else if (table === "publicacion" && method === "PATCH") {
-      const patch = route.request().postDataJSON() as Record<string, unknown>
-      const rows = database.publications.filter(matches)
-      rows.forEach((row) => Object.assign(row, patch))
-      await fulfillRows(rows)
-    } else if (table === "libro" && method === "POST") {
-      const row = route.request().postDataJSON() as Record<string, unknown>
-      database.books.push(row as typeof database.books[number])
-      await fulfillRows([row])
-    } else if (table === "libro") {
-      await fulfillRows(database.books.filter(matches))
-    } else if (table === "usuario") {
-      await fulfillRows(database.users.filter(matches))
-    } else if (table === "libro_categoria") {
-      await fulfillRows(database.categories.filter(matches))
-    } else {
-      await route.fulfill({ json: [] })
+    if (url.pathname.endsWith("/api/publicaciones/editar") && method === "PUT") {
+      const isbn = url.searchParams.get("isbn")
+      const body = request.postDataJSON() as {
+        estadoFisico: EstadoFisico
+        valorPuntosSolicitado: number
+        comentario?: string
+      }
+      const found = database.publications.find((pub) => pub.isbn === isbn)
+      if (found) {
+        found.estado_fisico = body.estadoFisico
+        found.valor_puntos_solicitado = body.valorPuntosSolicitado
+        found.comentario = body.comentario || ""
+      }
+      await route.fulfill({ status: 204, body: "" })
+      return
     }
+
+    if (url.pathname.endsWith("/api/publicaciones/eliminar") && method === "DELETE") {
+      const isbn = url.searchParams.get("isbn")
+      const found = database.publications.find((pub) => pub.isbn === isbn)
+      if (found) {
+        found.estado_publicacion = "ELIMINADA"
+      }
+      await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    await route.fulfill({ json: [] })
   })
+
   return database
 }
 
@@ -135,7 +174,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email o nombre de usuario").fill(testUser.email)
   await page.getByLabel("Contraseña").fill("valid-test-password")
   await page.getByRole("button", { name: "Ingresar a la plataforma" }).click()
-  await expect(page.getByRole("button", { name: /Franco Papa/i })).toBeVisible()
+  await expect(page.locator('button[title="Ir a mi perfil y billetera"]')).toBeVisible()
   await page.locator("aside").getByRole("button", { name: "Catálogo", exact: true }).click()
   await expect(page.getByRole("heading", { name: "Libros Disponibles" })).toBeVisible()
 }
@@ -154,17 +193,17 @@ async function openPublishForm(page: Page) {
 test("el catálogo lista todas las publicaciones y permite buscar, filtrar y recuperar resultados vacíos", async ({
   page,
 }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await signIn(page)
 
-  await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
-  await expect(page.locator("article")).toHaveCount(10)
+  await expect(page.getByText(`Mostrando ${SEED_BOOKS.length} libros`)).toBeVisible()
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
   await expect(bookCard(page, "Rayuela")).toBeVisible()
-  await expect(bookCard(page, "Ficciones")).toBeVisible()
+  await expect(bookCard(page, "Clean Code")).toBeVisible()
 
-  await page.getByRole("button", { name: "Ciencia", exact: true }).click()
-  await expect(page.getByText("Mostrando 2 libros")).toBeVisible()
-  await expect(bookCard(page, "Cosmos")).toBeVisible()
+  await page.getByRole("button", { name: "Historia", exact: true }).click()
+  await expect(page.getByText("Mostrando 1 libros")).toBeVisible()
+  await expect(bookCard(page, "Sapiens: De animales a dioses")).toBeVisible()
   await expect(bookCard(page, "Rayuela")).toHaveCount(0)
 
   const search = page.getByPlaceholder("Buscar título, autor o género...")
@@ -173,14 +212,14 @@ test("el catálogo lista todas las publicaciones y permite buscar, filtrar y rec
   await expect(page.getByText("No encontramos libros con esos criterios")).toBeVisible()
   await page.getByRole("button", { name: "Restablecer todos los filtros" }).click()
 
-  await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
+  await expect(page.getByText(`Mostrando ${SEED_BOOKS.length} libros`)).toBeVisible()
   await expect(bookCard(page, "Rayuela")).toBeVisible()
 })
 
 test("publicar valida campos obligatorios y exige puntos enteros positivos, incluso en los bordes", async ({
   page,
 }) => {
-  const database = await mockSupabase(page)
+  const database = await mockBackend(page)
   await signIn(page)
   await openPublishForm(page)
 
@@ -202,54 +241,47 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   await page.getByLabel("Puntos solicitados *").fill("1.5")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("Ingresá un número de puntos válido mayor a 0")).toBeVisible()
-  await expect(database.publications).toHaveLength(SEED_BOOKS.length)
+  expect(database.publications).toHaveLength(SEED_BOOKS.length)
 
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
   await page.getByLabel("Puntos solicitados *").fill("1")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
-  await expect(page.getByText("se publicó y guardó en Supabase.")).toBeVisible()
-  await expect(database.publications).toHaveLength(SEED_BOOKS.length + 1)
+  await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
+  expect(database.publications).toHaveLength(SEED_BOOKS.length + 1)
   expect(database.publications[0]).toMatchObject({
     isbn: newIsbn,
     email_propietario: testUser.email,
     valor_puntos_solicitado: 1,
     estado_publicacion: "DISPONIBLE",
   })
-  expect(database.publications[0]).not.toHaveProperty("titulo")
-  expect(database.publications[0]).not.toHaveProperty("autores")
-  expect(database.books.at(-1)).toMatchObject({
-    isbn: newIsbn,
-    google_books_id: null,
-    titulo: null,
-    autores: null,
-  })
 })
 
 test("publicar registra todos los datos opcionales y presenta el libro en el catálogo", async ({ page }) => {
-  const database = await mockSupabase(page)
+  const database = await mockBackend(page)
   await signIn(page)
   await openPublishForm(page)
 
-  await page.getByLabel("ISBN del libro *").fill(SEED_BOOKS[0].isbn)
+  const targetSeed = SEED_BOOKS[1] // Clean Code
+  await page.getByLabel("ISBN del libro *").fill(targetSeed.isbn)
   await page.getByLabel("Estado físico *").selectOption("Como nuevo")
   await page.getByLabel("Puntos solicitados *").fill("120")
   await page.getByLabel("Descripción y estado (opcional)").fill("Ejemplar cuidado, sin marcas.")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
-  await expect(page.getByText("se publicó y guardó en Supabase.")).toBeVisible()
+  await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
 
-  const publishedBook = bookCard(page, "Rayuela").first()
+  const publishedBook = bookCard(page, targetSeed.title).first()
   await expect(publishedBook).toBeVisible()
   await expect(publishedBook).toContainText("Como nuevo")
   await expect(publishedBook).toContainText("120 pts")
 
   await publishedBook.click()
   const detail = page.locator("div.fixed.inset-0")
-  await expect(detail.getByRole("heading", { name: "Rayuela" })).toBeVisible()
-  await expect(detail).toContainText(`ISBN: ${SEED_BOOKS[0].isbn}`)
+  await expect(detail.getByRole("heading", { name: targetSeed.title })).toBeVisible()
+  await expect(detail).toContainText(`ISBN: ${targetSeed.isbn}`)
   await expect(detail).toContainText("Ejemplar cuidado, sin marcas.")
 
   expect(database.publications[0]).toMatchObject({
-    isbn: SEED_BOOKS[0].isbn,
+    isbn: targetSeed.isbn,
     email_propietario: testUser.email,
     estado_fisico: "COMO_NUEVO",
     valor_puntos_solicitado: 120,
@@ -260,81 +292,81 @@ test("publicar registra todos los datos opcionales y presenta el libro en el cat
 test("el dueño puede editar una publicación y se conservan los valores existentes como punto de partida", async ({
   page,
 }) => {
-  const database = await mockSupabase(page)
+  const database = await mockBackend(page)
   await signIn(page)
-  await bookCard(page, "Rayuela").click()
+  await bookCard(page, "Clean Code").click()
 
   const detail = page.locator("div.fixed.inset-0")
   await detail.getByRole("button", { name: "Modificar Publicación" }).click()
   await expect(page.getByRole("heading", { name: "Modificar Publicación" })).toBeVisible()
-  await expect(page.getByLabel("ISBN del libro *")).toHaveValue(SEED_BOOKS[0].isbn)
-  await expect(page.getByLabel("Puntos solicitados *")).toHaveValue("50")
+  await expect(page.getByLabel("ISBN del libro *")).toHaveValue(SEED_BOOKS[1].isbn)
+  await expect(page.getByLabel("Puntos solicitados *")).toHaveValue("60")
 
-  await page.getByLabel("Puntos solicitados *").fill("55")
+  await page.getByLabel("Puntos solicitados *").fill("65")
   await page.getByRole("button", { name: "Guardar cambios" }).click()
 
-  await expect(bookCard(page, "Rayuela")).toBeVisible()
-  expect(database.publications.find((publication) => publication.isbn === SEED_BOOKS[0].isbn))
-    .toMatchObject({ valor_puntos_solicitado: 55 })
+  await expect(bookCard(page, "Clean Code")).toBeVisible()
+  expect(database.publications.find((publication) => publication.isbn === SEED_BOOKS[1].isbn))
+    .toMatchObject({ valor_puntos_solicitado: 65 })
 })
 
 test("solo el dueño ve acciones de edición y eliminación", async ({ page }) => {
-  await mockSupabase(page)
+  await mockBackend(page)
   await signIn(page)
-  await bookCard(page, "Ficciones").click()
+  await bookCard(page, "Rayuela").click()
 
   const detail = page.locator("div.fixed.inset-0")
   await expect(detail.getByRole("button", { name: "Modificar Publicación" })).toHaveCount(0)
   await expect(detail.getByRole("button", { name: "Eliminar", exact: true })).toHaveCount(0)
   await expect(detail.getByRole("button", { name: /Solicitar/ })).toBeVisible()
+  await page.getByRole("button").filter({ has: page.locator("svg.lucide-x") }).click()
 
-  await page.reload()
-  await expect(page.getByRole("button", { name: /Franco Papa/i })).toBeVisible()
-  await bookCard(page, "Rayuela").click()
+  await bookCard(page, "Clean Code").click()
   const ownedDetail = page.locator("div.fixed.inset-0")
   await expect(ownedDetail.getByRole("button", { name: "Modificar Publicación" })).toBeVisible()
   await expect(ownedDetail.getByRole("button", { name: "Eliminar", exact: true })).toBeVisible()
 })
 
 test("el dueño confirma la eliminación y la publicación deja de aparecer", async ({ page }) => {
-  const database = await mockSupabase(page)
+  const database = await mockBackend(page)
   await signIn(page)
-  await bookCard(page, "Cosmos").click()
+  await bookCard(page, "El principito").click()
 
   const detail = page.locator("div.fixed.inset-0")
   await detail.getByRole("button", { name: "Eliminar", exact: true }).click()
   await expect(detail.getByRole("button", { name: "¿Confirmar?" })).toBeVisible()
   await detail.getByRole("button", { name: "¿Confirmar?" }).click()
 
-  await expect(page.getByText("Publicación eliminada de Supabase.")).toBeVisible()
-  await expect(bookCard(page, "Cosmos")).toHaveCount(0)
-  expect(database.publications.find((publication) => publication.isbn === SEED_BOOKS[7].isbn))
+  await expect(page.getByText("Publicación eliminada correctamente.")).toBeVisible()
+  await expect(bookCard(page, "El principito")).toHaveCount(0)
+  expect(database.publications.find((publication) => publication.isbn === SEED_BOOKS[2].isbn))
     .toMatchObject({ estado_publicacion: "ELIMINADA" })
 })
 
 test("no permite eliminar una publicación reservada con un intercambio en curso", async ({ page }) => {
   await page.addInitScript(
-    ({ users, books }) => {
+    ({ storageKey, users, books }) => {
       localStorage.setItem(
-        "mercadolibro_v2_data",
+        storageKey,
         JSON.stringify({ currentUser: null, users, books }),
       )
     },
     {
+      storageKey: STORAGE_KEY,
       users: SEED_USERS,
       books: SEED_BOOKS.map((book) =>
-        book.id === "book-1" ? { ...book, availability: "RESERVADO" } : book,
+        book.isbn === SEED_BOOKS[1].isbn ? { ...book, availability: "RESERVADO" } : book,
       ),
     },
   )
-  await mockSupabase(page, { reservedIsbn: SEED_BOOKS[0].isbn })
+  await mockBackend(page, { skipInitialAvailableFetch: true })
   await signIn(page)
-  await bookCard(page, "Rayuela").click()
+  await bookCard(page, "Clean Code").click()
 
   const detail = page.locator("div.fixed.inset-0")
   await detail.getByRole("button", { name: "Eliminar", exact: true }).click()
   await detail.getByRole("button", { name: "¿Confirmar?" }).click()
 
   await expect(page.getByText("No se puede eliminar un libro con intercambio en curso (RF04).")).toBeVisible()
-  await expect(bookCard(page, "Rayuela")).toBeVisible()
+  await expect(bookCard(page, "Clean Code")).toBeVisible()
 })

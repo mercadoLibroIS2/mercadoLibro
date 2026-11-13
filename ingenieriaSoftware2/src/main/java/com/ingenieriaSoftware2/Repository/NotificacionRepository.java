@@ -18,6 +18,8 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, UUID
 
     long countByUsuarioEmailAndLeidaFalse(String email);
 
+    long countByUsuarioEmailAndLeidaFalseAndArchivadaFalse(String email);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Notificacion n SET n.leida = true WHERE n.usuario.email = :email AND n.leida = false")
     int marcarTodasLeidas(@Param("email") String email);

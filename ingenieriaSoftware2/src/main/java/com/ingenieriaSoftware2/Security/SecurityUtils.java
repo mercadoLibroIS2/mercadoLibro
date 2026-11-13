@@ -27,13 +27,27 @@ public class SecurityUtils {
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No hay un usuario logueado");
         }
-        return auth.getName();
+        if (auth.getPrincipal() instanceof Usuario usuario && usuario.getEmail() != null) {
+            return usuario.getEmail();
+        }
+        String identificador = auth.getName();
+        return usuarioRepository.findByNombreOrEmail(identificador, identificador)
+                .map(Usuario::getEmail)
+                .orElse(identificador);
     }
 
     /** Usuario logueado completo, buscado en la base. */
     public Usuario getUsuarioLogueado() {
-        String email = getEmailUsuarioLogueado();
-        return usuarioRepository.findByEmail(email)
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No hay un usuario logueado");
+        }
+        if (auth.getPrincipal() instanceof Usuario usuario && usuario.getId() != null) {
+            return usuarioRepository.findById(usuario.getId())
+                    .orElse(usuario);
+        }
+        String identificador = auth.getName();
+        return usuarioRepository.findByNombreOrEmail(identificador, identificador)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                         "El usuario del token no existe"));
     }

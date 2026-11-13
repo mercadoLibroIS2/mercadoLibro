@@ -11,11 +11,12 @@ import {
   XCircle,
 } from "lucide-react"
 import { useStore } from "./store"
+import { isUserMatch } from "@/lib/mercado-types"
 
 export function ChainsView() {
   const { chains, currentUser, confirmChainStep, rejectChain } = useStore()
   const userChains = currentUser
-    ? chains.filter((chain) => chain.steps.some((step) => step.userId === currentUser.id))
+    ? chains.filter((chain) => chain.steps.some((step) => isUserMatch(currentUser, step.userId)))
     : []
 
   return (
@@ -41,7 +42,7 @@ export function ChainsView() {
         </div>
       ) : (
         userChains.map((chain) => {
-          const myStep = chain.steps.find((s) => s.userId === currentUser?.id)
+          const myStep = chain.steps.find((s) => isUserMatch(currentUser, s.userId))
           const allConfirmed = chain.steps.every((s) => s.confirmed)
 
           return (
@@ -85,7 +86,7 @@ export function ChainsView() {
               {/* Visual Circular Circuit */}
               <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 {chain.steps.map((step, idx) => {
-                  const isMe = step.userId === currentUser?.id
+                  const isMe = isUserMatch(currentUser, step.userId)
                   return (
                     <div
                       key={step.userId}

@@ -42,6 +42,13 @@ public class NotificacionController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}/archivar")
+    public ResponseEntity<Void> archivar(@PathVariable UUID id) {
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
+        notificacionService.archivar(id, usuarioId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/marcar-todas")
     public ResponseEntity<Void> marcarTodasLeidas() {
         UUID usuarioId = securityUtils.getUsuarioIdLogueado();

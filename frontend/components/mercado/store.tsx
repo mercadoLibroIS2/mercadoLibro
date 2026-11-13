@@ -39,7 +39,11 @@ import {
   apiRegister,
   apiLogout,
   apiGetMe,
+  apiUpdateProfile,
+  apiGetPublicProfile,
+  apiChangePassword,
   apiListAvailablePublications,
+  apiListMyPublications,
   apiCreatePublication,
   apiEditPublication,
   apiDeletePublication,
@@ -60,12 +64,20 @@ import {
   parseIntercambioId,
   parseCompraId,
   apiFollowBook,
+  apiGetFollowedBooks,
+  apiUnfollowBook,
   apiGetSaldoPuntos,
   apiGetHistorialPuntos,
   apiListNotificaciones,
   apiMarcarNotificacionLeida,
+  apiArchivarNotificacion,
   apiMarcarTodasNotificacionesLeidas,
   apiCreateReview,
+  apiListReviews,
+  apiListUserReviews,
+  apiListCadenas,
+  apiAceptarCadena,
+  apiRechazarCadena,
   getAuthToken,
   setAuthToken,
   CONDITION_TO_ESTADO,
@@ -268,6 +280,7 @@ interface StoreContextValue extends AppState {
   logout: () => void
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
   switchUser: (userId: string) => void
   updateProfile: (patch: Partial<User>) => void
   viewUserProfile: (userId: string) => void
@@ -355,8 +368,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved)
         const hasLegacyNoise = parsed.books?.some((b: any) =>
-          b.ownerName?.includes("Camila") ||
-          b.ownerId?.startsWith("user-") ||
           b.title?.startsWith("Libro (") ||
           b.author === "Autor desconocido" ||
           b.ownerId?.includes("testuser") ||
@@ -484,7 +495,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async (userId: string) => {
     try {
-      const [enviados, recibidos, compras, ventas, historial, notifs, saldo, pubs] = await Promise.all([
+      const [
+        enviados,
+        recibidos,
+        compras,
+        ventas,
+        historial,
+        notifs,
+        saldo,
+        pubs,
+        myPubs,
+        followedBooks,
+        backendReviews,
+        backendCadenas,
+      ] = await Promise.all([
         apiListIntercambiosEnviados().catch(() => []),
         apiListIntercambiosRecibidos().catch(() => []),
         apiListMisCompras().catch(() => []),
@@ -493,6 +517,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apiListNotificaciones().catch(() => []),
         apiGetSaldoPuntos().catch(() => null),
         apiListAvailablePublications().catch(() => []),
+        apiListMyPublications().catch(() => []),
+        apiGetFollowedBooks(userId).catch(() => []),
+        apiListReviews().catch(() => []),
+        apiListCadenas().catch(() => []),
       ])
 
       const backendTrades: TradeRequest[] = [
@@ -539,14 +567,81 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           )
         }
 
+        const allBackendPubs = [...(pubs || []), ...(myPubs || [])]
+        const mergedBooks =
+          allBackendPubs.length > 0 ? mergeBackendPublications(prev.books, allBackendPubs) : prev.books
+
+        let mergedReviews = prev.reviews
+        if (backendReviews && backendReviews.length > 0) {
+          const mappedReviews: Review[] = backendReviews.map((r) => {
+            const reqIsbn = r.intercambioId?.isbnSolicitante || (r.intercambioId as any)?.isbnSolicitada || ""
+            const reqProp = r.intercambioId?.propietarioIdSolicitante || (r.intercambioId as any)?.propietarioSolicitada || ""
+            const reqHora = r.intercambioId?.horaDePublicacionSolicitante || (r.intercambioId as any)?.horaSolicitada || ""
+            const offIsbn = r.intercambioId?.isbnOfrecida || ""
+            const offProp = r.intercambioId?.propietarioIdOfrecida || (r.intercambioId as any)?.propietarioOfrecida || ""
+            const offHora = r.intercambioId?.horaDePublicacionOfrecida || (r.intercambioId as any)?.horaOfrecida || ""
+            const tradeId = `${reqIsbn}|${reqProp}|${reqHora}:${offIsbn}|${offProp}|${offHora}`
+            const id = `rev-backend-${tradeId}-${r.solicitanteReviewer ? "sol" : "ofr"}`
+            const matchedBook = mergedBooks.find((b) => b.isbn.replace(/[^0-9X]/gi, "") === reqIsbn.replace(/[^0-9X]/gi, ""))
+            const fromUser = prev.users.find((u) => isUserMatch(u, r.emailReviewer))
+            return {
+              id,
+              tradeId,
+              fromUserId: r.emailReviewer,
+              fromUserName: fromUser?.name || (r.emailReviewer ? r.emailReviewer.split("@")[0] : "Usuario"),
+              toUserId: r.emailReseniado,
+              rating: r.calificacion,
+              comment: r.comentario || "",
+              date: reqHora || new Date().toISOString(),
+              bookTitle: matchedBook?.title || `Libro (${reqIsbn || "Intercambio"})`,
+            }
+          })
+          const existingIds = new Set(prev.reviews.map((rev) => rev.id))
+          const newReviews = mappedReviews.filter((mr) => !existingIds.has(mr.id))
+          if (newReviews.length > 0) {
+            mergedReviews = [...newReviews, ...prev.reviews]
+          }
+        }
+
+        let mergedTrackedBooks = prev.trackedBooks
+        if (followedBooks && followedBooks.length > 0) {
+          const mappedTracked: TrackedBook[] = followedBooks.map((fb: any) => {
+            const isbn = typeof fb === "string" ? fb : fb?.isbn || ""
+            const cleanIsbn = isbn.replace(/[^0-9X]/gi, "")
+            const matchedBook = mergedBooks.find((b) => b.isbn.replace(/[^0-9X]/gi, "") === cleanIsbn)
+            return {
+              id: `track-backend-${userId}-${isbn}`,
+              userId,
+              isbn,
+              title: fb?.titulo || fb?.title || matchedBook?.title || `Libro (${isbn})`,
+              author: fb?.autor || fb?.author || matchedBook?.author,
+              category: fb?.categoria || fb?.category || matchedBook?.category,
+              createdAt: new Date().toISOString(),
+            }
+          })
+          const existingTrackedKeys = new Set(
+            prev.trackedBooks.map((t) => `${t.userId}|${(t.isbn || t.title).toLowerCase()}`)
+          )
+          const newTracked = mappedTracked.filter(
+            (mt) => !existingTrackedKeys.has(`${mt.userId}|${(mt.isbn || mt.title).toLowerCase()}`)
+          )
+          if (newTracked.length > 0) {
+            mergedTrackedBooks = [...newTracked, ...prev.trackedBooks]
+          }
+        }
+
+        void backendCadenas
+
         return {
           ...prev,
           currentUser: updatedCurrentUser,
           users: updatedUsers,
-          books: pubs && pubs.length > 0 ? mergeBackendPublications(prev.books, pubs) : prev.books,
+          books: mergedBooks,
           trades: !isDemoUser && backendTrades.length > 0 ? backendTrades : prev.trades,
           pointMovements: !isDemoUser && backendMovements.length > 0 ? backendMovements : prev.pointMovements,
           notifications: !isDemoUser && backendNotifs.length > 0 ? backendNotifs : prev.notifications,
+          reviews: mergedReviews,
+          trackedBooks: mergedTrackedBooks,
         }
       })
     } catch (err) {
@@ -767,12 +862,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     (patch: Partial<User>) => {
       if (!state.currentUser) return
+      if (patch.name) {
+        apiUpdateProfile(patch.name).catch((err) =>
+          console.warn("[Backend] Error actualizando perfil:", err)
+        )
+      }
       setState((prev) => {
         const updated = { ...prev.currentUser!, ...patch }
         return {
           ...prev,
           currentUser: updated,
-          users: prev.users.map((u) => (u.id === updated.id ? updated : u)),
+          users: prev.users.map((u) =>
+            isUserMatch(u, updated.id) || isUserMatch(u, prev.currentUser?.email) ? updated : u
+          ),
         }
       })
       showToast("Perfil actualizado correctamente.")
@@ -780,9 +882,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.currentUser, showToast]
   )
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      try {
+        await apiChangePassword({
+          contraseniaActual: currentPassword,
+          contraseniaNueva: newPassword,
+        })
+        showToast("Contraseña actualizada correctamente.")
+        return { success: true }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "No se pudo actualizar la contraseña."
+        return { success: false, error: message }
+      }
+    },
+    [showToast]
+  )
+
   const viewUserProfile = useCallback((userId: string) => {
     setSelectedProfileUserId(userId)
     setScreen("perfil_publico")
+    apiGetPublicProfile(userId)
+      .then((pubProfile) => {
+        if (!pubProfile?.email) return
+        setState((prev) => ({
+          ...prev,
+          users: prev.users.map((u) =>
+            isUserMatch(u, pubProfile.email)
+              ? {
+                  ...u,
+                  name: pubProfile.nombre || u.name,
+                  rating: pubProfile.reputacionPromedio ?? u.rating,
+                }
+              : u
+          ),
+        }))
+      })
+      .catch(() => {})
+    apiListUserReviews(userId).catch(() => [])
   }, [])
 
   // --- Books CRUD (Spring Boot Backend + Local Fallback) ---
@@ -898,7 +1035,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteBook = useCallback(
     async (bookId: string): Promise<boolean> => {
       const book = state.books.find((b) => b.id === bookId)
-      if (!book) return false
+      if (!book || !isUserMatch(state.currentUser, book.ownerId)) {
+        showToast("Solo el dueño puede eliminar esta publicación.")
+        return false
+      }
+      if (book.availability === "RESERVADO") {
+        showToast("No se puede eliminar un libro con intercambio en curso (RF04).")
+        return false
+      }
+      if (book.availability !== "DISPONIBLE") {
+        showToast("No se puede eliminar una publicación que no está disponible.")
+        return false
+      }
 
       const [isbn, emailPropietario, horaPublicacion] = bookId.includes("|")
         ? bookId.split("|")
@@ -916,7 +1064,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast("Publicación eliminada correctamente.")
       return true
     },
-    [state.books, showToast]
+    [state.books, state.trades, state.currentUser, showToast]
   )
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
@@ -1582,13 +1730,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeFromTracker = useCallback(
     (id: string) => {
+      const trackedBook = state.trackedBooks.find((t) => t.id === id)
+      if (trackedBook && state.currentUser?.id && trackedBook.isbn) {
+        apiUnfollowBook(state.currentUser.id, trackedBook.isbn).catch((err) =>
+          console.warn("[Backend] Error dejando de seguir libro:", err)
+        )
+      }
       setState((prev) => ({
         ...prev,
         trackedBooks: prev.trackedBooks.filter((t) => t.id !== id),
       }))
       showToast("Libro quitado de tu tracker.")
     },
-    [showToast]
+    [state.trackedBooks, state.currentUser, showToast]
   )
 
   const markNotificationRead = useCallback((id: string) => {
@@ -1601,6 +1755,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const archiveNotification = useCallback(
     (id: string) => {
+      apiArchivarNotificacion(id).catch((err) =>
+        console.warn("[Backend] Error archivando notificación:", err)
+      )
       setState((prev) => ({
         ...prev,
         notifications: prev.notifications.map((n) => (n.id === id ? { ...n, archived: true } : n)),
@@ -1636,6 +1793,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      apiAceptarCadena(chainId).catch((err) =>
+        console.warn("[Backend] Error aceptando cadena:", err)
+      )
+
       setState((prev) => {
         const updatedChains = prev.chains.map((chain) => {
           if (chain.id !== chainId) return chain
@@ -1667,6 +1828,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ) {
         return
       }
+
+      apiRechazarCadena(chainId).catch((err) =>
+        console.warn("[Backend] Error rechazando cadena:", err)
+      )
 
       setState((prev) => ({
         ...prev,
@@ -1707,6 +1872,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         logout,
         signInWithSupabase,
         signUpWithSupabase,
+        changePassword,
         switchUser,
         updateProfile,
         viewUserProfile,

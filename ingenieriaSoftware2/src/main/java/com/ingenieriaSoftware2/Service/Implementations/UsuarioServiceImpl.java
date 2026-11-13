@@ -61,6 +61,17 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
+    @Transactional
+    public PerfilResponseDTO actualizarPerfilPropio(String nuevoNombre) {
+        Usuario usuario = getUsuarioActual();
+        if (nuevoNombre != null && !nuevoNombre.isBlank() && !nuevoNombre.trim().equals(usuario.getNombre())) {
+            usuario.setNombre(nuevoNombre.trim());
+            usuarioRepository.save(usuario);
+        }
+        return usuarioMapper.toPerfilDTO(usuario);
+    }
+
+    @Override
     public void cambiarContrasenia(CambiarContraseniaRequestDTO dto) {
         Usuario usuario = getUsuarioActual();
 
@@ -84,6 +95,13 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
         Libro libro = libroRepository.findByIsbn(isbn).orElseThrow(()-> new LibroNoExisteException());
         usuario.getLibrosSeguidos().add(libro);
+    }
+
+    @Override
+    @Transactional
+    public void dejarDeSeguirLibro(UUID usuarioId, String isbn) {
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(() -> new UsuarioNoEncontrado());
+        usuario.getLibrosSeguidos().removeIf(libro -> libro.getIsbn().equals(isbn));
     }
 
     @Override
