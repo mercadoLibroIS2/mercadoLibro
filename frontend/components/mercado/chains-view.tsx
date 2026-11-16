@@ -1,156 +1,183 @@
 "use client"
 
 import {
-  Share2,
   ArrowRight,
   CheckCircle2,
   Clock,
-  BookOpen,
-  Sparkles,
-  ShieldCheck,
-  XCircle,
+  Share2,
 } from "lucide-react"
 import { useStore } from "./store"
 import { isUserMatch } from "@/lib/mercado-types"
 
+const STATUS_BADGES = {
+  COMPLETADA: {
+    label: "Cadena Completada",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  CANCELADA: {
+    label: "Cadena Cancelada",
+    className: "border-rose-200 bg-rose-50 text-rose-800",
+  },
+  ACTIVA: {
+    label: "En Proceso de Confirmación",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+  },
+} as const
+
 export function ChainsView() {
   const { chains, currentUser, confirmChainStep, rejectChain } = useStore()
   const userChains = currentUser
-    ? chains.filter((chain) => chain.steps.some((step) => isUserMatch(currentUser, step.userId)))
+    ? chains.filter((chain) =>
+        chain.steps.some((step) => isUserMatch(currentUser, step.userId))
+      )
     : []
 
   return (
     <div className="space-y-6">
-      {/* Intro Box */}
-      <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-5 sm:p-6">
-        <div className="flex items-center gap-2 text-purple-900 font-bold text-base md:text-lg">
-          <Share2 className="h-4.5 w-4.5" />
-          <span>Algoritmo de Cadenas Circulares de Intercambio (RF46)</span>
+      {/* Intro Callout */}
+      <div className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(28,25,23,0.03)] sm:p-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span>Cadenas circulares de intercambio</span>
         </div>
-        <p className="mt-1.5 text-sm md:text-base md:text-lg text-purple-800 leading-relaxed max-w-3xl">
-          Cuando dos personas no pueden intercambiar directamente porque una no tiene lo que la otra busca, MercadoLibro detecta circuitos triangulares de 3 o más participantes donde cada persona entrega un libro y recibe exactamente el libro que desea.
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-600">
+          Cuando dos personas no pueden intercambiar directamente porque una no tiene lo que la otra busca, MercadoLibro detecta circuitos de 3 o más participantes donde cada lector entrega un ejemplar y recibe exactamente el título que sigue.
         </p>
       </div>
 
       {userChains.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-stone-300 p-8 sm:p-12 text-center bg-white">
-          <Share2 className="mx-auto h-10 w-10 text-stone-300 mb-3" />
-          <p className="text-base sm:text-lg font-serif font-bold text-stone-800">No hay cadenas activas en este momento</p>
-          <p className="text-sm md:text-base md:text-lg text-stone-500 mt-1 max-w-md mx-auto">
-            A medida que más usuarios agreguen libros a su Tracker y publiquen ejemplares, el algoritmo sugerirá nuevas conexiones.
+        <div className="rounded-3xl border border-dashed border-stone-300/90 bg-white p-8 text-center sm:p-12">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+            <Share2 className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <p className="font-serif text-lg font-bold text-stone-900">
+            No hay cadenas activas en este momento
+          </p>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-stone-500">
+            A medida que más lectores agreguen libros a su Tracker y publiquen ejemplares, detectaremos automáticamente nuevas conexiones triangulares.
           </p>
         </div>
       ) : (
         userChains.map((chain) => {
-          const myStep = chain.steps.find((s) => isUserMatch(currentUser, s.userId))
-          const allConfirmed = chain.steps.every((s) => s.confirmed)
+          const myStep = chain.steps.find((s) =>
+            isUserMatch(currentUser, s.userId)
+          )
+          const badge =
+            chain.status === "COMPLETADA"
+              ? STATUS_BADGES.COMPLETADA
+              : chain.status === "CANCELADA"
+              ? STATUS_BADGES.CANCELADA
+              : STATUS_BADGES.ACTIVA
 
           return (
             <div
               key={chain.id}
-              className="rounded-3xl border border-stone-200 bg-white p-5 sm:p-7 shadow-xs overflow-hidden"
+              className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_1px_3px_rgba(28,25,23,0.05)] sm:p-7"
             >
               {/* Chain Header */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-700 text-white font-bold text-base md:text-lg">
-                    3P
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-800 text-xs font-bold tracking-wide text-white">
+                    {chain.steps.length}P
                   </span>
                   <div>
-                    <h3 className="font-serif text-base sm:text-lg font-bold text-stone-900">
+                    <h3 className="font-serif text-base sm:text-lg font-bold tracking-tight text-stone-900">
                       Cadena Triangular de Intercambio #{chain.id.slice(-4)}
                     </h3>
-                    <p className="text-sm md:text-base md:text-lg text-stone-500">
+                    <p className="text-xs sm:text-sm text-stone-500">
                       {chain.steps.length} participantes coordinados en ciclo cerrado
                     </p>
                   </div>
                 </div>
 
                 <span
-                  className={`rounded-full px-3.5 py-1 text-sm md:text-base md:text-lg font-bold ${
-                    chain.status === "COMPLETADA"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : chain.status === "CANCELADA"
-                      ? "bg-rose-100 text-rose-800"
-                      : "bg-purple-100 text-purple-800"
-                  }`}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${badge.className}`}
                 >
-                  {chain.status === "COMPLETADA"
-                    ? "Cadena Completada"
-                    : chain.status === "CANCELADA"
-                    ? "Cadena Cancelada"
-                    : "En Proceso de Confirmación"}
+                  {badge.label}
                 </span>
               </div>
 
-              {/* Visual Circular Circuit */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Circuit Steps */}
+              <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {chain.steps.map((step, idx) => {
                   const isMe = isUserMatch(currentUser, step.userId)
                   return (
                     <div
                       key={step.userId}
-                      className={`relative flex flex-col rounded-2xl border p-4 transition-all ${
+                      className={`relative flex flex-col justify-between rounded-2xl border p-4 transition-colors ${
                         isMe
-                          ? "border-purple-300 bg-purple-50/40 ring-1 ring-purple-300"
-                          : "border-stone-200 bg-stone-50/50"
+                          ? "border-amber-300/90 bg-amber-50/45"
+                          : "border-stone-200/80 bg-[#faf8f5]"
                       }`}
                     >
-                      {/* Step Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={step.userAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"}
-                            alt=""
-                            className="h-8 w-8 rounded-full object-cover ring-1 ring-stone-200"
-                          />
-                          <div>
-                            <p className="text-base md:text-lg font-bold text-stone-900">
-                              {step.userName} {isMe && "(Vos)"}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-200 bg-amber-100 text-xs font-bold text-amber-900">
+                            {step.userAvatar ? (
+                              <img
+                                src={step.userAvatar}
+                                alt={step.userName}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              step.userName.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-stone-900">
+                              {step.userName} {isMe ? "(Vos)" : ""}
                             </p>
-                            <span className="text-sm md:text-base text-stone-500">
+                            <span className="text-xs text-stone-500">
                               Paso {idx + 1} del circuito
                             </span>
                           </div>
                         </div>
 
                         {step.confirmed ? (
-                          <span className="flex items-center gap-1 text-emerald-600 text-sm md:text-base md:text-lg font-bold">
-                            <CheckCircle2 className="h-4 w-4" />
-                            Aceptó
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Aceptó</span>
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-amber-600 text-sm md:text-base md:text-lg font-medium">
-                            <Clock className="h-4 w-4" />
-                            Pendiente
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Pendiente</span>
                           </span>
                         )}
                       </div>
 
-                      {/* Trade flow */}
-                      <div className="mt-4 space-y-2.5 text-sm md:text-base md:text-lg">
-                        <div className="rounded-xl bg-white border border-stone-200 p-3">
-                          <span className="text-sm md:text-base font-bold text-amber-800 uppercase tracking-wider block">
-                            Entrega su libro:
+                      <div className="mt-4 flex flex-col gap-2.5">
+                        <div className="rounded-xl border border-stone-200/80 bg-white p-3">
+                          <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                            Entrega su libro
                           </span>
-                          <p className="font-semibold text-stone-900 text-base md:text-lg line-clamp-1 mt-0.5">
+                          <p className="mt-0.5 line-clamp-1 text-sm font-semibold text-stone-900">
                             {step.givesBook.title}
                           </p>
-                          <p className="text-sm md:text-base text-stone-500">{step.givesBook.author}</p>
+                          <p className="truncate text-xs text-stone-500">
+                            {step.givesBook.author}
+                          </p>
                         </div>
 
-                        <div className="flex justify-center text-purple-700">
-                          <ArrowRight className="h-4.5 w-4.5 rotate-90 md:rotate-0" />
+                        <div className="flex justify-center text-stone-400">
+                          <ArrowRight
+                            className="h-4 w-4 rotate-90 md:rotate-0"
+                            aria-hidden="true"
+                          />
                         </div>
 
-                        <div className="rounded-xl bg-white border border-stone-200 p-3">
-                          <span className="text-sm md:text-base font-bold text-emerald-700 uppercase tracking-wider block">
-                            Recibe a cambio:
+                        <div className="rounded-xl border border-stone-200/80 bg-white p-3">
+                          <span className="block text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                            Recibe a cambio
                           </span>
-                          <p className="font-semibold text-stone-900 text-base md:text-lg line-clamp-1 mt-0.5">
+                          <p className="mt-0.5 line-clamp-1 text-sm font-semibold text-stone-900">
                             {step.receivesBook.title}
                           </p>
-                          <p className="text-sm md:text-base text-stone-500">{step.receivesBook.author}</p>
+                          <p className="truncate text-xs text-stone-500">
+                            {step.receivesBook.author}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -158,42 +185,48 @@ export function ChainsView() {
                 })}
               </div>
 
-              {/* My Actions on the Chain */}
-              {chain.status !== "CANCELADA" && chain.status !== "COMPLETADA" && myStep && (
-                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
-                  <div className="text-sm md:text-base md:text-lg text-stone-600">
-                    {myStep.confirmed ? (
-                      <p className="flex items-center gap-1.5 text-emerald-700 font-semibold">
-                        <CheckCircle2 className="h-4.5 w-4.5" />
-                        Ya confirmaste tu participación. Esperando al resto de los integrantes.
-                      </p>
-                    ) : (
-                      <p>
-                        Revisá los libros que entregás y recibís antes de confirmar tu participación en la cadena.
-                      </p>
+              {/* Action Footer */}
+              {chain.status !== "CANCELADA" &&
+                chain.status !== "COMPLETADA" &&
+                myStep && (
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
+                    <div className="text-xs sm:text-sm text-stone-600">
+                      {myStep.confirmed ? (
+                        <p className="flex items-center gap-1.5 font-semibold text-emerald-700">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>
+                            Ya confirmaste tu participación. Esperando al resto de los integrantes.
+                          </span>
+                        </p>
+                      ) : (
+                        <p>
+                          Revisá los ejemplares que entregás y recibís antes de confirmar tu parte del circuito.
+                        </p>
+                      )}
+                    </div>
+
+                    {!myStep.confirmed && (
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => rejectChain(chain.id)}
+                          className="h-10 rounded-xl border border-stone-200/90 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                        >
+                          Rechazar
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => confirmChainStep(chain.id)}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                        >
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                          <span>Aceptar mi parte del circuito</span>
+                        </button>
+                      </div>
                     )}
                   </div>
-
-                  {!myStep.confirmed && (
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        onClick={() => rejectChain(chain.id)}
-                        className="rounded-xl border border-stone-200 px-4 py-2 text-sm md:text-base md:text-lg font-semibold text-stone-600 hover:bg-stone-50 transition-colors"
-                      >
-                        Rechazar
-                      </button>
-
-                      <button
-                        onClick={() => confirmChainStep(chain.id)}
-                        className="flex items-center gap-1.5 rounded-xl bg-purple-700 px-4 py-2 text-sm md:text-base md:text-lg font-bold text-white shadow-xs hover:bg-purple-800 transition-all active:scale-95"
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Aceptar mi parte del circuito
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
             </div>
           )
         })

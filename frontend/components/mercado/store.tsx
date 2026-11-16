@@ -273,6 +273,7 @@ interface StoreContextValue extends AppState {
   setSelectedCategory: (c: string) => void
   toast: string | null
   showToast: (msg: string) => void
+  isLoadingCatalog: boolean
 
   // Auth & User Switch
   login: (user: User) => void
@@ -345,6 +346,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [selectedCategory, setSelectedCategory] = useState<string>("Todas")
   const [toast, setToast] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true)
 
   const setTradeModalBook = useCallback((b: Book | null, type: TradeType = "PUNTOS") => {
     setTradeModalBookState(b)
@@ -374,9 +376,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           b.ownerId?.includes("mail@gmail")
         )
         if (parsed.users && parsed.books && !hasLegacyNoise) {
+          const sanitizedUsers = (parsed.users as User[]).map((u) => ({
+            ...u,
+            avatar: u.avatar?.includes("images.unsplash.com") ? "" : u.avatar || "",
+          }))
           setState((prev) => ({
             ...prev,
-            users: parsed.users,
+            users: sanitizedUsers,
             books: parsed.books,
             trades: parsed.trades || prev.trades,
             pointMovements: parsed.pointMovements || prev.pointMovements,
@@ -450,7 +456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   name: profile.nombre,
                   username: profile.nombre.toLowerCase().replace(/\s+/g, ""),
                   email: profile.email,
-                  avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
+                  avatar: "",
                   rating: profile.reputacionPromedio || 5.0,
                   totalReviews: 0,
                   totalTrades: 0,
@@ -490,6 +496,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         console.warn("[Backend] No se pudieron cargar publicaciones iniciales:", err)
+      })
+      .finally(() => {
+        setIsLoadingCatalog(false)
       })
   }, [])
 
@@ -705,7 +714,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 name: userProfile?.nombre || authData.username,
                 username: authData.username || authData.email.split("@")[0],
                 email: authData.email,
-                avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
+                avatar: "",
                 rating: userProfile?.reputacionPromedio || 5.0,
                 totalReviews: 0,
                 totalTrades: 0,
@@ -758,7 +767,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         name,
         username: username.replace("@", ""),
         email,
-        avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250`,
+        avatar: "",
         rating: 5.0,
         totalReviews: 0,
         totalTrades: 0,
@@ -796,7 +805,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           name: authData.username || cleanName,
           username: authData.username || username,
           email: authData.email,
-          avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250",
+          avatar: "",
           rating: 5.0,
           totalReviews: 0,
           totalTrades: 0,
@@ -1867,6 +1876,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSelectedCategory,
         toast,
         showToast,
+        isLoadingCatalog,
         login,
         register,
         logout,

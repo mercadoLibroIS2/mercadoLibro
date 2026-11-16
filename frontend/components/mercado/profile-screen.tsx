@@ -1,33 +1,65 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import {
+  ArrowLeft,
   BookOpen,
+  History,
+  KeyRound,
+  MapPin,
   MessageSquareText,
   Pencil,
   PlusCircle,
   Star,
-  History,
-  KeyRound,
   X,
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
 import { Field } from "./field"
-import type { PointMovementType } from "@/lib/mercado-types"
-import { isUserMatch } from "@/lib/mercado-types"
+import { isUserMatch, type PointMovementType } from "@/lib/mercado-types"
 
 type ProfileTab = "publicaciones" | "resenas" | "movimientos"
 
-const MOVEMENT_LABELS: Record<PointMovementType, { label: string; color: string; sign: string }> = {
-  INICIAL: { label: "Puntos de Bienvenida", color: "text-emerald-700 bg-emerald-50 border-emerald-200", sign: "+" },
-  BONO_INTERCAMBIO: { label: "Bono Intercambio", color: "text-emerald-700 bg-emerald-50 border-emerald-200", sign: "+" },
-  RECOMPENSA_RESEÑA: { label: "Bono Reseña", color: "text-emerald-700 bg-emerald-50 border-emerald-200", sign: "+" },
-  TRANSFERENCIA_RECIBIDA: { label: "Puntos Recibidos", color: "text-emerald-700 bg-emerald-50 border-emerald-200", sign: "+" },
-  TRANSFERENCIA_ENVIADA: { label: "Puntos Transferidos", color: "text-stone-700 bg-stone-100 border-stone-200", sign: "" },
-  RESERVA: { label: "Reserva de Garantía", color: "text-amber-700 bg-amber-50 border-amber-200", sign: "" },
-  LIBERACION: { label: "Liberación de Reserva", color: "text-blue-700 bg-blue-50 border-blue-200", sign: "+" },
+const MOVEMENT_LABELS: Record<
+  PointMovementType,
+  { label: string; badgeClass: string; sign: string }
+> = {
+  INICIAL: {
+    label: "Puntos de Bienvenida",
+    badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    sign: "+",
+  },
+  BONO_INTERCAMBIO: {
+    label: "Bono Intercambio",
+    badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    sign: "+",
+  },
+  RECOMPENSA_RESEÑA: {
+    label: "Bono Reseña",
+    badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    sign: "+",
+  },
+  TRANSFERENCIA_RECIBIDA: {
+    label: "Puntos Recibidos",
+    badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    sign: "+",
+  },
+  TRANSFERENCIA_ENVIADA: {
+    label: "Puntos Transferidos",
+    badgeClass: "border-stone-200 bg-stone-100 text-stone-700",
+    sign: "",
+  },
+  RESERVA: {
+    label: "Reserva de Garantía",
+    badgeClass: "border-amber-200 bg-amber-50 text-amber-800",
+    sign: "",
+  },
+  LIBERACION: {
+    label: "Liberación de Reserva",
+    badgeClass: "border-sky-200 bg-sky-50 text-sky-800",
+    sign: "+",
+  },
 }
 
 export function ProfileScreen() {
@@ -47,6 +79,7 @@ export function ProfileScreen() {
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
   const [editing, setEditing] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [avatarFailed, setAvatarFailed] = useState(false)
 
   const isOwnProfile =
     screen === "perfil" ||
@@ -56,6 +89,10 @@ export function ProfileScreen() {
     ? currentUser
     : users.find((u) => isUserMatch(u, selectedProfileUserId)) || currentUser
 
+  useEffect(() => {
+    setAvatarFailed(false)
+  }, [targetUser?.id, targetUser?.avatar])
+
   if (!targetUser) return null
 
   const userBooks = books.filter((b) => isUserMatch(targetUser, b.ownerId))
@@ -63,303 +100,360 @@ export function ProfileScreen() {
   const userMovements = pointMovements.filter((m) => isUserMatch(targetUser, m.userId))
 
   return (
-    <div className="mx-auto max-w-5xl px-3 sm:px-6 lg:px-8 py-4 sm:py-8 overflow-x-hidden">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       {!isOwnProfile && (
         <button
+          type="button"
           onClick={() => {
             setSelectedProfileUserId(null)
             setScreen("inicio")
           }}
-          className="mb-3 text-sm md:text-base font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-1"
+          className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-stone-500 transition-colors hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
         >
-          ← Volver al Catálogo
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <span>Volver al Catálogo</span>
         </button>
       )}
 
       {/* Header Profile Card */}
-      <div className="rounded-2xl sm:rounded-3xl border border-stone-200 bg-white p-4 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <img
-              src={targetUser.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"}
-              alt={targetUser.name}
-              className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl sm:rounded-3xl object-cover ring-2 ring-amber-700/20 shadow-xs shrink-0"
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-serif text-xl sm:text-3xl font-bold text-stone-900">
+      <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_1px_3px_rgba(28,25,23,0.05)] sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-stone-200 bg-amber-100 text-xl font-bold text-amber-900 sm:h-20 sm:w-20 sm:rounded-3xl">
+              {targetUser.avatar && !avatarFailed ? (
+                <img
+                  src={targetUser.avatar}
+                  alt={targetUser.name}
+                  onError={() => setAvatarFailed(true)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                targetUser.name.charAt(0).toUpperCase()
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
                   {targetUser.name}
                 </h1>
                 {isOwnProfile && (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-sm md:text-base font-bold text-amber-900">
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
                     Tu Cuenta
                   </span>
                 )}
               </div>
-              <p className="text-base md:text-lg text-stone-500 mt-0.5">@{targetUser.username}</p>
 
-              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-sm md:text-base md:text-lg text-stone-500">
-                <span className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-sm md:text-base md:text-lg font-bold text-amber-900">
-                  <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
-                  {targetUser.rating.toFixed(1)} ({targetUser.totalReviews})
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs sm:text-sm text-stone-500">
+                <span>@{targetUser.username}</span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-700 tabular-nums">
+                  <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
+                  <span>
+                    {targetUser.rating.toFixed(1)} ({targetUser.totalReviews})
+                  </span>
                 </span>
-                <span className="text-sm md:text-base md:text-lg text-stone-500">
-                  • {targetUser.totalTrades} trueques concretados
-                </span>
+                {targetUser.city && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1 text-stone-600">
+                      <MapPin className="h-3.5 w-3.5 text-stone-400" aria-hidden="true" />
+                      <span>{targetUser.city}</span>
+                    </span>
+                  </>
+                )}
               </div>
+
+              {targetUser.bio && (
+                <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-stone-600">
+                  {targetUser.bio}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Action buttons */}
           {isOwnProfile && (
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={startPublishing}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-amber-800 px-4 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
-                <PlusCircle className="h-4.5 w-4.5" />
+                <PlusCircle className="h-4 w-4" aria-hidden="true" />
                 <span>Publicar</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-4 w-4 text-stone-500" aria-hidden="true" />
                 <span>Editar</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => setChangingPassword(true)}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
-                <KeyRound className="h-4 w-4" />
+                <KeyRound className="h-4 w-4 text-stone-500" aria-hidden="true" />
                 <span>Cambiar contraseña</span>
               </button>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Compact Wallet Card (Own profile) */}
-      {isOwnProfile && (
-        <div className="mt-4 rounded-2xl sm:rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/30 p-4 sm:p-6 shadow-xs">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+        {/* Wallet / Activity Summary */}
+        {isOwnProfile && (
+          <div className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-stone-200/75 bg-[#faf8f5] p-4 sm:grid-cols-3 sm:gap-5 sm:p-5">
             <div>
-              <span className="text-sm md:text-base md:text-lg font-bold uppercase tracking-wider text-amber-800 block">
-                Puntos Disponibles
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                Puntos disponibles
               </span>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="font-serif text-2xl sm:text-4xl font-extrabold text-amber-950">
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-serif text-3xl font-bold tabular-nums text-stone-900">
                   {targetUser.availablePoints}
                 </span>
-                <span className="text-sm md:text-base md:text-lg font-bold text-amber-900/70">pts</span>
+                <span className="text-xs font-semibold text-stone-500">pts</span>
               </div>
-              <p className="text-sm md:text-base md:text-lg text-amber-900/70 mt-0.5 hidden sm:block">Listos para canjear</p>
+              <p className="mt-0.5 text-xs text-stone-500">Listos para canjear</p>
             </div>
 
-            <div>
-              <span className="text-sm md:text-base md:text-lg font-bold uppercase tracking-wider text-stone-600 block">
+            <div className="border-t border-stone-200/70 pt-3 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500">
                 En Garantía
               </span>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="font-serif text-2xl sm:text-4xl font-bold text-stone-700">
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-serif text-3xl font-bold tabular-nums text-stone-800">
                   {targetUser.reservedPoints}
                 </span>
-                <span className="text-sm md:text-base md:text-lg font-medium text-stone-500">pts</span>
+                <span className="text-xs font-semibold text-stone-500">pts</span>
               </div>
-              <p className="text-sm md:text-base md:text-lg text-stone-500 mt-0.5 hidden sm:block">Retenidos por trueques</p>
+              <p className="mt-0.5 text-xs text-stone-500">Retenidos por trueques activos</p>
             </div>
 
-            <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-amber-200/60 pt-2 sm:pt-0 sm:pl-4">
-              <span className="text-sm md:text-base md:text-lg font-bold uppercase tracking-wider text-stone-600 block">
+            <div className="border-t border-stone-200/70 pt-3 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-stone-500">
                 Trueques Concretados
               </span>
-              <span className="font-serif text-2xl sm:text-4xl font-bold text-stone-800 block mt-1">
-                {targetUser.totalTrades}
-              </span>
-              <p className="text-sm md:text-base md:text-lg text-stone-500 mt-0.5 hidden sm:block">Intercambios exitosos</p>
+              <div className="mt-1">
+                <span className="font-serif text-3xl font-bold tabular-nums text-stone-900">
+                  {targetUser.totalTrades}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-stone-500">Intercambios exitosos</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
       {/* Tabs */}
-      <div className="mt-4 sm:mt-6 w-full flex gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+      <div
+        aria-label="Secciones del perfil"
+        className="mt-6 flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+      >
         <button
+          type="button"
+          aria-pressed={tab === "publicaciones"}
           onClick={() => setTab("publicaciones")}
-          className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm md:text-base font-bold whitespace-nowrap transition-all ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "publicaciones"
               ? "bg-amber-800 text-white shadow-xs"
-              : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <BookOpen className="h-3.5 w-3.5" />
+          <BookOpen className="h-4 w-4" aria-hidden="true" />
           <span>Publicaciones ({userBooks.length})</span>
         </button>
 
         <button
+          type="button"
+          aria-pressed={tab === "resenas"}
           onClick={() => setTab("resenas")}
-          className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm md:text-base font-bold whitespace-nowrap transition-all ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "resenas"
               ? "bg-amber-800 text-white shadow-xs"
-              : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <MessageSquareText className="h-3.5 w-3.5" />
+          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
           <span>Reseñas ({userReviews.length})</span>
         </button>
 
         {isOwnProfile && (
           <button
+            type="button"
+            aria-pressed={tab === "movimientos"}
             onClick={() => setTab("movimientos")}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm md:text-base font-bold whitespace-nowrap transition-all ${
+            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
               tab === "movimientos"
                 ? "bg-amber-800 text-white shadow-xs"
-                : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
             }`}
           >
-            <History className="h-3.5 w-3.5" />
+            <History className="h-4 w-4" aria-hidden="true" />
             <span>Movimientos ({userMovements.length})</span>
           </button>
         )}
       </div>
 
       {/* Tab Content */}
-      <div className="mt-3 sm:mt-6">
+      <div className="mt-4">
         {tab === "publicaciones" && (
-          <div>
-            {userBooks.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {userBooks.map((book) => (
-                  <BookCard key={book.id} book={book} />
-                ))}
+          userBooks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300/90 bg-white p-10 text-center sm:p-14">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+                <BookOpen className="h-6 w-6" aria-hidden="true" />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-center">
-                <BookOpen className="h-8 w-8 text-stone-300 mb-2" />
-                <p className="font-serif text-base md:text-lg font-bold text-stone-800">
-                  Sin libros publicados todavía
-                </p>
-                <p className="mt-1 text-sm md:text-base text-stone-500 max-w-sm">
-                  {isOwnProfile
-                    ? "Publicá tu primer libro para comenzar a recibir solicitudes."
-                    : "Este usuario aún no tiene publicaciones activas."}
-                </p>
-                {isOwnProfile && (
-                  <button
-                    onClick={startPublishing}
-                    className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-800 px-3.5 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Publicar libro
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              <p className="font-serif text-lg font-bold text-stone-900">
+                Sin libros publicados todavía
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-stone-500">
+                {isOwnProfile
+                  ? "Publicá tu primer ejemplar para empezar a sumar puntos e intercambiar con la comunidad."
+                  : "Este lector todavía no tiene ejemplares publicados en el catálogo."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {userBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          )
         )}
 
         {tab === "resenas" && (
-          <div className="space-y-3">
-            {userReviews.length > 0 ? (
-              userReviews.map((rev) => (
-                <div
-                  key={rev.id}
-                  className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xs"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center text-amber-500">
-                        {Array.from({ length: rev.rating }).map((_, i) => (
-                          <Star key={i} className="h-3.5 w-3.5 fill-amber-500" />
-                        ))}
-                      </div>
-                      <span className="text-sm md:text-base font-bold text-stone-900">
-                        De {rev.fromUserName}
-                      </span>
-                    </div>
-                    <span className="text-sm md:text-base text-stone-400">
-                      {new Date(rev.date).toLocaleDateString("es-AR")}
-                    </span>
-                  </div>
-
-                  {rev.bookTitle && (
-                    <div className="mt-1 text-sm md:text-base font-semibold text-amber-900 bg-amber-50/70 border border-amber-200 px-2.5 py-0.5 rounded-lg inline-block">
-                      📖 {rev.bookTitle}
-                    </div>
-                  )}
-
-                  <p className="mt-2 text-sm md:text-base md:text-lg text-stone-700 italic bg-stone-50 p-3 rounded-xl border border-stone-100">
-                    &ldquo;{rev.comment}&rdquo;
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300 bg-white p-8 text-center">
-                <MessageSquareText className="h-8 w-8 text-stone-300 mb-2" />
-                <p className="font-serif text-base md:text-lg font-bold text-stone-800">
-                  Sin reseñas recibidas todavía
-                </p>
-                <p className="mt-1 text-sm md:text-base text-stone-500 max-w-sm">
-                  Las calificaciones aparecerán automáticamente tras concretar trueques.
-                </p>
+          userReviews.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300/90 bg-white p-10 text-center sm:p-14">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+                <MessageSquareText className="h-6 w-6" aria-hidden="true" />
               </div>
-            )}
-          </div>
+              <p className="font-serif text-lg font-bold text-stone-900">
+                Sin reseñas recibidas todavía
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-stone-500">
+                Las calificaciones de otros lectores aparecerán acá luego de completar intercambios.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {userReviews.map((review) => (
+                <article
+                  key={review.id}
+                  className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(28,25,23,0.03)] sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-900">
+                        {review.fromUserName}
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        Libro: {review.bookTitle}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1" aria-label={`${review.rating} de 5 estrellas`}>
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <Star
+                          key={idx}
+                          className={`h-4 w-4 ${
+                            idx < review.rating
+                              ? "fill-amber-500 text-amber-500"
+                              : "text-stone-200"
+                          }`}
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-2.5 text-sm leading-relaxed text-stone-700">
+                    {review.comment}
+                  </p>
+                  <span className="mt-2 block text-xs text-stone-400">
+                    {new Date(review.date).toLocaleDateString("es-AR", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </article>
+              ))}
+            </div>
+          )
         )}
 
         {tab === "movimientos" && isOwnProfile && (
-          <div className="space-y-2 rounded-2xl border border-stone-200 bg-white overflow-hidden shadow-xs divide-y divide-stone-100">
-            {userMovements.map((mov) => {
-              const meta = MOVEMENT_LABELS[mov.type] || {
-                label: mov.type,
-                color: "text-stone-700 bg-stone-100 border-stone-200",
-                sign: "",
-              }
-
-              return (
-                <div
-                  key={mov.id}
-                  className="flex items-center justify-between gap-3 p-3.5 hover:bg-stone-50/60 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`rounded-md border px-2 py-0.5 text-sm md:text-base font-bold uppercase tracking-wider ${meta.color}`}
-                      >
-                        {meta.label}
-                      </span>
+          userMovements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300/90 bg-white p-10 text-center sm:p-14">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+                <History className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="font-serif text-lg font-bold text-stone-900">
+                Sin movimientos registrados todavía
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-stone-500">
+                Acá verás el detalle de tus reservas, liberaciones y puntos ganados en cada intercambio.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100 overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.03)]">
+              {userMovements.map((mov) => {
+                const meta = MOVEMENT_LABELS[mov.type] ?? {
+                  label: mov.type,
+                  badgeClass: "border-stone-200 bg-stone-100 text-stone-700",
+                  sign: "",
+                }
+                const positive = mov.amount >= 0
+                return (
+                  <div
+                    key={mov.id}
+                    className="flex flex-wrap items-center justify-between gap-3 p-4 sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${meta.badgeClass}`}
+                        >
+                          {meta.label}
+                        </span>
+                        <span className="text-xs text-stone-400">
+                          {new Date(mov.date).toLocaleDateString("es-AR", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-sm text-stone-700">{mov.description}</p>
                     </div>
-                    <p className="mt-1 text-sm md:text-base md:text-lg text-stone-800 font-medium truncate">
-                      {mov.description}
-                    </p>
-                  </div>
 
-                  <div className="text-right shrink-0">
-                    <span
-                      className={`font-serif text-sm md:text-base md:text-lg font-bold ${
-                        mov.amount > 0 ? "text-emerald-700" : "text-stone-800"
-                      }`}
-                    >
-                      {mov.amount > 0 ? `+${mov.amount}` : mov.amount} pts
-                    </span>
-                    <span className="block text-sm md:text-base text-stone-500 font-medium">
-                      Saldo: {mov.balanceAfter} pts
-                    </span>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm sm:text-base font-bold tabular-nums ${
+                          positive ? "text-emerald-700" : "text-stone-800"
+                        }`}
+                      >
+                        {positive && !String(mov.amount).startsWith("+") ? "+" : ""}
+                        {mov.amount} pts
+                      </p>
+                      <p className="text-xs tabular-nums text-stone-400">
+                        Saldo: {mov.balanceAfter} pts
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )
         )}
       </div>
 
-      {editing ? <EditProfileModal onClose={() => setEditing(false)} /> : null}
-      {changingPassword ? (
+      {editing && <EditProfileModal onClose={() => setEditing(false)} />}
+      {changingPassword && (
         <ChangePasswordModal onClose={() => setChangingPassword(false)} />
-      ) : null}
+      )}
     </div>
   )
 }
@@ -372,7 +466,15 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !saving) onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [saving, onClose])
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     if (newPassword.length < 8) {
@@ -386,7 +488,10 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 
     setSaving(true)
     try {
-      const res = await changePassword(currentPassword || "valid-test-password", newPassword)
+      const res = await changePassword(
+        currentPassword || "valid-test-password",
+        newPassword
+      )
       if (!res.success) {
         setError(res.error || "No se pudo actualizar la contraseña.")
         return
@@ -399,39 +504,45 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-900/60 p-0 sm:p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Cambiar contraseña"
-      onClick={onClose}
+      onClick={() => !saving && onClose()}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-stone-200 bg-white p-4 sm:p-6 shadow-2xl animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 flex flex-col"
+        className="flex w-full max-w-md flex-col rounded-t-3xl border border-stone-200/90 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-4 sm:rounded-3xl sm:p-6 sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between border-b border-stone-100 pb-3">
-          <h2 className="font-serif text-lg sm:text-xl font-bold text-stone-900">
+        <div className="flex justify-center pb-2 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-stone-300" aria-hidden="true" />
+        </div>
+
+        <div className="mb-4 flex items-center justify-between border-b border-stone-100 pb-3.5">
+          <h2 className="font-serif text-lg sm:text-xl font-bold tracking-tight text-stone-900">
             Cambiar contraseña
           </h2>
           <button
             type="button"
+            disabled={saving}
             onClick={onClose}
-            className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            aria-label="Cerrar modal de contraseña"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4.5 w-4.5" aria-hidden="true" />
           </button>
         </div>
 
         {error && (
           <div
             role="alert"
-            className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm md:text-base font-medium text-rose-800"
+            className="mb-3.5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-800"
           >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3.5">
           <Field
             id="pwd-current"
             label="Contraseña actual"
@@ -457,18 +568,19 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
 
-          <div className="mt-2 flex justify-end gap-2 border-t border-stone-100 pt-3">
+          <div className="mt-2 flex items-center justify-end gap-2.5 border-t border-stone-100 pt-4">
             <button
               type="button"
+              disabled={saving}
               onClick={onClose}
-              className="rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm md:text-base font-semibold text-stone-700 hover:bg-stone-50"
+              className="h-11 rounded-xl border border-stone-200/90 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-amber-800 px-4 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900 shadow-xs transition-all active:scale-95 disabled:opacity-60"
+              className="h-11 rounded-xl bg-amber-800 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-900 active:scale-[0.99] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
             >
               {saving ? "Actualizando..." : "Actualizar contraseña"}
             </button>

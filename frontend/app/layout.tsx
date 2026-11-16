@@ -18,8 +18,7 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'MercadoLibro — Intercambiá libros con tu comunidad',
   description:
-    'Prototipo interactivo de MercadoLibro: registrate, obtené puntos de bienvenida y publicá tus libros para intercambiar.',
-  generator: 'v0.app',
+    'Plataforma comunitaria de intercambio de libros mediante puntos virtuales, trueque directo y cadenas circulares.',
   icons: {
     icon: [
       {
@@ -40,11 +39,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'light',
+  themeColor: '#faf8f5',
 }
 
 export default function RootLayout({
@@ -53,8 +49,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`bg-stone-50 ${sourceSans.variable} ${playfair.variable}`}>
-      <body className="antialiased">
+    <html lang="es" className={`bg-[#faf8f5] ${sourceSans.variable} ${playfair.variable}`}>
+      <body className="min-h-screen bg-[#faf8f5] font-sans text-stone-800 antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
