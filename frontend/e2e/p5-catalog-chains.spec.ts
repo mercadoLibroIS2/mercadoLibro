@@ -1,4 +1,11 @@
-import { expect, test, type Page, type Route } from "@playwright/test"
+import {
+  expect,
+  request as playwrightRequest,
+  test,
+  type APIRequestContext,
+  type Page,
+  type Route,
+} from "@playwright/test"
 import { generateInitialChains } from "../lib/chain-detector"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 import type { Book, TradeChain, User } from "../lib/mercado-types"
@@ -60,7 +67,36 @@ async function mockBackend(page: Page) {
     }
 
     if (url.pathname.endsWith("/api/auth/logout")) {
-      await route.fulfill({ status: 204, body: "" })
+      await route.fulfill({ status: 200, json: { message: "Logout exitoso" } })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/libro/google-books/isbn/9789500421461")) {
+      await route.fulfill({
+        json: {
+          googleBooksId: "p5-google-book",
+          isbn: "9789500421461",
+          titulo: "Ficciones",
+          autor: "Jorge Luis Borges",
+          descripcion: "Una colección de relatos.",
+          portadaUrl: "https://example.test/ficciones.jpg",
+          editorial: "Emecé",
+          anioPublicacion: "1944",
+          categorias: ["Ficción"],
+          paginas: 176,
+          ratingExterno: 4.5,
+        },
+      })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/libro/google-books/isbn/9780000000000")) {
+      await route.fulfill({ status: 404, body: "" })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/libro/google-books/isbn/9781111111111")) {
+      await route.fulfill({ status: 503, json: { message: "Proveedor no disponible" } })
       return
     }
 
@@ -112,6 +148,14 @@ async function openChains(page: Page) {
     .getByRole("button", { name: "Cadenas Circulares", exact: true })
     .click()
   await expect(page.getByRole("heading", { name: "Cadenas Multiusuario de Intercambio" })).toBeVisible()
+}
+
+async function openPublishForm(page: Page) {
+  await page
+    .locator("aside")
+    .getByRole("button", { name: "Publicar un Libro", exact: true })
+    .click()
+  await expect(page.getByRole("heading", { name: "Publicar un Libro" })).toBeVisible()
 }
 
 function bookCard(page: Page, title: string) {
@@ -239,6 +283,53 @@ test("la ficha del catálogo presenta metadatos y disponibilidad del ejemplar", 
   const reservedDetails = page.locator("div.fixed.inset-0")
   await expect(reservedDetails).toContainText("Publicación reservada o intercambiada.")
   await expect(reservedDetails.getByRole("button", { name: /Solicitar/ })).toHaveCount(0)
+})
+
+test("Google Books completa los metadatos y sugiere puntos en una publicación", async ({ page }) => {
+  await mockBackend(page)
+  await loadSeedState(page)
+  await signIn(page)
+  await openPublishForm(page)
+
+  await page.getByLabel("ISBN del libro *").fill("978-950-04-2146-1")
+  await page.getByRole("button", { name: "Buscar", exact: true }).click()
+
+  await expect(page.getByText("Libro verificado en Google Books")).toBeVisible()
+  await expect(page.getByText("Ficciones")).toBeVisible()
+  await expect(page.getByText("Jorge Luis Borges")).toBeVisible()
+  await expect(page.getByLabel("Puntos solicitados *")).not.toHaveValue("")
+  await expect(page.getByText("Emecé · 1944 · 176 págs.")).toBeVisible()
+})
+
+test("Google Books valida el ISBN antes de consultar y muestra un ISBN sin resultados", async ({
+  page,
+}) => {
+  await mockBackend(page)
+  await loadSeedState(page)
+  await signIn(page)
+  await openPublishForm(page)
+
+  const isbn = page.getByLabel("ISBN del libro *")
+  await isbn.fill("123")
+  await page.getByRole("button", { name: "Buscar", exact: true }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "Google Books requiere" })).toContainText(
+    "Google Books requiere un ISBN de 10 o 13 dígitos",
+  )
+
+  await isbn.fill("978-000-000-0000")
+  await page.getByRole("button", { name: "Buscar", exact: true }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "No se encontró ningún libro" })).toBeVisible()
+})
+
+test("Google Books expone errores del proveedor sin ocultarlos", async ({ page }) => {
+  await mockBackend(page)
+  await loadSeedState(page)
+  await signIn(page)
+  await openPublishForm(page)
+
+  await page.getByLabel("ISBN del libro *").fill("978-111-111-1111")
+  await page.getByRole("button", { name: "Buscar", exact: true }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "Proveedor no disponible" })).toBeVisible()
 })
 
 test("el autocompletado comienza con dos caracteres y solo abre coincidencias disponibles", async ({
@@ -387,4 +478,99 @@ test("no detecta ni muestra una cadena si falta un libro disponible para cerrar 
   await openChains(page)
   await expect(page.getByText("No hay cadenas activas en este momento")).toBeVisible()
   await expect(page.getByRole("heading", { name: /Cadena Triangular de Intercambio/ })).toHaveCount(0)
+})
+
+async function createBackendContext(): Promise<APIRequestContext> {
+  return playwrightRequest.newContext({
+    baseURL: process.env.P5_API_URL,
+  })
+}
+
+async function registerBackendUser(api: APIRequestContext, suffix: string) {
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const data = {
+    nombre: `P5 ${suffix} ${uniqueId}`,
+    email: `p5-${suffix.toLowerCase()}-${uniqueId}@example.test`,
+    contrasenia: `P5-${suffix}-Ab!`,
+  }
+  const response = await api.post("/api/auth/registro", { data })
+  expect(response.status()).toBe(201)
+  return {
+    ...data,
+    token: ((await response.json()) as { token: string }).token,
+  }
+}
+
+test.describe("contratos REST de cadenas", () => {
+  test("crea una cadena y la completa con la aceptación de sus participantes", async () => {
+    test.skip(!process.env.P5_API_URL, "Definí P5_API_URL para ejecutar la capa REST.")
+    const api = await createBackendContext()
+    try {
+      const first = await registerBackendUser(api, "Uno")
+      const second = await registerBackendUser(api, "Dos")
+      const create = await api.post("/api/cadenaIntercambio", {
+        headers: { Authorization: `Bearer ${first.token}` },
+        data: { participantesEmails: [first.email, second.email], puntosBonus: 75 },
+      })
+      expect(create.status()).toBe(201)
+      const chain = (await create.json()) as {
+        id: string
+        puntosBonus: number
+        estado: string
+        participantesEmails: string[]
+      }
+      expect(chain).toMatchObject({
+        puntosBonus: 75,
+        estado: "PROPUESTA",
+        participantesEmails: expect.arrayContaining([first.email, second.email]),
+      })
+
+      const firstAcceptance = await api.patch(
+        `/api/cadenaIntercambio/${chain.id}/aceptar`,
+        { headers: { Authorization: `Bearer ${first.token}` } },
+      )
+      expect(firstAcceptance.status()).toBe(200)
+      await expect(firstAcceptance.json()).resolves.toMatchObject({ estado: "EN_CURSO" })
+
+      const secondAcceptance = await api.patch(
+        `/api/cadenaIntercambio/${chain.id}/aceptar`,
+        { headers: { Authorization: `Bearer ${second.token}` } },
+      )
+      expect(secondAcceptance.status()).toBe(200)
+      await expect(secondAcceptance.json()).resolves.toMatchObject({ estado: "COMPLETADA" })
+    } finally {
+      await api.dispose()
+    }
+  })
+
+  test("rechaza una cadena, la cancela y la expone en el listado autenticado", async () => {
+    test.skip(!process.env.P5_API_URL, "Definí P5_API_URL para ejecutar la capa REST.")
+    const api = await createBackendContext()
+    try {
+      const user = await registerBackendUser(api, "Rechazo")
+      const create = await api.post("/api/cadenaIntercambio", {
+        headers: { Authorization: `Bearer ${user.token}` },
+        data: { participantesEmails: [user.email], puntosBonus: 50 },
+      })
+      expect(create.status()).toBe(201)
+      const chain = (await create.json()) as { id: string }
+
+      const rejection = await api.patch(
+        `/api/cadenaIntercambio/${chain.id}/rechazar`,
+        { headers: { Authorization: `Bearer ${user.token}` } },
+      )
+      expect(rejection.status()).toBe(200)
+      await expect(rejection.json()).resolves.toMatchObject({ estado: "CANCELADA" })
+
+      const list = await api.get("/api/cadenaIntercambio", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+      expect(list.status()).toBe(200)
+      await expect(list.json()).resolves.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: chain.id, estado: "CANCELADA" })]),
+      )
+    } finally {
+      await api.dispose()
+    }
+  })
 })

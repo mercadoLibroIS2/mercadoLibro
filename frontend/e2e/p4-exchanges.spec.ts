@@ -97,6 +97,7 @@ async function publish(
     },
   })
 
+  expect(response.status()).toBe(201)
   const publication = await apiOk<Publication>(response)
   expect(publication?.publicacionId.isbn).toBe(isbn)
   expect(publication?.publicacionId.emailPropietario).toBe(owner.email)
@@ -171,6 +172,7 @@ async function propose(request: APIRequestContext, pair: ExchangePair) {
     headers: { Authorization: `Bearer ${pair.proposer.token}` },
     data: exchangeRequest(pair),
   })
+  expect(response.status()).toBe(201)
   return apiOk<Exchange>(response)
 }
 

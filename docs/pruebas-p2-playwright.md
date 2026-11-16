@@ -2,39 +2,64 @@
 
 ## Objetivo
 
-La suite `frontend/e2e/p2-publications.spec.ts` comprueba los flujos de catálogo y publicaciones:
+Verificar los flujos de catálogo y publicaciones implementados actualmente en el frontend:
 
-- Listado, búsqueda, filtros y estado sin resultados.
-- Validación y publicación de libros con campos obligatorios y opcionales.
+- Listado de publicaciones disponibles.
+- Búsqueda, filtro por categoría y recuperación del estado sin resultados.
+- Validación y creación de publicaciones.
+- Visualización del detalle.
 - Edición y eliminación de publicaciones propias.
-- Restricción de acciones para libros ajenos y protección de publicaciones reservadas.
+- Restricción de acciones sobre publicaciones ajenas o reservadas.
+
+La suite está implementada en [`frontend/e2e/p2-publications.spec.ts`](../frontend/e2e/p2-publications.spec.ts). Intercepta las solicitudes REST del frontend y usa `SEED_BOOKS` como fixture; no modifica una base real.
 
 ## Ejecución
 
 Desde `frontend`:
 
 ```bash
-npm run test:e2e -- e2e/p2-publications.spec.ts
+npm install
+npm run test:e2e:p2
 ```
 
-Playwright inicia Next.js en `http://127.0.0.1:3100`. Si el navegador Chromium no está instalado:
+La configuración [`frontend/playwright.p2.config.ts`](../frontend/playwright.p2.config.ts) inicia automáticamente Next.js en `http://localhost:3000`. Si falta Chromium:
 
 ```bash
 npx playwright install chromium
 ```
 
+También se puede usar otra URL del frontend con `P2_APP_URL`.
+
 ## Casos cubiertos
 
-| ID | Caso | Verificaciones principales |
-|---|---|---|
-| P2-PUB-01 | Listado, búsqueda y filtros | Aparecen las diez publicaciones iniciales; el filtro por categoría y la búsqueda actualizan resultados; se puede recuperar el catálogo tras una búsqueda sin coincidencias. |
-| P2-PUB-02 | Validación de publicación | Rechaza título/autor vacíos o con espacios, puntos ausentes, cero, negativos y fraccionarios; acepta el límite inferior de un punto. |
-| P2-PUB-03 | Publicación completa | Recoge campos obligatorios y opcionales, recorta espacios en título y autor, muestra la nueva ficha y persiste sus datos en el estado local. |
-| P2-PUB-04 | Edición propia | Precarga los valores actuales, guarda cambios y actualiza el libro existente sin duplicarlo. |
-| P2-PUB-05 | Permisos en ficha | Un usuario que no es dueño no ve edición/eliminación; el dueño sí ve ambas acciones. |
-| P2-PUB-06 | Eliminación propia | Requiere confirmación y quita la publicación del catálogo. |
-| P2-PUB-07 | Publicación reservada | Impide eliminar un libro con un intercambio en curso y conserva su publicación. |
+| ID | Funcionalidad | Caso | Verificaciones principales |
+|---|---|---|---|
+| P2-PUB-01 | Catálogo | Listado, búsqueda y filtros | Carga las publicaciones de `SEED_BOOKS`, filtra por categoría, muestra el estado sin coincidencias y permite restablecer los filtros. |
+| P2-PUB-02 | Publicación | Validaciones de `PublicacionRequestDTO` | Exige ISBN y puntos; rechaza cero, negativos y fracciones; acepta un valor entero positivo. |
+| P2-PUB-03 | Publicación | Creación completa | Envía ISBN, estado físico, puntos y comentario; incorpora la publicación al catálogo y muestra su detalle. |
+| P2-PUB-04 | Publicación propia | Edición | Precarga el ISBN y los puntos actuales, envía `PUT /api/publicaciones/editar` y actualiza la publicación sin duplicarla. |
+| P2-PUB-05 | Autorización de interfaz | Publicación ajena | Oculta modificar/eliminar para un libro de otro usuario y mantiene visible solicitar intercambio. |
+| P2-PUB-06 | Publicación propia | Eliminación confirmada | Requiere una segunda confirmación, envía `DELETE /api/publicaciones/eliminar` y quita el libro del catálogo. |
+| P2-PUB-07 | Regla de negocio | Publicación reservada | Impide eliminar una publicación con disponibilidad `RESERVADO` y conserva la ficha con el mensaje RF04. |
 
-## Simulación y alcance
+## Contrato REST simulado
 
-La autenticación y las consultas REST de Supabase se interceptan con Playwright; no se usan cuentas reales ni se modifican datos remotos. Los libros parten del catálogo de demostración y las operaciones se verifican en el estado del frontend almacenado en `localStorage`. Por ello, estos E2E validan la interfaz y las reglas del estado cliente, no la persistencia o autorización del backend.
+La fixture intercepta estas rutas:
+
+- `POST /api/auth/login` y `GET /api/usuario/me` para establecer un usuario autenticado.
+- `GET /api/publicaciones/disponibles` para cargar el catálogo.
+- `POST /api/publicaciones/publicar` con `isbn`, `estadoFisico`, `valorPuntosSolicitado` y `comentario`.
+- `PUT /api/publicaciones/editar` y `DELETE /api/publicaciones/eliminar`, usando `isbn`, `emailPropietario` y `horaPublicacion` como identificador compuesto.
+- `POST /api/auth/logout` para cerrar la sesión de la fixture.
+
+Las respuestas de publicación siguen `PublicacionResponseDTO` y su `publicacionId` compuesto. Los códigos simulados son HTTP 200 para consultas/login/logout y HTTP 204 para editar/eliminar.
+
+## Alcance y limitaciones
+
+- Estas pruebas validan la interfaz, el store y la conversión entre el modelo de la UI y el contrato REST; no verifican persistencia, JWT real, autorización del backend ni Google Books.
+- El catálogo inicial proviene de `SEED_BOOKS`; no depende de publicaciones existentes en una base externa.
+- La creación, edición y eliminación modifican una base en memoria de la prueba. No prueban transacciones ni concurrencia.
+- La restricción de publicación reservada se prepara en el estado local con `availability: "RESERVADO"`; no crea un intercambio real.
+- La suite no cubre compras, intercambios, seguimiento de libros ni cadenas, que pertenecen a los planes P3-P6.
+
+Los reportes y artefactos generados por Playwright quedan en `test-results/` y `playwright-report/`, excluidos de Git.

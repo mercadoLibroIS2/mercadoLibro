@@ -89,7 +89,7 @@ async function mockBackend(
         })
         return
       }
-      await route.fulfill({ status: 204, body: "" })
+      await route.fulfill({ status: 200, body: "" })
       return
     }
 
@@ -251,6 +251,24 @@ test("el usuario autenticado puede ver su perfil propio", async ({ page }) => {
   await expect(page.getByText("Tu Cuenta")).toBeVisible()
   await expect(page.getByRole("heading", { name: "P1 Test User" })).toBeVisible()
   await expect(page.getByText("@P1 Test User")).toBeVisible()
+})
+
+test("el usuario autenticado puede editar su perfil", async ({ page }) => {
+  const authRequests = await mockBackend(page)
+  await page.goto("/")
+  await signIn(page)
+  await page.locator('button[title="Ir a mi perfil y billetera"]').click()
+  await page.getByRole("button", { name: "Editar" }).click()
+
+  const dialog = page.getByRole("dialog", { name: "Editar Perfil" })
+  await dialog.getByLabel("Nombre completo").fill("P1 Test User Updated")
+  await dialog.getByRole("button", { name: "Guardar cambios" }).click()
+
+  await expect(page.getByRole("heading", { name: "P1 Test User Updated" })).toBeVisible()
+  await expect(page.getByText("Perfil actualizado correctamente.")).toBeVisible()
+  const profileRequests = authRequests.filter((request) => request.path.endsWith("/api/usuario/me"))
+  const updateRequest = profileRequests[profileRequests.length - 1]
+  expect(updateRequest?.body.nombre).toBe("P1 Test User Updated")
 })
 
 test("un usuario guardado localmente no queda autenticado sin sesión activa", async ({ page }) => {
