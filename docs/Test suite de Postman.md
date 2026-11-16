@@ -2,7 +2,7 @@
 
 ## Objetivo y alcance
 
-La colección `postman/MercadoLibro.postman_collection.json` verifica los contratos HTTP que existen en el backend Java actual: disponibilidad, autenticación JWT, perfil, puntos, notificaciones y publicaciones. Los casos se ejecutan contra una instancia local y una base de datos descartable.
+La colección `postman/MercadoLibro.postman_collection.json` verifica los contratos HTTP que existen en el backend Java actual: disponibilidad, autenticación JWT, perfiles, puntos, notificaciones, seguimiento de libros y publicaciones. Los casos se ejecutan contra una instancia local y una base de datos descartable.
 
 La ejecución crea un usuario QA único, conserva su token en variables de colección y crea una publicación con el ISBN `9788437604572`. Al final edita y elimina esa publicación y cierra la sesión. No ejecutar contra producción ni contra una base con datos relevantes.
 
@@ -28,6 +28,7 @@ La publicación usa un ISBN conocido por el servicio de importación y por las p
 | AUTH-06 | `LoginRequestDTO` | Contraseña incorrecta | HTTP 401 sin token |
 | AUTH-07 | `AuthResponseDTO` | Refrescar token válido | HTTP 200, token e identidad |
 | USER-01 | `PerfilResponseDTO` | Consultar `/api/usuario/me` | HTTP 200, identidad y saldos |
+| USER-02 | `PerfilResponseDTO` | Consultar perfil público por nombre | HTTP 200, identidad y reputación |
 | PTS-01 | `SaldoPuntosResponseDTO` | Consultar saldo | HTTP 200 y los tres saldos |
 | PTS-02 | `MovimientoPuntosResponseDTO` | Consultar historial | HTTP 200 y lista |
 | NOTIF-01 | `Page<NotificacionResponseDTO>` | Listar no leídas | HTTP 200 y `content` como lista |
@@ -37,6 +38,9 @@ La publicación usa un ISBN conocido por el servicio de importación y por las p
 | PUB-03 | Seguridad | Publicar sin JWT | HTTP 401 o 403 |
 | PUB-04 | Publicaciones | Listar disponibles sin JWT | HTTP 200 y lista |
 | PUB-05 | Publicaciones | Listar propias | HTTP 200 e incluye la publicación QA |
+| TRACK-01 | Seguimiento | Seguir el libro publicado | HTTP 204 |
+| TRACK-02 | Seguimiento | Listar libros seguidos | HTTP 200 e incluye el ISBN seguido |
+| TRACK-03 | Seguimiento | Dejar de seguir el libro | HTTP 204 |
 | PUB-06 | `PublicacionIdParams` | Consultar detalle | HTTP 200 e ID compuesto |
 | PUB-07 | Publicaciones | Editar publicación propia | HTTP 204 |
 | PUB-08 | Publicaciones | Eliminar publicación propia | HTTP 204 |
@@ -54,6 +58,11 @@ No se inventan solicitudes para DTOs cuyos datos base no pueden prepararse de fo
 | `CadenaIntercambioRequestDTO` / `CadenaIntercambioResponseDTO` | El endpoint existe, pero sus operaciones de aceptar/rechazar requieren participantes y permisos que no se generan en esta corrida. |
 | `Notificacion` marcar/archivar | El listado y el conteo son reproducibles; marcar una notificación requiere conocer un ID generado por un evento de negocio. |
 | `GoogleBookVolumeDTO` | Las búsquedas dependen de un proveedor externo y no son necesarias para validar el flujo local de publicación. |
+
+El seguimiento se prueba con el libro creado por la propia colección. La
+colección valida alta, consulta y baja de la relación; la aplicación de
+criterios de precio/estado y la generación de avisos se cubren en la suite
+E2E del catálogo cuando esas operaciones pertenecen a la store de frontend.
 
 `LibroRequestDTO` no es el contrato usado para publicar actualmente; `LibroResponseDTO` sí se conserva en la respuesta de libros seguidos, pero ese flujo no crea datos nuevos y queda fuera de esta corrida. `OfertaIntercambio*` y `NotificacionRequestDTO` tampoco tienen operaciones ejecutables en sus controladores actuales. No se mantienen casos contra rutas antiguas.
 

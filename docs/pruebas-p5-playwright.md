@@ -48,6 +48,7 @@ la capa frontend sigue ejecutándose.
 | Área | Escenarios |
 |---|---|
 | Catálogo | Listado completo; búsqueda por título, autor e ISBN; filtros por categoría, disponibilidad y puntos; limpieza de filtros; estado sin resultados; ficha con metadatos y publicación reservada; autocomplete desde dos caracteres y exclusión de publicaciones no disponibles. |
+| Seguimiento | Alta de un libro con título, autor, tope de puntos, condición y nota; detección de una publicación coincidente; consulta de la lista y baja del seguimiento. Cubre HU 4.2, HU 4.3 y parte de HU 4.4. |
 | Google Books | ISBN válido en el formulario de publicación, autocompletado de título/autor/categoría/metadatos y sugerencia de puntos; ISBN con formato inválido; ISBN sin resultados (404); error del proveedor (503) mostrado al usuario. |
 | Cadenas en UI | Ciclo de tres participantes con libros distintos; relación entrega/recibe cerrada; visibilidad restringida a participantes; aceptación secuencial hasta `COMPLETADA`; rechazo persistente hasta `CANCELADA`; ausencia de ciclo cuando falta una publicación disponible. |
 | Cadenas REST | Creación `POST /api/cadenaIntercambio` con estado `PROPUESTA`; aceptación de participantes hasta `EN_CURSO` y `COMPLETADA`; rechazo mediante `PATCH .../rechazar`; listado autenticado. |
@@ -66,6 +67,10 @@ respuestas 404 y 503; no se convierten en éxitos silenciosos.
   local del frontend. La suite REST verifica el controlador y servicio
   `CadenaIntercambioController`, pero no afirma que ambas representaciones
   estén sincronizadas entre dispositivos.
+- El tracker aplica los criterios guardados a las publicaciones disponibles
+  en la store; la generación automática de notificaciones para una nueva
+  publicación no está expuesta como flujo REST reproducible y queda fuera de
+  esta suite.
 - Los casos REST no prueban la disponibilidad de un proveedor externo de
   Google Books; esa dependencia se cubre mediante mocks en la UI. La
   integración externa se prueba de forma aislada en el backend.
