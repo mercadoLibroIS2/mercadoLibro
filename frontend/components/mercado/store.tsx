@@ -87,7 +87,50 @@ import {
   type IntercambioResponse,
   type IntercambioIdParams,
   type CompraIdParams,
+  type CadenaResponse,
+  type CadenaPasoResponse,
 } from "@/lib/api"
+
+function cadenaPasoToBook(paso: CadenaPasoResponse): Book {
+  const cleanIsbn = paso.isbn.replace(/[^0-9X]/gi, "")
+  return {
+    id: `${paso.isbn}|${paso.emailEntrega}|${paso.horaPublicacion}`,
+    isbn: paso.isbn,
+    title: paso.titulo || `Libro (${paso.isbn})`,
+    author: paso.autor || "",
+    category: "General",
+    condition: (paso.estadoFisico && ESTADO_TO_CONDITION[paso.estadoFisico]) || "Bueno",
+    points: paso.valorPuntosSolicitado ?? 0,
+    coverUrl: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
+    ownerId: paso.emailEntrega,
+    ownerName: paso.nombreEntrega,
+    ownerRating: 0,
+    ownerTrades: 0,
+    availability: "DISPONIBLE",
+    createdAt: paso.horaPublicacion,
+  }
+}
+
+function cadenaResponseToChain(cadena: CadenaResponse): TradeChain {
+  const pasos = cadena.pasos || []
+  return {
+    id: cadena.id,
+    status: cadena.estado,
+    createdAt: pasos[0]?.horaPublicacion || new Date().toISOString(),
+    steps: pasos.map((paso) => {
+      // Lo que recibe este participante es lo que entrega quien le pasa el libro
+      const recibido = pasos.find((otro) => otro.emailRecibe === paso.emailEntrega) || paso
+      return {
+        userId: paso.emailEntrega,
+        userName: paso.nombreEntrega,
+        userAvatar: "",
+        givesBook: cadenaPasoToBook(paso),
+        receivesBook: cadenaPasoToBook(recibido),
+        confirmed: paso.confirmado,
+      }
+    }),
+  }
+}
 
 const ESTADO_PUBLICACION_TO_AVAILABILITY: Record<string, Book["availability"]> = {
   DISPONIBLE: "DISPONIBLE",
@@ -770,7 +813,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        void backendCadenas
 
         return {
           ...prev,
@@ -782,6 +824,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           notifications: !isDemoUser && backendNotifs.length > 0 ? backendNotifs : prev.notifications,
           reviews: mergedReviews,
           trackedBooks: mergedTrackedBooks,
+          // Con sesión del backend las cadenas son las reales (detectadas por el servidor)
+          chains: hasBackendSession() ? (backendCadenas || []).map(cadenaResponseToChain) : prev.chains,
         }
       })
     } catch (err) {
@@ -1161,6 +1205,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // El backend recalcula referencia y semáforo al editar: tomar su valor
+      let backendReference: number | undefined
+      if (hasBackendSession()) {
+        const mine = await apiListMyPublications().catch(() => [])
+        const updated = mine.find((pub) => `${pub.publicacionId.isbn}|${pub.publicacionId.emailPropietario}|${pub.publicacionId.horaPublicacion}` === bookId)
+        backendReference = updated?.valorReferenciaCalculado ?? undefined
+      }
+
       setState((prev) => ({
         ...prev,
         books: prev.books.map((candidate) =>
@@ -1170,7 +1222,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 condition: patch.condition,
                 points: patch.points,
                 description: patch.description,
-                referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5),
+                referencePrice:
+                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, 4.5),
               }
             : candidate
         ),
@@ -1977,7 +2030,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.currentUser])
 
   const confirmChainStep = useCallback(
-    (chainId: string) => {
+    async (chainId: string) => {
       if (!state.currentUser) return
 
       const chain = state.chains.find((item) => item.id === chainId)
@@ -1991,9 +2044,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      apiAceptarCadena(chainId).catch((err) =>
-        console.warn("[Backend] Error aceptando cadena:", err)
-      )
+      if (hasBackendSession()) {
+        try {
+          const actualizada = await apiAceptarCadena(chainId)
+          setState((prev) => ({
+            ...prev,
+            chains: prev.chains.map((c) => (c.id === chainId ? cadenaResponseToChain(actualizada) : c)),
+          }))
+          if (actualizada.estado === "COMPLETADA") {
+            showToast(`¡Cadena completada! Cada participante recibió +${actualizada.puntosBonus} pts.`)
+          } else if (actualizada.estado === "CANCELADA") {
+            showToast("La cadena se canceló porque uno de los libros ya no está disponible.")
+          } else {
+            showToast("Confirmaste tu participación. Falta que confirmen los demás.")
+          }
+          refreshFromBackend()
+        } catch (err) {
+          showToast(`No se pudo confirmar la cadena: ${backendErrorMessage(err)}`)
+        }
+        return
+      }
 
       setState((prev) => {
         const updatedChains = prev.chains.map((chain) => {
@@ -2013,11 +2083,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       showToast("Confirmaste tu participación en la cadena de intercambio.")
     },
-    [state.currentUser, state.chains, showToast]
+    [state.currentUser, state.chains, showToast, refreshFromBackend]
   )
 
   const rejectChain = useCallback(
-    (chainId: string) => {
+    async (chainId: string) => {
       const chain = state.chains.find((item) => item.id === chainId)
       if (
         !state.currentUser ||
@@ -2027,9 +2097,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      apiRechazarCadena(chainId).catch((err) =>
-        console.warn("[Backend] Error rechazando cadena:", err)
-      )
+      if (hasBackendSession()) {
+        try {
+          await apiRechazarCadena(chainId)
+        } catch (err) {
+          showToast(`No se pudo rechazar la cadena: ${backendErrorMessage(err)}`)
+          return
+        }
+      }
 
       setState((prev) => ({
         ...prev,

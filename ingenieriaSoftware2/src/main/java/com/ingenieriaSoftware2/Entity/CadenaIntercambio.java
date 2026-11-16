@@ -35,4 +35,8 @@ public class CadenaIntercambio {
             inverseJoinColumns = @JoinColumn(name = "usuario_id")
     )
     private Set<Usuario> participantes = new HashSet<>();
+
+    @OneToMany(mappedBy = "cadena", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orden ASC")
+    private List<CadenaPaso> pasos = new ArrayList<>();
 }

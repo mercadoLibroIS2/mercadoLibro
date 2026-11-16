@@ -292,7 +292,8 @@ export async function apiEditPublication(
   })
   return request<void>(`/api/publicaciones/editar?${params.toString()}`, {
     method: "PUT",
-    body: JSON.stringify(dto),
+    // El backend valida el mismo DTO que al publicar, que exige el ISBN
+    body: JSON.stringify({ isbn: id.isbn, ...dto }),
   })
 }
 
@@ -639,9 +640,31 @@ export async function apiMarcarTodasNotificacionesLeidas(): Promise<void> {
 // CADENAS
 // -------------------------------------------------------------
 
-export async function apiListCadenas(): Promise<any[]> {
+export interface CadenaPasoResponse {
+  emailEntrega: string
+  nombreEntrega: string
+  emailRecibe: string
+  isbn: string
+  horaPublicacion: string
+  titulo?: string | null
+  autor?: string | null
+  estadoFisico?: EstadoFisico | null
+  valorPuntosSolicitado?: number | null
+  confirmado: boolean
+}
+
+export interface CadenaResponse {
+  id: string
+  puntosBonus: number
+  estado: "PROPUESTA" | "EN_CURSO" | "COMPLETADA" | "CANCELADA"
+  participantesEmails: string[]
+  pasos: CadenaPasoResponse[]
+}
+
+/** El backend detecta cadenas nuevas al listar y devuelve solo las del usuario logueado. */
+export async function apiListCadenas(): Promise<CadenaResponse[]> {
   try {
-    return await request<any[]>("/api/cadenaIntercambio")
+    return await request<CadenaResponse[]>("/api/cadenaIntercambio")
   } catch {
     return []
   }

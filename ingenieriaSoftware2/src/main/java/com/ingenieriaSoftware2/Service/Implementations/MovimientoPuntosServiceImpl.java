@@ -112,6 +112,31 @@ public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
     }
 
     @Override
+    @Transactional
+    public void acreditarBonificacionSistema(Usuario usuario, int monto, String descripcion) {
+        if (usuario == null || monto <= 0) {
+            return;
+        }
+        int saldoActual = usuario.getSaldoTotal() != null ? usuario.getSaldoTotal() : 0;
+        usuario.setSaldoTotal(saldoActual + monto);
+        usuarioRepository.save(usuario);
+
+        EventoSistemaId eventoId = new EventoSistemaId(TipoEventoSistema.PROMOCION, obtenerFechaEventoUnica());
+        EventoSistema evento = new EventoSistema();
+        evento.setEventoSistemaId(eventoId);
+        evento.setDescripcion(descripcion);
+        eventoSistemaRepository.save(evento);
+
+        MovimientoPuntosSistema movimiento = new MovimientoPuntosSistema();
+        movimiento.setMovimientoPuntosSistemaId(
+                new MovimientoPuntosSistemaId(eventoId, usuario.getId(), TipoMovimiento.BONIFICACION));
+        movimiento.setMonto((long) monto);
+        movimiento.setEventoSistema(evento);
+        movimiento.setUsuario(usuario);
+        movimientoPuntosSistemaRepository.save(movimiento);
+    }
+
+    @Override
     public SaldoPuntosResponseDTO obtenerSaldoActual() {
 
         Usuario usuario = usuarioService.getUsuarioActual();

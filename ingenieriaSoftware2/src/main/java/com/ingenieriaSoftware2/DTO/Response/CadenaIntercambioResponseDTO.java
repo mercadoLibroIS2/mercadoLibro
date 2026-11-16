@@ -9,7 +9,8 @@ public record CadenaIntercambioResponseDTO(
         UUID id,
         Integer puntosBonus,
         EstadoCadena estado,
-        List<String> participantesEmails
+        List<String> participantesEmails,
+        List<CadenaPasoResponseDTO> pasos
 ) {
 }
 
