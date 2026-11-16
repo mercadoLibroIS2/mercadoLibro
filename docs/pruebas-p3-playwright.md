@@ -1,35 +1,68 @@
-# Pruebas E2E Playwright — P3: Puntos
+# Pruebas API Playwright — P3: Puntos
 
 ## Objetivo y alcance
 
-`frontend/e2e/p3-points.spec.ts` prueba los endpoints reales del backend Spring Boot:
+La suite [`frontend/e2e/p3-points.spec.ts`](../frontend/e2e/p3-points.spec.ts) verifica contra el backend Java real:
 
-- `POST /api/auth/registro`, prerequisito de P1 y origen de los puntos de bienvenida.
-- `GET /api/movimientoPuntos/saldo`.
-- `GET /api/movimientoPuntos/historial`.
+- Acreditación de puntos al registrarse.
+- Consulta de saldo actual.
+- Consulta del historial de movimientos.
+- Protección de los endpoints con JWT.
+- Rechazo de registros duplicados e inválidos.
+- Aislamiento del saldo e historial entre usuarios.
 
-No se simulan las respuestas de puntos. Cada prueba registra usuarios únicos, usa el JWT que responde el backend y consulta el saldo y el historial asociados a esa sesión. La asignación inicial implementada en el backend es de **500 puntos**.
+Esta suite usa `APIRequestContext` de Playwright. No abre el frontend Next.js, no intercepta respuestas y no usa mocks: las solicitudes se envían a la API configurada.
 
 ## Preparación y ejecución
 
-Requiere el backend iniciado con una base de datos exclusiva de pruebas. La suite no tiene una URL predeterminada: hay que indicar `P3_API_URL` explícitamente. Desde `frontend`:
+1. Iniciar el backend desde `ingenieriaSoftware2`:
 
-```bash
-P3_API_URL=http://localhost:8086 npm run test:e2e:p3
-```
+   ```bash
+   ./mvnw spring-boot:run
+   ```
 
-Los tests crean usuarios persistentes con emails bajo `example.test`; ejecútalos solo contra una base de datos destinada a pruebas. Sin `P3_API_URL`, Playwright se detiene antes de iniciar las pruebas. No ejecutan reset de esquema ni requieren credenciales de base de datos en el navegador.
+2. Confirmar que responde en `http://127.0.0.1:8086`:
+
+   ```bash
+   curl http://127.0.0.1:8086/api/test/ping
+   ```
+
+3. Ejecutar la suite desde `frontend`, indicando explícitamente la URL:
+
+   ```bash
+   P3_API_URL=http://127.0.0.1:8086 npm run test:e2e:p3
+   ```
+
+`frontend/playwright.p3.config.ts` detiene la ejecución si no se define `P3_API_URL` ni `PLAYWRIGHT_BASE_URL`. No se inicia ningún `webServer` de Next.js.
+
+La configuración local del backend usa H2 en memoria por defecto. Los usuarios creados por la suite son efímeros para esa ejecución; si se usa PostgreSQL o Supabase, debe ser una base exclusiva de pruebas. No ejecutar contra producción ni contra una base con datos relevantes.
+
+## Contrato verificado
+
+| Endpoint | Autenticación | Contrato comprobado |
+|---|---|---|
+| `POST /api/auth/registro` | Pública | HTTP 201, `AuthResponseDTO`, token y 500 puntos iniciales |
+| `GET /api/movimientoPuntos/saldo` | Bearer JWT | `SaldoPuntosResponseDTO` con total, reservado y disponible |
+| `GET /api/movimientoPuntos/historial` | Bearer JWT | Lista de `MovimientoPuntosResponseDTO` con tipo, monto, origen y fecha |
+
+La implementación actual asigna `500` puntos, `0` reservados y `500` disponibles al registrarse. El primer movimiento tiene `tipo=INGRESO` y `origen=ALTA_INICIAL`.
 
 ## Casos cubiertos
 
 | ID | Caso | Verificaciones |
 |---|---|---|
-| P3-PTS-01 | Acreditación al registrarse | Registro exitoso, respuesta de autenticación con 500 puntos y saldo inicial de 500 total, 0 reservado y 500 disponible. |
-| P3-PTS-02 | GET saldo | Estructura y tipos numéricos, valores no negativos y relación `total - reservado = disponible`. |
-| P3-PTS-03 | GET historial | Existe exactamente un movimiento inicial positivo de 500, con tipo `INGRESO`, origen `ALTA_INICIAL` y fecha. |
-| P3-PTS-04 | Acceso sin token | Ambos GET protegidos rechazan solicitudes sin JWT. |
-| P3-PTS-05 | Registro duplicado | Un segundo registro con las mismas credenciales se rechaza con 409 y no duplica saldo ni movimiento. |
-| P3-PTS-06 | Datos de registro inválidos | Nombre por debajo del mínimo, email inválido y contraseñas vacía/corta reciben 400. |
-| P3-PTS-07 | Sesiones de usuarios distintos | Dos cuentas distintas pueden consultar saldo e historial con sus propios JWT. |
+| P3-PTS-01 | Acreditación inicial | El registro devuelve 500 puntos y el saldo queda en 500 total, 0 reservado y 500 disponible. |
+| P3-PTS-02 | Consulta de saldo | Los tres valores son enteros no negativos y cumplen `saldoTotal - saldoReservado = saldoDisponible`. |
+| P3-PTS-03 | Historial inicial | Existe exactamente un movimiento de alta, positivo, con origen y fecha. |
+| P3-PTS-04 | Protección | Saldo e historial rechazan solicitudes sin JWT con HTTP 401 o 403. |
+| P3-PTS-05 | Registro duplicado | El segundo registro devuelve HTTP 409 y no crea puntos ni movimientos adicionales. |
+| P3-PTS-06 | Registro inválido | Nombre corto, email inválido y contraseñas inválidas devuelven HTTP 400 y `ValidationError`. |
+| P3-PTS-07 | Aislamiento por usuario | Dos JWT distintos consultan sus propios saldos e historiales iniciales. |
 
-La interfaz Next.js muestra un saldo de demostración independiente del backend Java, por lo que estas pruebas apuntan deliberadamente a la API que implementa los GET solicitados y no atribuyen persistencia de backend a la UI.
+## Limitaciones
+
+- Los casos no cubren movimientos generados por compras, intercambios o reseñas; esos flujos pertenecen a P4-P6.
+- La suite valida la API real, pero no la presentación del saldo en la interfaz Next.js. La integración visual con el store se cubre en los escenarios de frontend correspondientes.
+- Cada usuario se crea durante la ejecución. La suite no borra registros al finalizar; con H2 en memoria desaparecen al detener el backend, pero con una base persistente deben limpiarse según el procedimiento del entorno.
+
+Los reportes de Playwright quedan en `test-results/` y `playwright-report/`, excluidos de Git.
