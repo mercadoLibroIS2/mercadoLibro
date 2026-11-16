@@ -59,16 +59,24 @@ export async function saveSolicitudIntercambio(
   if (error) throw error
 }
 
+export interface EstadoSolicitud {
+  estado: TradeStatus
+  solicitante_confirmado: boolean
+  propietario_confirmado: boolean
+}
+
+/** Ejecuta la acción en la base y devuelve el estado que quedó guardado. */
 export async function updateSolicitudIntercambio(
   id: string,
   action: "ACEPTAR" | "RECHAZAR" | "CANCELAR" | "CONFIRMAR",
-): Promise<void> {
+): Promise<EstadoSolicitud> {
   const { data, error } = await supabase.rpc("gestionar_solicitud_intercambio", {
     p_solicitud_id: id,
     p_accion: action,
   })
   if (error) throw error
   if (!data) throw new Error("La solicitud no existe o no tenés permiso para modificarla.")
+  return data as EstadoSolicitud
 }
 
 export async function loadSolicitudesIntercambio(

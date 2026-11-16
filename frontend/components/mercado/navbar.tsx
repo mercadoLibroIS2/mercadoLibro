@@ -9,6 +9,7 @@ import {
   PanelLeftOpen,
 } from "lucide-react"
 import { useStore } from "./store"
+import { isDatabaseId } from "@/lib/social-db"
 
 export function Navbar({
   sidebarOpen,
@@ -27,6 +28,8 @@ export function Navbar({
     setSelectedBookId,
     notifications,
     trades,
+    users,
+    viewUserProfile,
   } = useStore()
 
   const [searchFocused, setSearchFocused] = useState(false)
@@ -54,6 +57,20 @@ export function Navbar({
                 b.category.toLowerCase().includes(searchQuery.toLowerCase()))
           )
           .slice(0, 6)
+      : []
+
+  // Búsqueda de usuarios por nombre o @usuario (perfil público)
+  const userQuery = searchQuery.trim().replace(/^@/, "").toLowerCase()
+  const userSuggestions =
+    userQuery.length >= 2
+      ? (users.some((u) => isDatabaseId(u.id)) ? users.filter((u) => isDatabaseId(u.id)) : users)
+          .filter(
+            (u, index, all) =>
+              u.id !== currentUser?.id &&
+              all.findIndex((other) => other.email.toLowerCase() === u.email.toLowerCase()) === index &&
+              (u.name.toLowerCase().includes(userQuery) || u.username.toLowerCase().includes(userQuery))
+          )
+          .slice(0, 4)
       : []
 
   useEffect(() => {
@@ -94,7 +111,7 @@ export function Navbar({
             <Search className="pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
-              placeholder="Buscar título, autor o género..."
+              placeholder="Buscar título, autor, género o @usuario..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value)
@@ -119,11 +136,41 @@ export function Navbar({
           </div>
 
           {/* Autocomplete Dropdown */}
-          {searchFocused && suggestions.length > 0 && (
+          {searchFocused && (suggestions.length > 0 || userSuggestions.length > 0) && (
             <div className="absolute left-0 right-0 top-full mt-2 overflow-hidden rounded-2xl border border-stone-200 bg-white p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              {userSuggestions.length > 0 && (
+                <>
+                  <div className="px-3 py-1.5 text-sm md:text-base font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100">
+                    Usuarios
+                  </div>
+                  <div className="mt-1 mb-2 divide-y divide-stone-50">
+                    {userSuggestions.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => {
+                          viewUserProfile(u.id)
+                          setSearchFocused(false)
+                          setSearchQuery("")
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-amber-50/70 transition-colors"
+                      >
+                        <img src={u.avatar} alt="" className="h-9 w-9 rounded-xl object-cover ring-1 ring-stone-200" />
+                        <div className="truncate">
+                          <p className="text-base md:text-lg font-bold text-stone-900 truncate">{u.name}</p>
+                          <p className="text-sm md:text-base text-stone-600 truncate">
+                            @{u.username} • ★ {u.rating.toFixed(1)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {suggestions.length > 0 && (
               <div className="px-3 py-1.5 text-sm md:text-base font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100">
                 Sugerencias en el catálogo
               </div>
+              )}
               <div className="mt-1 divide-y divide-stone-50">
                 {suggestions.map((item) => (
                   <button

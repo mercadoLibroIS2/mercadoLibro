@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
+import { fulfillDefaultRest } from "./support/supabase-rest"
 import { generateInitialChains } from "../lib/chain-detector"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 import type { Book, TradeChain, User } from "../lib/mercado-types"
@@ -67,24 +68,7 @@ async function mockSupabase(page: Page) {
   })
 
   await page.route("**/rest/v1/**", async (route) => {
-    const url = new URL(route.request().url())
-    const table = url.pathname.split("/").pop()
-    if (table === "usuario" || table === "profiles") {
-      const email = url.searchParams.get("email")?.replace(/^eq\./, "")
-      const user = SEED_USERS.find((u) => u.email === email) || SEED_USERS[0]
-      await route.fulfill({
-        json: {
-          id: user.id,
-          email: user.email,
-          nombre: user.name,
-          nombre_usuario: user.username,
-          saldo_total: user.availablePoints ?? 100,
-          saldo_reservado: user.reservedPoints ?? 0,
-          reputacion_promedio: user.rating ?? 5.0,
-        },
-      })
-      return
-    }
+    if (await fulfillDefaultRest(route, SEED_USERS)) return
     await route.fulfill({ json: [] })
   })
 }
@@ -168,7 +152,7 @@ test("el catálogo muestra publicaciones y permite buscar por título, autor e I
   await expect(page.getByText("Mostrando 10 libros")).toBeVisible()
   await expect(page.locator("article")).toHaveCount(10)
 
-  const search = page.getByPlaceholder("Buscar título, autor o género...")
+  const search = page.getByPlaceholder("Buscar título, autor, género o @usuario...")
   await search.fill("Rayuela")
   await search.press("Enter")
   await expect(page.getByText("Mostrando 1 libros")).toBeVisible()
@@ -228,7 +212,7 @@ test("búsqueda vacía muestra estado sin coincidencias y permite recuperar el c
   await signIn(page)
   await openCatalog(page)
 
-  const search = page.getByPlaceholder("Buscar título, autor o género...")
+  const search = page.getByPlaceholder("Buscar título, autor, género o @usuario...")
   await search.fill("título inexistente para P5")
   await search.press("Enter")
   await expect(page.getByText("No encontramos libros con esos criterios")).toBeVisible()
@@ -273,7 +257,7 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
   await signIn(page)
   await openCatalog(page)
 
-  const search = page.getByPlaceholder("Buscar título, autor o género...")
+  const search = page.getByPlaceholder("Buscar título, autor, género o @usuario...")
   await search.fill("R")
   await expect(page.getByText("Sugerencias en el catálogo")).toHaveCount(0)
 

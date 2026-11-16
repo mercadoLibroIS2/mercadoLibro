@@ -10,6 +10,7 @@ export type Screen =
   | "login"
   | "registro"
   | "bienvenida"
+  | "admin"
 
 export type Condition =
   | "Nuevo"
@@ -83,6 +84,7 @@ export interface GoogleBookVolume {
 
 export type PublicationInput = Pick<Book, "isbn" | "condition" | "points"> &
   Pick<Book, "description"> & {
+    category?: Category
     googleBook?: GoogleBookVolume
   }
 
@@ -100,6 +102,8 @@ export interface User {
   availablePoints: number
   reservedPoints: number
   joinedDate: string
+  role?: "USUARIO" | "ADMINISTRADOR"
+  active?: boolean
 }
 
 export type Deal = "green" | "yellow" | "red"
@@ -196,6 +200,8 @@ export type NotificationType =
   | "TRACKER_MATCH"
   | "CHAIN_DETECTED"
   | "POINTS_RECEIVED"
+  | "REVIEW_RECEIVED"
+  | "REPORT_UPDATE"
 
 export interface NotificationItem {
   id: string

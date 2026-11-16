@@ -16,20 +16,20 @@ const USERS = {
 }
 
 const BOOKS = {
-  "9788437604572": ["Rayuela", "Julio Cortázar"],
-  "9780156012195": ["El principito", "Antoine de Saint-Exupéry"],
-  "9780132350884": ["Clean Code", "Robert C. Martin"],
-  "9780307474728": ["Cien años de soledad", "Gabriel García Márquez"],
-  "9788499926223": ["Sapiens: De animales a dioses", "Yuval Noah Harari"],
-  "9780345539434": ["Cosmos", "Carl Sagan"],
-  "9788445000656": ["El Hobbit", "J. R. R. Tolkien"],
-  "9788478884452": ["Harry Potter y la piedra filosofal", "J. K. Rowling"],
-  "9788420633114": ["El Aleph", "Jorge Luis Borges"],
-  "9788499890944": ["1984", "George Orwell"],
-  "9780553380163": ["Breve historia del tiempo", "Stephen Hawking"],
-  "9788408163381": ["El laberinto de los espíritus", "Carlos Ruiz Zafón"],
-  "9788433973382": ["El hombre que confundió a su mujer con un sombrero", "Oliver Sacks"],
-  "9788420674179": ["El señor de las moscas", "William Golding"],
+  "9788437604572": ["Rayuela", "Julio Cortázar", "Ficción"],
+  "9780156012195": ["El principito", "Antoine de Saint-Exupéry", "Infantil"],
+  "9780132350884": ["Clean Code", "Robert C. Martin", "Técnico"],
+  "9780307474728": ["Cien años de soledad", "Gabriel García Márquez", "Ficción"],
+  "9788499926223": ["Sapiens: De animales a dioses", "Yuval Noah Harari", "Historia"],
+  "9780345539434": ["Cosmos", "Carl Sagan", "Ciencia"],
+  "9788445000656": ["El Hobbit", "J. R. R. Tolkien", "Ficción"],
+  "9788478884452": ["Harry Potter y la piedra filosofal", "J. K. Rowling", "Infantil"],
+  "9788420633114": ["El Aleph", "Jorge Luis Borges", "Ficción"],
+  "9788499890944": ["1984", "George Orwell", "Ficción"],
+  "9780553380163": ["Breve historia del tiempo", "Stephen Hawking", "Ciencia"],
+  "9788408163381": ["El laberinto de los espíritus", "Carlos Ruiz Zafón", "Ficción"],
+  "9788433973382": ["El hombre que confundió a su mujer con un sombrero", "Oliver Sacks", "Ciencia"],
+  "9788420674179": ["El señor de las moscas", "William Golding", "Ficción"],
 }
 
 // [dueño, isbn, estado físico, puntos, comentario, días atrás]
@@ -91,6 +91,19 @@ async function main() {
     if (existingBooks.has(isbn)) continue
     check(await clients.lucia.from("libro").insert({ isbn, titulo, autores }), `libro ${isbn}`)
     console.log(`+ libro ${titulo}`)
+  }
+
+  // Categorías (requiere la migración 20261116120000; si falta, se avisa y se sigue).
+  const categorized = await clients.lucia.from("libro_categoria").select("isbn").in("isbn", Object.keys(BOOKS))
+  const withCategory = new Set((categorized.data || []).map((row) => row.isbn))
+  for (const [isbn, [titulo, , categoria]] of Object.entries(BOOKS)) {
+    if (withCategory.has(isbn)) continue
+    const res = await clients.lucia.from("libro_categoria").insert({ isbn, nombre_categoria: categoria })
+    if (res.error) {
+      console.warn(`! no se pudo asignar la categoría de ${titulo}: ${res.error.message} (¿falta aplicar la migración?)`)
+      break
+    }
+    console.log(`+ categoría ${categoria} para ${titulo}`)
   }
 
   const publications = {}
@@ -169,7 +182,8 @@ async function main() {
   if (!hasTradeFor("9788478884452")) {
     const id = await request("lucia", "9788478884452", "PUNTOS")
     await act("valentina", id, "ACEPTAR")
-    await act("lucia", id, "CONFIRMAR")
+    await act("valentina", id, "CONFIRMAR") // entrega
+    await act("lucia", id, "CONFIRMAR") // recepción: con las dos confirmaciones se completa
     console.log("+ intercambio completado: Lucía compró Harry Potter a Valentina")
   }
 

@@ -3,6 +3,7 @@
 import { Coins, Star, BookMarked } from "lucide-react"
 import type { Book } from "@/lib/mercado-types"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { DEFAULT_EXTERNAL_RATING } from "@/lib/publicaciones-db"
 import { useStore } from "./store"
 
 const DEAL_BADGES = {
@@ -22,7 +23,7 @@ const DEAL_BADGES = {
 
 export function BookCard({ book }: { book: Book }) {
   const { setSelectedBookId, viewUserProfile } = useStore()
-  const evaluation = evaluatePriceDeal(book.points, book.category, book.condition, book.externalRating || 4.5)
+  const evaluation = evaluatePriceDeal(book.points, book.category, book.condition, book.externalRating || DEFAULT_EXTERNAL_RATING)
   const isAvailable = book.availability === "DISPONIBLE"
 
   return (

@@ -11,9 +11,11 @@ import {
   Trash2,
   Edit,
   Info,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { databasePublicationId, DEFAULT_EXTERNAL_RATING } from "@/lib/publicaciones-db"
 
 export function BookDetailModal() {
   const {
@@ -26,6 +28,7 @@ export function BookDetailModal() {
     addToTracker,
     setTradeModalBook,
     viewUserProfile,
+    setReportTarget,
   } = useStore()
 
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -40,7 +43,7 @@ export function BookDetailModal() {
     book.points,
     book.category,
     book.condition,
-    book.externalRating || 4.5
+    book.externalRating || DEFAULT_EXTERNAL_RATING
   )
 
   const isAvailable = book.availability === "DISPONIBLE"
@@ -309,6 +312,35 @@ export function BookDetailModal() {
                     Publicación reservada o intercambiada.
                   </div>
                 )}
+                {!isOwner && (() => {
+                  let key: [string, string, string] | null = null
+                  try {
+                    key = databasePublicationId(book)
+                  } catch {
+                    key = null
+                  }
+                  if (!key) return null
+                  const [isbn, ownerEmail, publicationTime] = key
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBookId(null)
+                        setReportTarget({
+                          type: "PUBLICACION",
+                          label: `"${book.title}" publicado por ${book.ownerName}`,
+                          reportedEmail: ownerEmail,
+                          isbn,
+                          publicationTime,
+                        })
+                      }}
+                      className="flex items-center justify-center gap-1.5 self-center text-xs md:text-sm font-semibold text-stone-400 hover:text-rose-700 py-1 transition-colors"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      Reportar publicación
+                    </button>
+                  )
+                })()}
               </div>
             </div>
           </div>

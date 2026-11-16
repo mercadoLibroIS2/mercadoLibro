@@ -13,8 +13,10 @@ import {
   Inbox,
   Send,
   History as HistoryIcon,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
+import { isDatabaseId } from "@/lib/social-db"
 import { ChainsView } from "./chains-view"
 import type { TradeRequest } from "@/lib/mercado-types"
 
@@ -208,6 +210,17 @@ function renderOngoingAction(
   onConfirmReceipt?: (id: string) => void
 ) {
   if (trade.type === "PUNTOS") {
+    // El intercambio por puntos se completa cuando confirman las dos partes.
+    if ((isRequester && trade.requesterConfirmed) || (isOwner && trade.ownerConfirmed)) {
+      return (
+        <span className="flex items-center gap-2 text-base md:text-lg font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl">
+          <CheckCircle className="h-4.5 w-4.5" />
+          {isRequester
+            ? "Recepción confirmada (Esperando que el vendedor confirme la entrega)"
+            : "Entrega registrada (Esperando recepción del comprador)"}
+        </span>
+      )
+    }
     if (isRequester) {
       return (
         <button
@@ -284,7 +297,7 @@ function TradeList({
   onBookClick: (id: string) => void
   onUserClick: (id: string) => void
 }) {
-  const { books } = useStore()
+  const { books, setReportTarget } = useStore()
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
 
   if (trades.length === 0) {
@@ -325,6 +338,24 @@ function TradeList({
                 {trade.type === "PUNTOS" ? "Por Puntos" : "Directo"}
               </span>
 
+              <span className="flex items-center gap-2">
+              {isDatabaseId(trade.id) && (isRequester || isOwner) && trade.status !== "RECHAZADO" && (
+                <button
+                  type="button"
+                  title="Reportar un problema con este intercambio"
+                  onClick={() =>
+                    setReportTarget({
+                      type: "INTERCAMBIO",
+                      label: `"${requestedBook?.title || "Libro"}" con ${isRequester ? trade.ownerName : trade.requesterName}`,
+                      tradeId: trade.id,
+                    })
+                  }
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs md:text-sm font-semibold text-stone-400 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Reportar</span>
+                </button>
+              )}
               <span
                 className={`rounded-full px-3 py-1 text-sm md:text-base md:text-lg font-bold ${
                   trade.status === "PENDIENTE"
@@ -337,6 +368,7 @@ function TradeList({
                 }`}
               >
                 {trade.status === "ACEPTADO" ? "EN CURSO" : trade.status}
+              </span>
               </span>
             </div>
 

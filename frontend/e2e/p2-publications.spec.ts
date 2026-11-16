@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
+import { fulfillDefaultRest } from "./support/supabase-rest"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 
 const testUser = {
@@ -123,7 +124,7 @@ async function mockSupabase(page: Page, options: { reservedIsbn?: string } = {})
       await fulfillRows(database.users.filter(matches))
     } else if (table === "libro_categoria") {
       await fulfillRows(database.categories.filter(matches))
-    } else {
+    } else if (!(await fulfillDefaultRest(route, SEED_USERS))) {
       await route.fulfill({ json: [] })
     }
   })
@@ -167,7 +168,7 @@ test("el catálogo lista todas las publicaciones y permite buscar, filtrar y rec
   await expect(bookCard(page, "Cosmos")).toBeVisible()
   await expect(bookCard(page, "Rayuela")).toHaveCount(0)
 
-  const search = page.getByPlaceholder("Buscar título, autor o género...")
+  const search = page.getByPlaceholder("Buscar título, autor, género o @usuario...")
   await search.fill("libro sin coincidencias")
   await search.press("Enter")
   await expect(page.getByText("No encontramos libros con esos criterios")).toBeVisible()
@@ -187,7 +188,9 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   await expect(page.getByRole("button", { name: "Buscar", exact: true })).toBeVisible()
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("El ISBN es obligatorio")).toBeVisible()
+  await expect(page.getByText("La categoría es obligatoria")).toBeVisible()
   await expect(page.getByText("Ingresá el valor en puntos")).toBeVisible()
+  await page.getByLabel("Categoría *").selectOption("Ficción")
 
   const newIsbn = "979-1-23456-789-0"
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
@@ -231,6 +234,7 @@ test("publicar registra todos los datos opcionales y presenta el libro en el cat
   await openPublishForm(page)
 
   await page.getByLabel("ISBN del libro *").fill(SEED_BOOKS[0].isbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Estado físico *").selectOption("Como nuevo")
   await page.getByLabel("Puntos solicitados *").fill("120")
   await page.getByLabel("Descripción y estado (opcional)").fill("Ejemplar cuidado, sin marcas.")

@@ -11,15 +11,19 @@ import {
 import { useStore } from "./store"
 import { Field } from "./field"
 import {
+  CATEGORIES,
   CONDITIONS,
+  type Category,
   type Condition,
 } from "@/lib/mercado-types"
 import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
+import { DEFAULT_EXTERNAL_RATING, suggestCategory } from "@/lib/publicaciones-db"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
 import type { GoogleBookVolume } from "@/lib/mercado-types"
 
 interface FormState {
   isbn: string
+  category: Category | ""
   condition: Condition
   points: string
   description: string
@@ -27,6 +31,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   isbn: "",
+  category: "",
   condition: "Muy bueno",
   points: "",
   description: "",
@@ -45,6 +50,9 @@ export function PublishForm() {
   const editingBook = books.find((book) => book.id === editingBookId)
   const [form, setForm] = useState<FormState>(() => editingBook ? {
     isbn: editingBook.isbn || "",
+    category: (CATEGORIES as readonly string[]).includes(editingBook.category)
+      ? (editingBook.category as Category)
+      : "",
     condition: editingBook.condition,
     points: String(editingBook.points),
     description: editingBook.description || "",
@@ -86,8 +94,11 @@ export function PublishForm() {
         return
       }
       setGoogleBook(result)
+      const suggestedCategory = form.category || suggestCategory(result.categorias) || ""
+      if (suggestedCategory) set("category", suggestedCategory)
       if (!form.points || form.points === "0") {
-        const suggested = calculateReferencePrice("Ficción", form.condition)
+        const rating = result.ratingExterno && result.ratingExterno > 0 ? result.ratingExterno : DEFAULT_EXTERNAL_RATING
+        const suggested = calculateReferencePrice(suggestedCategory || "Ficción", form.condition, rating)
         set("points", String(suggested))
       }
     } catch (error) {
@@ -99,14 +110,22 @@ export function PublishForm() {
 
   const pointsNum = Number(form.points)
   const hasPoints = form.points !== "" && Number.isInteger(pointsNum) && pointsNum > 0
+  // Mismo cálculo que se guarda con la publicación (categoría + estado + rating externo).
+  const externalRating =
+    googleBook?.ratingExterno && googleBook.ratingExterno > 0
+      ? Math.min(5, googleBook.ratingExterno)
+      : editingBook?.externalRating || DEFAULT_EXTERNAL_RATING
   const evaluation = hasPoints
-    ? evaluatePriceDeal(pointsNum, editingBook?.category || "Ficción", form.condition, 4.5)
+    ? evaluatePriceDeal(pointsNum, form.category || editingBook?.category || "Sin categoría", form.condition, externalRating)
     : null
+  // La categoría pertenece al libro (ISBN): si ya tiene una guardada no se cambia desde una publicación.
+  const categoryLocked = Boolean(editingBook && form.category)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const next: Partial<Record<keyof FormState, string>> = {}
     if (!form.isbn.trim()) next.isbn = "El ISBN es obligatorio"
+    if (!form.category) next.category = "La categoría es obligatoria"
     if (!form.points.trim()) next.points = "Ingresá el valor en puntos"
     else if (!Number.isInteger(pointsNum) || pointsNum <= 0)
       next.points = "Ingresá un número de puntos válido mayor a 0"
@@ -116,6 +135,7 @@ export function PublishForm() {
 
     const publicationData = {
       isbn: form.isbn.trim(),
+      category: form.category || undefined,
       condition: form.condition,
       points: pointsNum,
       description: form.description.trim() || undefined,
@@ -244,6 +264,33 @@ export function PublishForm() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Category */}
+          <div>
+            <label htmlFor="pub-category" className="block text-base md:text-lg font-bold text-stone-800 mb-1.5">
+              Categoría *
+            </label>
+            <select
+              id="pub-category"
+              value={form.category}
+              disabled={categoryLocked}
+              onChange={(e) => set("category", e.target.value as Category)}
+              className="w-full rounded-xl border border-stone-200 bg-white p-3 text-base md:text-lg text-stone-900 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100 disabled:bg-stone-100 disabled:text-stone-500"
+            >
+              <option value="">Elegí una categoría</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            {errors.category && (
+              <p className="mt-1 text-sm md:text-base font-semibold text-red-600">{errors.category}</p>
+            )}
+            {categoryLocked && (
+              <p className="mt-1 text-xs text-stone-500">La categoría es del libro y se comparte entre publicaciones.</p>
+            )}
+          </div>
+
           {/* Condition */}
           <div>
             <label htmlFor="pub-condition" className="block text-base md:text-lg font-bold text-stone-800 mb-1.5">

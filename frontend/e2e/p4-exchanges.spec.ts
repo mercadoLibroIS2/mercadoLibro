@@ -198,8 +198,11 @@ async function getExchanges(
   return apiOk<Exchange[]>(response)
 }
 
+// Solo los participantes pueden consultar el estado; se consulta como quien propuso.
 async function getExchangeState(request: APIRequestContext, pair: ExchangePair) {
-  const response = await request.get(`/api/intercambios/estado?${exchangeQuery(pair)}`)
+  const response = await request.get(`/api/intercambios/estado?${exchangeQuery(pair)}`, {
+    headers: { Authorization: `Bearer ${pair.proposer.token}` },
+  })
   return apiOk<string>(response)
 }
 

@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   XCircle,
   Archive,
+  Star,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
 import type { NotificationItem, NotificationType } from "@/lib/mercado-types"
@@ -22,6 +24,8 @@ const TYPE_ICONS: Record<NotificationType, React.ReactNode> = {
   TRACKER_MATCH: <Target className="h-4 w-4 text-blue-600" />,
   CHAIN_DETECTED: <Share2 className="h-4 w-4 text-purple-600" />,
   POINTS_RECEIVED: <Coins className="h-4 w-4 text-amber-600" />,
+  REVIEW_RECEIVED: <Star className="h-4 w-4 text-amber-500" />,
+  REPORT_UPDATE: <Flag className="h-4 w-4 text-rose-600" />,
 }
 
 export function NotificationsScreen() {

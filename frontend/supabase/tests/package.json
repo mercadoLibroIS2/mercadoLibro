@@ -1,0 +1,12 @@
+{
+  "name": "mercadolibro-db-tests",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas de las migraciones de Supabase sobre Postgres embebido (PGlite).",
+  "scripts": {
+    "test": "node migraciones.test.mjs ../../.."
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.14"
+  }
+}

@@ -9,7 +9,7 @@ import type { User } from "@/lib/mercado-types"
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function LoginScreen() {
-  const { login, users, setScreen, showToast, signInWithSupabase } = useStore()
+  const { users, setScreen, showToast, signInWithSupabase } = useStore()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({})
@@ -32,7 +32,7 @@ export function LoginScreen() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    // Si el identificador ingresado coincide con un usuario demo local y la contraseña es simple, permitir demo
+    // Permite ingresar con el nombre de usuario: se traduce al email conocido.
     const demoUser = users.find(
       (u) =>
         u.email.toLowerCase() === identifier.toLowerCase() ||
@@ -44,17 +44,17 @@ export function LoginScreen() {
     if (!targetEmail.includes("@") && demoUser) {
       targetEmail = demoUser.email
     }
+    if (!emailRe.test(targetEmail)) {
+      setErrors({ identifier: "El email no tiene un formato válido" })
+      return
+    }
 
     setLoading(true)
     try {
       // Intentar autenticación con Supabase
       const res = await signInWithSupabase(targetEmail, password)
       if (!res.success) {
-        // Si falló en Supabase pero es un usuario Demo local, permitir acceso como fallback
-        if (demoUser && password === "demo") {
-          login(demoUser)
-          return
-        }
+        // Sin acceso de respaldo: solo se entra con una sesión válida de Supabase.
         setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
       }
     } catch {

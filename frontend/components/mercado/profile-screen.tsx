@@ -8,10 +8,15 @@ import {
   PlusCircle,
   Star,
   History,
+  Flag,
+  ShieldCheck,
+  MapPin,
+  KeyRound,
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
+import { ChangePasswordModal } from "./change-password-modal"
 import type { PointMovementType } from "@/lib/mercado-types"
 
 type ProfileTab = "publicaciones" | "resenas" | "movimientos"
@@ -38,10 +43,12 @@ export function ProfileScreen() {
     setSelectedProfileUserId,
     screen,
     setScreen,
+    setReportTarget,
   } = useStore()
 
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
   const [editing, setEditing] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const isOwnProfile = screen === "perfil" || selectedProfileUserId === currentUser?.id
   const targetUser = isOwnProfile
@@ -88,7 +95,22 @@ export function ProfileScreen() {
                   </span>
                 )}
               </div>
-              <p className="text-base md:text-lg text-stone-500 mt-0.5">@{targetUser.username}</p>
+              <p className="text-base md:text-lg text-stone-500 mt-0.5">
+                @{targetUser.username}
+                {targetUser.city && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-sm md:text-base">
+                    <MapPin className="h-3.5 w-3.5" /> {targetUser.city}
+                  </span>
+                )}
+              </p>
+              {targetUser.bio && (
+                <p className="mt-1.5 max-w-xl text-sm md:text-base text-stone-700">{targetUser.bio}</p>
+              )}
+              {targetUser.active === false && (
+                <span className="mt-1.5 inline-block rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">
+                  Cuenta suspendida
+                </span>
+              )}
 
               <div className="mt-2.5 flex flex-wrap items-center gap-2 text-sm md:text-base md:text-lg text-stone-500">
                 <span className="flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-sm md:text-base md:text-lg font-bold text-amber-900">
@@ -121,7 +143,41 @@ export function ProfileScreen() {
                 <Pencil className="h-4 w-4" />
                 <span>Editar</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setChangingPassword(true)}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+              >
+                <KeyRound className="h-4 w-4" />
+                <span>Cambiar contraseña</span>
+              </button>
+              {currentUser?.role === "ADMINISTRADOR" && (
+                <button
+                  type="button"
+                  onClick={() => setScreen("admin")}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Admin</span>
+                </button>
+              )}
             </div>
+          )}
+          {!isOwnProfile && (
+            <button
+              type="button"
+              onClick={() =>
+                setReportTarget({
+                  type: "USUARIO",
+                  label: `${targetUser.name} (@${targetUser.username})`,
+                  reportedEmail: targetUser.email,
+                })
+              }
+              className="self-start sm:self-center flex items-center gap-1.5 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+            >
+              <Flag className="h-4 w-4" />
+              Reportar usuario
+            </button>
           )}
         </div>
       </div>
@@ -341,6 +397,7 @@ export function ProfileScreen() {
       </div>
 
       {editing ? <EditProfileModal onClose={() => setEditing(false)} /> : null}
+      {changingPassword ? <ChangePasswordModal onClose={() => setChangingPassword(false)} /> : null}
     </div>
   )
 }

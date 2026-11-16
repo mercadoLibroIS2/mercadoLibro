@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test"
+import { fulfillDefaultRest } from "./support/supabase-rest"
 import {
   SEED_BOOKS,
   SEED_NOTIFICATIONS,
@@ -76,6 +77,7 @@ async function mockSupabase(page: Page) {
   })
 
   await page.route("**/rest/v1/**", async (route) => {
+    if (await fulfillDefaultRest(route, SEED_USERS)) return
     await route.fulfill({ json: [] })
   })
 }
@@ -287,6 +289,7 @@ test("aceptar una solicitud genera una notificación para quien la envió, visib
   await signIn(page)
   await page.locator("aside").getByRole("button", { name: /Mis Intercambios/ }).click()
   await page.getByRole("button", { name: "Aceptar Solicitud" }).click()
+  await expect(page.getByText(/Has aceptado el intercambio/)).toBeVisible()
 
   const saved = await savedState(page)
   expect(saved.notifications[0]).toMatchObject({
@@ -316,6 +319,7 @@ test("publicar una reseña actualiza reputación, historial y recompensa una sol
   await expect(modal.getByText("Bueno (3/5)")).toBeVisible()
   await modal.getByPlaceholder("¿Cómo estuvo el estado del libro, la puntualidad y el trato?...").fill("  Buena coordinación y libro cuidado.  ")
   await modal.getByRole("button", { name: "Publicar Calificación" }).click()
+  await expect(page.getByText(/Reseña publicada/)).toBeVisible()
 
   const saved = await savedState(page)
   const review = saved.reviews.find((item: { tradeId: string }) => item.tradeId === "trade-completed-p6")
@@ -359,6 +363,7 @@ test("se puede publicar la calificación mínima y los comentarios vacíos o sol
 
   await modal.getByPlaceholder("¿Cómo estuvo el estado del libro, la puntualidad y el trato?...").fill("Experiencia aceptable.")
   await modal.getByRole("button", { name: "Publicar Calificación" }).click()
+  await expect(page.getByText(/Reseña publicada/)).toBeVisible()
   const saved = await savedState(page)
   expect(saved.reviews.find((review: { tradeId: string }) => review.tradeId === "trade-completed-p6").rating).toBe(1)
 })

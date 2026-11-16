@@ -1,5 +1,5 @@
-// Deja la demo como al principio sin necesidad de SQL: cada usuario de demo marca sus
-// publicaciones como ELIMINADA y vuelve su saldo a 100/0. Después hay que correr seed-demo.mjs,
+// Deja la demo como al principio: cada usuario de demo marca sus publicaciones como ELIMINADA,
+// cancela sus intercambios abiertos, borra su historial y vuelve su saldo a 100/0. Después hay que correr seed-demo.mjs,
 // que crea publicaciones nuevas y vuelve a armar los intercambios iniciales.
 // Uso (desde frontend): node scripts/reset-demo.mjs && node scripts/seed-demo.mjs
 import { createClient } from "@supabase/supabase-js"
@@ -19,21 +19,12 @@ for (const user of USERS) {
     process.exit(1)
   }
 
-  const publications = await c
-    .from("publicacion")
-    .update({ estado_publicacion: "ELIMINADA" })
-    .eq("email_propietario", email)
-    .neq("estado_publicacion", "ELIMINADA")
-    .select("isbn")
-  if (publications.error) {
-    console.error(`${email}: ${publications.error.message}`)
+  // La base ya no permite cambiar el saldo desde el cliente: el reinicio lo hace una función
+  // de Supabase que solo acepta cuentas @mercadolibro.demo (ver supabase/migrations).
+  const reset = await c.rpc("reiniciar_usuario_demo")
+  if (reset.error) {
+    console.error(`${email}: ${reset.error.message}`)
     process.exit(1)
   }
-
-  const balance = await c.from("usuario").update({ saldo_total: 100, saldo_reservado: 0 }).eq("email", email).select("email")
-  if (balance.error) {
-    console.error(`${email}: ${balance.error.message}`)
-    process.exit(1)
-  }
-  console.log(`- ${email}: ${publications.data.length} publicaciones eliminadas, saldo 100/0`)
+  console.log(`- ${email}: publicaciones eliminadas, historial borrado, saldo 100/0`)
 }

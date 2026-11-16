@@ -19,6 +19,8 @@ import { NotificationsScreen } from "./notifications-screen"
 import { BookDetailModal } from "./book-detail-modal"
 import { TradeRequestModal } from "./trade-request-modal"
 import { ReviewModal } from "./review-modal"
+import { ReportModal } from "./report-modal"
+import { AdminScreen } from "./admin-screen"
 
 const SIDEBAR_STORAGE_KEY = "mercadolibro_sidebar_open_pref"
 
@@ -54,6 +56,8 @@ function AuthedRouter() {
       return <ProfileScreen />
     case "publicar":
       return <PublishForm />
+    case "admin":
+      return <AdminScreen />
     default:
       return <FeedScreen />
   }
@@ -134,6 +138,12 @@ function Shell() {
 
         {/* Page Content with safe padding for mobile bottom bar */}
         <main className="flex-1 pb-28 lg:pb-12">
+          {currentUser.active === false && (
+            <div role="alert" className="mx-3 sm:mx-6 mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm md:text-base text-rose-800">
+              <strong>Tu cuenta está suspendida</strong> tras la revisión de un reporte. Podés ver tus intercambios y
+              notificaciones, pero no publicar ni pedir libros hasta que un administrador la reactive.
+            </div>
+          )}
           <AuthedRouter />
         </main>
       </div>
@@ -145,6 +155,7 @@ function Shell() {
       <BookDetailModal />
       <TradeRequestModal />
       <ReviewModal />
+      <ReportModal />
 
       <Toast />
     </div>

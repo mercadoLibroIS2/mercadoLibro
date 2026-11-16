@@ -22,6 +22,7 @@ import type {
   TradeType,
   User,
 } from "@/lib/mercado-types"
+import { CATEGORIES } from "@/lib/mercado-types"
 import {
   SEED_BOOKS,
   SEED_NOTIFICATIONS,
@@ -36,19 +37,35 @@ import { generateInitialChains } from "@/lib/chain-detector"
 import { supabase } from "@/lib/supabase"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 import {
+  assignBookCategory,
+  categoryFromRow,
   databaseCondition,
   databaseBook,
   databasePublicationId,
+  databaseUser,
   findDatabaseBook,
   loadDatabasePublications,
   loadDatabaseUsers,
+  publicationPricing,
 } from "@/lib/publicaciones-db"
+import {
+  createReview,
+  deleteTrackedBook,
+  insertTrackedBook,
+  isDatabaseId,
+  isMissingSchemaError,
+  loadPersistedSocialData,
+  selectUsuarios,
+  updateNotifications,
+  updateUsuarioProfile,
+} from "@/lib/social-db"
 import {
   createSolicitudIntercambio,
   loadSolicitudesIntercambio,
   saveSolicitudIntercambio,
   updateSolicitudIntercambio,
 } from "@/lib/intercambios-db"
+import type { ReportTarget } from "@/lib/admin-db"
 
 const STORAGE_KEY = "mercadolibro_v2_data"
 
@@ -80,6 +97,8 @@ interface StoreContextValue extends AppState {
   setTradeModalBook: (b: Book | null, type?: TradeType) => void
   reviewTrade: TradeRequest | null
   setReviewTrade: (t: TradeRequest | null) => void
+  reportTarget: ReportTarget | null
+  setReportTarget: (t: ReportTarget | null) => void
   searchQuery: string
   setSearchQuery: (q: string) => void
   selectedCategory: string
@@ -91,10 +110,11 @@ interface StoreContextValue extends AppState {
   login: (user: User) => void
   register: (name: string, username: string, email: string) => void
   logout: () => void
+  changePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>
   signInWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUpWithSupabase: (name: string, username: string, email: string, password: string) => Promise<{ success: boolean; error?: string; requiresEmailConfirmation?: boolean }>
   switchUser: (userId: string) => void
-  updateProfile: (patch: Partial<User>) => void
+  updateProfile: (patch: Partial<User>) => Promise<boolean>
   viewUserProfile: (userId: string) => void
 
   // Books
@@ -111,11 +131,11 @@ interface StoreContextValue extends AppState {
   confirmTradeReceipt: (tradeId: string) => Promise<void>
 
   // Reviews
-  addReview: (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => void
+  addReview: (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => Promise<void>
 
   // Tracker
-  addToTracker: (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => void
-  removeFromTracker: (id: string) => void
+  addToTracker: (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => Promise<void>
+  removeFromTracker: (id: string) => Promise<void>
 
   // Notifications
   markNotificationRead: (id: string) => void
@@ -153,6 +173,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tradeModalBook, setTradeModalBookState] = useState<Book | null>(null)
   const [tradeModalInitialType, setTradeModalInitialType] = useState<TradeType>("PUNTOS")
   const [reviewTrade, setReviewTrade] = useState<TradeRequest | null>(null)
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("Todas")
   const [toast, setToast] = useState<string | null>(null)
@@ -240,68 +261,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Helper to map Supabase User and database Profile to our App User
   const syncSupabaseUser = useCallback(async (sbUser: SupabaseUser) => {
     try {
-      let profileData: Partial<User> | null = null
-      const { data: uData, error: uErr } = await supabase
-        .from("usuario")
-        .select("*")
-        .eq("email", sbUser.email)
-        .maybeSingle()
-
-      if (!uErr && uData) {
-        if (uData.saldo_total == null || uData.saldo_reservado == null) {
-          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
-        }
-        const availablePoints = Number(uData.saldo_total)
-        const reservedPoints = Number(uData.saldo_reservado)
-        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
-          throw new Error("El saldo guardado en Supabase no es válido.")
-        }
-        profileData = {
-          id: sbUser.id,
-          name: sbUser.user_metadata?.name || uData.nombre_usuario || uData.nombre || sbUser.email?.split("@")[0],
-          username: uData.nombre_usuario || uData.nombre || sbUser.user_metadata?.username,
-          email: uData.email || sbUser.email,
-          avatar: sbUser.user_metadata?.avatar,
-          availablePoints,
-          reservedPoints,
-          rating: Number(uData.reputacion_promedio) || 5.0,
-          totalReviews: 0,
-          totalTrades: 0,
-          joinedDate: uData.created_at || sbUser.created_at,
-        }
-      } else {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", sbUser.id)
-          .maybeSingle()
-        if (error) throw uErr || error
-        if (!data) {
-          throw new Error("No se encontró el perfil con saldo en Supabase. Verificá que la migración de usuario esté aplicada.")
-        }
-        if (data.available_points == null || data.reserved_points == null) {
-          throw new Error("El perfil de Supabase no tiene saldos inicializados.")
-        }
-        const availablePoints = Number(data.available_points)
-        const reservedPoints = Number(data.reserved_points)
-        if (!Number.isFinite(availablePoints) || !Number.isFinite(reservedPoints)) {
-          throw new Error("El saldo guardado en Supabase no es válido.")
-        }
-        profileData = {
-          id: data.id,
-          name: data.name,
-          username: data.username,
-          email: data.email || sbUser.email,
-          avatar: data.avatar,
-          bio: data.bio,
-          city: data.city,
-          availablePoints,
-          reservedPoints,
-          rating: Number(data.rating) || 5.0,
-          totalReviews: data.total_reviews || 0,
-          totalTrades: data.total_trades || 0,
-          joinedDate: data.created_at,
-        }
+      const usuarioRows = await selectUsuarios((columns) =>
+        supabase.from("usuario").select(columns).eq("email", sbUser.email || "").limit(1),
+      )
+      const uData = usuarioRows[0]
+      if (!uData) {
+        throw new Error("No se encontró tu perfil en Supabase. Verificá que la migración de usuario esté aplicada.")
+      }
+      if (uData.saldo_total == null || uData.saldo_reservado == null) {
+        throw new Error("El perfil de Supabase no tiene saldos inicializados.")
+      }
+      const dbUser = databaseUser(uData)
+      if (!Number.isFinite(dbUser.availablePoints) || !Number.isFinite(dbUser.reservedPoints)) {
+        throw new Error("El saldo guardado en Supabase no es válido.")
+      }
+      const profileData: Partial<User> = {
+        ...dbUser,
+        id: sbUser.id,
+        name: (uData.nombre_completo as string) || sbUser.user_metadata?.name || dbUser.name,
+        avatar: (uData.avatar_url as string) || sbUser.user_metadata?.avatar,
+        joinedDate: dbUser.joinedDate || sbUser.created_at,
       }
 
       const meta = sbUser.user_metadata || {}
@@ -384,6 +363,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast("No se pudieron cargar los intercambios guardados. Ejecutá la migración y revisá las políticas de Supabase.")
       }
 
+      // Reseñas, movimientos, notificaciones y seguimiento persistidos (si la migración está aplicada).
+      try {
+        const social = await loadPersistedSocialData(appUser, knownUsers, persistedBooks)
+        setState((prev) => {
+          const reviews = social.reviews ?? prev.reviews
+          return {
+            ...prev,
+            pointMovements: social.movements
+              ? [...social.movements, ...prev.pointMovements.filter((m) => m.userId !== appUser.id)]
+              : prev.pointMovements,
+            notifications: social.notifications
+              ? [...social.notifications, ...prev.notifications.filter((n) => n.userId !== appUser.id)]
+              : prev.notifications,
+            trackedBooks: social.tracked
+              ? [...social.tracked, ...prev.trackedBooks.filter((t) => t.userId !== appUser.id)]
+              : prev.trackedBooks,
+            reviews,
+            trades: social.reviews
+              ? prev.trades.map((trade) => ({
+                  ...trade,
+                  reviewedByRequester: reviews.some((r) => r.tradeId === trade.id && r.fromUserId === trade.requesterId),
+                  reviewedByOwner: reviews.some((r) => r.tradeId === trade.id && r.fromUserId === trade.ownerId),
+                }))
+              : prev.trades,
+          }
+        })
+      } catch (error) {
+        console.error("[Supabase] Error cargando datos persistidos:", error)
+      }
+
       return appUser
     } catch (err) {
       console.error("[Supabase] Error sincronizando usuario:", err)
@@ -391,6 +400,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return null
     }
   }, [showToast])
+
+  // Vuelve a leer saldo, intercambios, movimientos y notificaciones desde Supabase
+  // después de una operación, para que la pantalla refleje lo que quedó guardado.
+  const refreshFromDatabase = useCallback(async () => {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) await syncSupabaseUser(data.user)
+  }, [syncSupabaseUser])
 
   // Sincronizar sesión de Supabase al cargar la app y al cambiar el estado
   useEffect(() => {
@@ -470,7 +486,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (!u) {
             return { success: false, error: "No se pudo cargar tu perfil y saldo desde Supabase." }
           }
-          setScreen("bienvenida")
+          // Si la persona ya navegó mientras cargaban sus datos, no se la saca de donde está.
+          setScreen((current) => (current === "login" || current === "registro" ? "bienvenida" : current))
           showToast(`¡Bienvenido/a de nuevo, ${u.name || "lector"}!`)
           return { success: true }
         }
@@ -570,11 +587,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             description: "Bienvenida a Mercado Libro — Asignación de 100 puntos iniciales (RF14)",
             date: new Date().toISOString(),
           }
-          setState((prev) => ({
-            ...prev,
-            pointMovements: [initialMovement, ...prev.pointMovements],
-          }))
-          setScreen("bienvenida")
+          // Si la base ya registró el movimiento inicial (trigger), no se duplica.
+          setState((prev) =>
+            prev.pointMovements.some((m) => m.userId === data.user!.id && m.type === "INICIAL")
+              ? prev
+              : { ...prev, pointMovements: [initialMovement, ...prev.pointMovements] },
+          )
+          if (!u) {
+            return { success: false, error: "La cuenta se creó, pero no se pudo cargar tu perfil. Probá iniciar sesión." }
+          }
+          setScreen((current) => (current === "login" || current === "registro" ? "bienvenida" : current))
           showToast("¡Cuenta creada con éxito! Recibiste 100 puntos de bienvenida.")
           return { success: true }
         }
@@ -589,28 +611,63 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch {
-      // ignore
+    // Primero se cierra la sesión en todos los dispositivos; si el servidor no responde,
+    // al menos se cierra en este navegador y se avisa el alcance.
+    let notice = "Sesión cerrada."
+    const global = await supabase.auth.signOut({ scope: "global" }).catch((error: Error) => ({ error }))
+    if (global.error) {
+      const local = await supabase.auth.signOut({ scope: "local" }).catch((error: Error) => ({ error }))
+      if (local.error) {
+        showToast(`No se pudo cerrar la sesión: ${local.error.message}`)
+        return
+      }
+      notice = "Sesión cerrada en este dispositivo; no se pudo confirmar el cierre en otros dispositivos."
     }
     setState((prev) => ({ ...prev, currentUser: null }))
     setScreen("login")
-    showToast("Sesión cerrada.")
+    showToast(notice)
+  }, [showToast])
+
+  const changePassword = useCallback(async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) return { success: false, error: error.message }
+    showToast("Contraseña actualizada correctamente.")
+    return { success: true }
   }, [showToast])
 
   const updateProfile = useCallback(
-    (patch: Partial<User>) => {
-      if (!state.currentUser) return
+    async (patch: Partial<User>): Promise<boolean> => {
+      const currentUser = state.currentUser
+      if (!currentUser) return false
+      // El email identifica al usuario en toda la base; no se edita desde el perfil.
+      const safePatch: Partial<User> = { ...patch }
+      delete safePatch.email
+      try {
+        await updateUsuarioProfile(currentUser.email, {
+          name: safePatch.name ?? currentUser.name,
+          bio: safePatch.bio ?? currentUser.bio,
+          city: safePatch.city ?? currentUser.city,
+          avatar: safePatch.avatar ?? currentUser.avatar,
+        })
+      } catch (error) {
+        if (!isMissingSchemaError(error)) {
+          console.error("[Supabase] Error guardando perfil:", error)
+          showToast(error instanceof Error ? `No se pudo guardar el perfil: ${error.message}` : "No se pudo guardar el perfil.")
+          return false
+        }
+        console.warn("[Supabase] Falta la migración de perfil; el cambio queda solo en este navegador.")
+      }
       setState((prev) => {
-        const updated = { ...prev.currentUser!, ...patch }
+        const updated = { ...prev.currentUser!, ...safePatch }
         return {
           ...prev,
           currentUser: updated,
           users: prev.users.map((u) => (u.id === updated.id ? updated : u)),
+          books: prev.books.map((b) => (b.ownerId === updated.id ? { ...b, ownerName: updated.name } : b)),
         }
       })
       showToast("Perfil actualizado correctamente.")
+      return true
     },
     [state.currentUser, showToast]
   )
@@ -627,7 +684,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!currentUser) return false
 
       try {
-        const book = await findDatabaseBook(data.isbn.trim(), data.googleBook)
+        const isbn = data.isbn.trim()
+        const book = await findDatabaseBook(isbn, data.googleBook)
+        // La categoría es del libro: si ya tenía una se respeta, si no se guarda la elegida.
+        let savedCategory: string | null = null
+        try {
+          savedCategory = data.category ? await assignBookCategory(isbn, data.category) : null
+        } catch (categoryError) {
+          console.error("[Supabase] Error guardando la categoría:", categoryError)
+        }
+        const effectiveCategory = savedCategory || data.category || "Sin categoría"
+        const pricing = publicationPricing(data.points, effectiveCategory, data.condition, book)
         const timestamp = new Date().toISOString()
         const { data: publication, error } = await supabase
           .from("publicacion")
@@ -639,27 +706,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             valor_puntos_solicitado: data.points,
             comentario: data.description || null,
             estado_publicacion: "DISPONIBLE",
+            ...pricing,
           })
           .select("*")
           .single()
         if (error) throw error
         if (!publication) throw new Error("Supabase no devolvió la publicación creada.")
 
-        const { data: category, error: categoryError } = await supabase
-          .from("libro_categoria")
-          .select("*")
-          .eq("isbn", data.isbn.trim())
-          .maybeSingle()
-        if (categoryError) throw categoryError
-
         const newBook = databaseBook(
           publication as Record<string, unknown>,
           book,
           { email: currentUser.email, nombre: currentUser.name, reputacion_promedio: currentUser.rating },
-          category as Record<string, unknown> | null || undefined,
+          { nombre_categoria: effectiveCategory },
           state.users,
           currentUser,
         )
+        if (data.category && !savedCategory) {
+          console.warn("[Supabase] No se pudo guardar la categoría en la base (¿migración pendiente?).")
+        }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó y guardó en Supabase.`)
         return true
@@ -687,12 +751,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       try {
         const [isbn, email, timestamp] = databasePublicationId(book)
+        let category = book.category
+        if (patch.category && !(CATEGORIES as readonly string[]).includes(book.category)) {
+          try {
+            category = (await assignBookCategory(isbn, patch.category)) || patch.category
+          } catch (categoryError) {
+            console.error("[Supabase] Error guardando la categoría:", categoryError)
+            category = patch.category
+          }
+        }
         const { data, error } = await supabase
           .from("publicacion")
           .update({
             estado_fisico: databaseCondition(patch.condition),
             valor_puntos_solicitado: patch.points,
             comentario: patch.description || null,
+            ...publicationPricing(patch.points, category, patch.condition, {
+              puntuacion_externa: book.externalRating,
+            }),
           })
           .eq("isbn", isbn)
           .eq("email_propietario", email)
@@ -706,7 +782,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...prev,
           books: prev.books.map((candidate) =>
             candidate.id === bookId
-              ? { ...candidate, ...patch, referencePrice: calculateReferencePrice(candidate.category, patch.condition, 4.5) }
+              ? {
+                  ...candidate,
+                  condition: patch.condition,
+                  points: patch.points,
+                  description: patch.description,
+                  category,
+                  referencePrice: calculateReferencePrice(category, patch.condition, candidate.externalRating),
+                }
               : candidate,
           ),
         }))
@@ -848,9 +931,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       showToast(`¡Solicitud enviada! Se reservaron ${book.points} puntos de tu saldo.`)
+      void refreshFromDatabase()
       return true
     },
-    [state.currentUser, state.books, showToast]
+    [state.currentUser, state.books, showToast, refreshFromDatabase]
   )
 
   const requestDirectTrade = useCallback(
@@ -916,9 +1000,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
 
       showToast(`Propuesta directa enviada a ${targetBook.ownerName}.`)
+      void refreshFromDatabase()
       return true
     },
-    [state.currentUser, state.books, showToast]
+    [state.currentUser, state.books, showToast, refreshFromDatabase]
   )
 
   const acceptTrade = useCallback(
@@ -952,8 +1037,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
 
       showToast("Has aceptado el intercambio. El libro queda bloqueado para entrega.")
+      void refreshFromDatabase()
     },
-    [state.trades, showToast]
+    [state.trades, showToast, refreshFromDatabase]
   )
 
   const rejectTrade = useCallback(
@@ -1033,8 +1119,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       showToast("Solicitud rechazada. Puntos y libros liberados.")
+      void refreshFromDatabase()
     },
-    [state.trades, state.users, showToast]
+    [state.trades, state.users, showToast, refreshFromDatabase]
   )
 
   const cancelTrade = useCallback(
@@ -1120,8 +1207,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       showToast("Intercambio cancelado. Libros y puntos liberados con éxito.")
+      void refreshFromDatabase()
     },
-    [state.trades, state.currentUser, state.users, showToast]
+    [state.trades, state.currentUser, state.users, showToast, refreshFromDatabase]
   )
 
   const confirmTradeReceipt = useCallback(
@@ -1132,16 +1220,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const isRequester = state.currentUser.id === trade.requesterId
       const isOwner = state.currentUser.id === trade.ownerId
 
-      const updatedTrade: TradeRequest = {
-        ...trade,
-        requesterConfirmed: isRequester ? true : trade.requesterConfirmed,
-        ownerConfirmed: isOwner ? true : trade.ownerConfirmed,
+      // La base decide (con bloqueo de fila) si el intercambio quedó completado:
+      // así no importa si la otra parte confirmó desde otro dispositivo.
+      let saved: Awaited<ReturnType<typeof updateSolicitudIntercambio>>
+      try {
+        saved = await updateSolicitudIntercambio(tradeId, "CONFIRMAR")
+      } catch (error) {
+        console.error("[Supabase] Error confirmando recepción:", error)
+        showToast(error instanceof Error ? `No se pudo registrar la confirmación: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
+        return
       }
 
-      const shouldComplete =
-        trade.type === "PUNTOS"
-          ? updatedTrade.requesterConfirmed
-          : updatedTrade.requesterConfirmed && updatedTrade.ownerConfirmed
+      const updatedTrade: TradeRequest = {
+        ...trade,
+        requesterConfirmed: saved.solicitante_confirmado ?? (isRequester ? true : trade.requesterConfirmed),
+        ownerConfirmed: saved.propietario_confirmado ?? (isOwner ? true : trade.ownerConfirmed),
+      }
+
+      const shouldComplete = saved.estado === "COMPLETADO"
 
       const movements: PointMovement[] = []
       const bonusAmount = trade.type === "PUNTOS" ? 10 : 5
@@ -1203,14 +1299,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
       }
 
-      try {
-        await updateSolicitudIntercambio(tradeId, "CONFIRMAR")
-      } catch (error) {
-        console.error("[Supabase] Error confirmando recepción:", error)
-        showToast(error instanceof Error ? `No se pudo registrar la confirmación: ${error.message}` : "No se pudo actualizar la solicitud en Supabase.")
-        return
-      }
-
       setState((prev) => {
         let updatedUsers = prev.users.map((u) => {
           let avail = u.availablePoints
@@ -1258,17 +1346,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else {
         if (trade.type === "PUNTOS" && isOwner) {
           showToast("Has confirmado la entrega. Esperando confirmación de recepción del comprador.")
+        } else if (trade.type === "PUNTOS") {
+          showToast("Recepción confirmada. Falta que el vendedor confirme la entrega para transferir los puntos.")
         } else {
           showToast("Confirmación registrada. Esperando a la otra parte para finalizar.")
         }
       }
+      void refreshFromDatabase()
     },
-    [state.trades, state.currentUser, state.users, showToast]
+    [state.trades, state.currentUser, state.users, showToast, refreshFromDatabase]
   )
 
   const addReview = useCallback(
-    (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => {
+    async (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => {
       if (!state.currentUser) return
+
+      let persisted = false
+      try {
+        await createReview(tradeId, rating, comment)
+        persisted = true
+      } catch (error) {
+        if (!isMissingSchemaError(error)) {
+          console.error("[Supabase] Error guardando reseña:", error)
+          showToast(error instanceof Error ? `No se pudo guardar la reseña: ${error.message}` : "No se pudo guardar la reseña.")
+          return
+        }
+        console.warn("[Supabase] Falta la migración de reseñas; la reseña queda solo en este navegador.")
+      }
 
       // If bookTitle is generic, resolve from requested book
       const trade = state.trades.find((t) => t.id === tradeId)
@@ -1337,15 +1441,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       showToast("¡Reseña publicada! Ganaste +5 puntos por colaborar con la comunidad.")
       setReviewTrade(null)
+      if (persisted) void refreshFromDatabase()
     },
-    [state.currentUser, state.trades, state.books, state.users, showToast]
+    [state.currentUser, state.trades, state.books, state.users, showToast, refreshFromDatabase]
   )
 
   const addToTracker = useCallback(
-    (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => {
+    async (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => {
       if (!state.currentUser) return
 
-      const id = "track-" + Date.now()
+      let id = "track-" + Date.now()
+      try {
+        id = await insertTrackedBook(state.currentUser.email, data)
+      } catch (error) {
+        if (!isMissingSchemaError(error)) {
+          console.error("[Supabase] Error guardando seguimiento:", error)
+          showToast(error instanceof Error ? `No se pudo seguir el libro: ${error.message}` : "No se pudo seguir el libro.")
+          return
+        }
+        console.warn("[Supabase] Falta la migración de seguimiento; queda solo en este navegador.")
+      }
       const newTracked: TrackedBook = {
         ...data,
         id,
@@ -1364,7 +1479,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const removeFromTracker = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      if (isDatabaseId(id)) {
+        try {
+          await deleteTrackedBook(id)
+        } catch (error) {
+          console.error("[Supabase] Error quitando seguimiento:", error)
+          showToast(error instanceof Error ? `No se pudo quitar el libro: ${error.message}` : "No se pudo quitar el libro.")
+          return
+        }
+      }
       setState((prev) => ({
         ...prev,
         trackedBooks: prev.trackedBooks.filter((t) => t.id !== id),
@@ -1375,6 +1499,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const markNotificationRead = useCallback((id: string) => {
+    if (isDatabaseId(id)) {
+      updateNotifications([id], { leida: true }).catch((error) =>
+        console.error("[Supabase] Error marcando notificación:", error),
+      )
+    }
     setState((prev) => ({
       ...prev,
       notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
@@ -1383,6 +1512,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const archiveNotification = useCallback(
     (id: string) => {
+      if (isDatabaseId(id)) {
+        updateNotifications([id], { archivada: true, leida: true }).catch((error) =>
+          console.error("[Supabase] Error archivando notificación:", error),
+        )
+      }
       setState((prev) => ({
         ...prev,
         notifications: prev.notifications.map((n) => (n.id === id ? { ...n, archived: true } : n)),
@@ -1394,13 +1528,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const markAllNotificationsRead = useCallback(() => {
     if (!state.currentUser) return
+    const ids = state.notifications
+      .filter((n) => n.userId === state.currentUser?.id && !n.read && isDatabaseId(n.id))
+      .map((n) => n.id)
+    updateNotifications(ids, { leida: true }).catch((error) =>
+      console.error("[Supabase] Error marcando notificaciones:", error),
+    )
     setState((prev) => ({
       ...prev,
       notifications: prev.notifications.map((n) =>
         n.userId === prev.currentUser?.id ? { ...n, read: true } : n
       ),
     }))
-  }, [state.currentUser])
+  }, [state.currentUser, state.notifications])
 
   const confirmChainStep = useCallback(
     (chainId: string) => {
@@ -1477,6 +1617,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setTradeModalBook,
         reviewTrade,
         setReviewTrade,
+        reportTarget,
+        setReportTarget,
         searchQuery,
         setSearchQuery,
         selectedCategory,
@@ -1486,6 +1628,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        changePassword,
         signInWithSupabase,
         signUpWithSupabase,
         switchUser,

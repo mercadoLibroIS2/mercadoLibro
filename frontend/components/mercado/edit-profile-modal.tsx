@@ -10,13 +10,15 @@ const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export function EditProfileModal({ onClose }: { onClose: () => void }) {
   const { currentUser, updateProfile } = useStore()
   const [name, setName] = useState(currentUser?.name ?? "")
-  const [email, setEmail] = useState(currentUser?.email ?? "")
+  const [email] = useState(currentUser?.email ?? "")
   const [bio, setBio] = useState(currentUser?.bio ?? "")
   const [city, setCity] = useState(currentUser?.city ?? "")
   const [avatar, setAvatar] = useState(currentUser?.avatar ?? "")
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({})
 
-  function handleSubmit(e: React.FormEvent) {
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const next: typeof errors = {}
     if (!name.trim()) next.name = "El nombre no puede estar vacío"
@@ -25,14 +27,15 @@ export function EditProfileModal({ onClose }: { onClose: () => void }) {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    updateProfile({
+    setSaving(true)
+    const saved = await updateProfile({
       name: name.trim(),
-      email: email.trim(),
       bio: bio.trim(),
       city: city.trim(),
       avatar: avatar.trim() || currentUser?.avatar,
     })
-    onClose()
+    setSaving(false)
+    if (saved) onClose()
   }
 
   return (
@@ -78,7 +81,9 @@ export function EditProfileModal({ onClose }: { onClose: () => void }) {
               label="Email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              readOnly
+              disabled
+              title="El email identifica tu cuenta y no se puede cambiar"
               error={errors.email}
             />
           </div>
@@ -127,9 +132,10 @@ export function EditProfileModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-amber-800 px-4 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900 shadow-xs transition-all active:scale-95"
+              disabled={saving}
+              className="rounded-xl bg-amber-800 px-4 py-2 text-sm md:text-base font-bold text-white hover:bg-amber-900 shadow-xs transition-all active:scale-95 disabled:opacity-60"
             >
-              Guardar cambios
+              {saving ? "Guardando..." : "Guardar cambios"}
             </button>
           </div>
         </form>

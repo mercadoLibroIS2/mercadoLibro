@@ -7,7 +7,37 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
-import { CATEGORIES, CONDITIONS } from "@/lib/mercado-types"
+import { CATEGORIES, CONDITIONS, type Book } from "@/lib/mercado-types"
+
+type SortOption = "recientes" | "menos_puntos" | "mas_puntos" | "reputacion" | "oportunidad" | "titulo"
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "recientes", label: "Más recientes" },
+  { value: "menos_puntos", label: "Menos puntos" },
+  { value: "mas_puntos", label: "Más puntos" },
+  { value: "oportunidad", label: "Mejor oportunidad" },
+  { value: "reputacion", label: "Mejor reputación" },
+  { value: "titulo", label: "Título (A-Z)" },
+]
+
+function sortBooks(books: Book[], sortBy: SortOption): Book[] {
+  const sorted = [...books]
+  const priceRatio = (book: Book) => (book.referencePrice ? book.points / book.referencePrice : Number.POSITIVE_INFINITY)
+  switch (sortBy) {
+    case "menos_puntos":
+      return sorted.sort((a, b) => a.points - b.points)
+    case "mas_puntos":
+      return sorted.sort((a, b) => b.points - a.points)
+    case "oportunidad":
+      return sorted.sort((a, b) => priceRatio(a) - priceRatio(b))
+    case "reputacion":
+      return sorted.sort((a, b) => b.ownerRating - a.ownerRating)
+    case "titulo":
+      return sorted.sort((a, b) => a.title.localeCompare(b.title, "es"))
+    default:
+      return sorted.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
+  }
+}
 
 export function FeedScreen() {
   const {
@@ -21,6 +51,7 @@ export function FeedScreen() {
   const [selectedCondition, setSelectedCondition] = useState<string>("Todas")
   const [maxPoints, setMaxPoints] = useState<number>(500)
   const [showFilters, setShowFilters] = useState(false)
+  const [sortBy, setSortBy] = useState<SortOption>("recientes")
 
   // Filter books
   const filteredBooks = books.filter((book) => {
@@ -51,6 +82,8 @@ export function FeedScreen() {
 
     return true
   })
+
+  const sortedBooks = sortBooks(filteredBooks, sortBy)
 
   const allCategories = ["Todas", ...CATEGORIES]
   const hasActiveFilters =
@@ -185,6 +218,21 @@ export function FeedScreen() {
             <span className="hidden sm:inline-block text-stone-400">• Filtros aplicados</span>
           )}
         </div>
+        <label className="flex items-center gap-2">
+          <span className="hidden sm:inline font-semibold text-stone-700">Ordenar:</span>
+          <select
+            aria-label="Ordenar resultados"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm md:text-base font-semibold text-stone-800 outline-none focus:border-amber-700 focus:ring-2 focus:ring-amber-100"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
         {searchQuery && (
           <span className="truncate max-w-[220px] font-medium text-amber-950 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
             &ldquo;{searchQuery}&rdquo;
@@ -211,7 +259,7 @@ export function FeedScreen() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-          {filteredBooks.map((book) => (
+          {sortedBooks.map((book) => (
             <BookCard key={book.id} book={book} />
           ))}
         </div>
