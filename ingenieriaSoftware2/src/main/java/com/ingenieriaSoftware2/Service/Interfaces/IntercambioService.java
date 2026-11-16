@@ -13,7 +13,7 @@ public interface IntercambioService {
 
     IntercambioResponseDTO proponerIntercambio(IntercambioRequestDTO request, UUID usuarioProponenteId);
 
-    IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId);
+    IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId, UUID usuarioId);
 
     List<IntercambioResponseDTO> listarPropuestasEnviadas(UUID usuarioId);
 
@@ -27,7 +27,7 @@ public interface IntercambioService {
 
     IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
-    EstadoIntercambio consultarEstado(IntercambioId intercambioId);
+    EstadoIntercambio consultarEstado(IntercambioId intercambioId, UUID usuarioId);
 
     void cancelarPendientesDePublicacion(PublicacionId publicacionId, IntercambioId excluir);
 }

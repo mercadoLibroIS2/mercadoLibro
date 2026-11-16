@@ -21,21 +21,29 @@ public class SecurityUtils {
 
     private final UsuarioRepository usuarioRepository;
 
-    /** Email del usuario logueado (lo que el filtro JWT guardó como "username"). */
-    public String getEmailUsuarioLogueado() {
+    /**
+     * Usuario logueado completo, buscado en la base.
+     * El filtro JWT guarda como "username" el NOMBRE de usuario (Usuario.getUsername() devuelve nombre),
+     * así que se busca por nombre y no por email.
+     */
+    public Usuario getUsuarioLogueado() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No hay un usuario logueado");
         }
-        return auth.getName();
-    }
-
-    /** Usuario logueado completo, buscado en la base. */
-    public Usuario getUsuarioLogueado() {
-        String email = getEmailUsuarioLogueado();
-        return usuarioRepository.findByEmail(email)
+        if (auth.getPrincipal() instanceof Usuario principal && principal.getId() != null) {
+            return usuarioRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                            "El usuario del token no existe"));
+        }
+        return usuarioRepository.findByNombre(auth.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                         "El usuario del token no existe"));
+    }
+
+    /** Email del usuario logueado. */
+    public String getEmailUsuarioLogueado() {
+        return getUsuarioLogueado().getEmail();
     }
 
     /** UUID del usuario logueado. */

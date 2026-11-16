@@ -23,8 +23,7 @@ public class CorsConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:*",
                 "https://*.vercel.app",
-                "https://*.onrender.com",
-                "*"
+                "https://*.onrender.com"
         ));
 
         // ✅ Métodos HTTP permitidos

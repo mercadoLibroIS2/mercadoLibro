@@ -5,12 +5,12 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import jakarta.annotation.PostConstruct;
-import lombok.Value;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -21,14 +21,26 @@ import java.util.function.Function;
 @Service
 public class JwtService implements JwtServiceInterface {
 
-    private String secreto = "miClaveSecretaSuperSeguraParaJWTConMasDe32Caracteres";
-    private Long expiracion = 86400000L ;
+    // Antes el secreto estaba fijo en el código (cualquiera con el repo podía firmar tokens).
+    // Ahora sale de JWT_SECRET; si no está definido se genera uno aleatorio al arrancar
+    // (los tokens dejan de valer al reiniciar, pero nadie puede falsificarlos).
+    private final Key claveFirma;
+    private final Long expiracion;
 
+    public JwtService(@Value("${jwt.secret:}") String secreto,
+                      @Value("${jwt.expiration:86400000}") Long expiracion) {
+        this.expiracion = expiracion;
+        if (secreto == null || secreto.getBytes(StandardCharsets.UTF_8).length < 32) {
+            log.warn("JWT_SECRET no está definido o tiene menos de 32 bytes: se usa una clave aleatoria temporal.");
+            this.claveFirma = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+        } else {
+            this.claveFirma = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
+        }
+    }
 
     @Override
     public Key obtenerClaveFirma() {
-        byte[] claveBytes = secreto.getBytes();
-        return Keys.hmacShaKeyFor(claveBytes);
+        return claveFirma;
     }
 
     @Override

@@ -110,9 +110,10 @@ public class CompraServiceImpl implements CompraService {
 
     @Override
     @Transactional
-    public CompraResponseDTO obtenerPorId(CompraId compraId) {
+    public CompraResponseDTO obtenerPorId(CompraId compraId, UUID usuarioId) {
         Compra compra = compraRepository.findById(compraId)
                 .orElseThrow(() -> new CompraNoEncontradaException());
+        validarEsParticipante(compra, buscarUsuario(usuarioId));
         return compraMapper.toDTO(compra);
     }
 

@@ -1,5 +1,14 @@
 package com.ingenieriaSoftware2.Exception;
 
+import com.ingenieriaSoftware2.Exception.Compra.CompraNoEncontradaException;
+import com.ingenieriaSoftware2.Exception.Compra.EstadoCompraInvalidoException;
+import com.ingenieriaSoftware2.Exception.Intercambio.EstadoIntercambioInvalidoException;
+import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+import com.ingenieriaSoftware2.Exception.Intercambio.PuntosInsuficientesException;
+import com.ingenieriaSoftware2.Exception.Libro.LibroNoExisteException;
+import com.ingenieriaSoftware2.Exception.Usuario.ContraseniaIncorrecta;
+import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoAutenticadoException;
+import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import com.ingenieriaSoftware2.Exception.Usuario.UsuarioYaExiste;
 import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleException;
@@ -11,7 +20,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -82,16 +95,63 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(body);
     }
 
+    // Errores de negocio: antes caían en handleAll y respondían 500.
+    @ExceptionHandler({
+            IntercambioNoExiste.class,
+            CompraNoEncontradaException.class,
+            LibroNoExisteException.class,
+            UsuarioNoEncontrado.class
+    })
+    public ResponseEntity<Map<String, Object>> handleNoEncontrado(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.NOT_FOUND, e.getClass().getSimpleName(), mensaje(e, "Recurso no encontrado"));
+    }
+
+    @ExceptionHandler({
+            EstadoIntercambioInvalidoException.class,
+            EstadoCompraInvalidoException.class,
+            PuntosInsuficientesException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleConflicto(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.CONFLICT, e.getClass().getSimpleName(), mensaje(e, "La operación no es válida en el estado actual"));
+    }
+
+    @ExceptionHandler({AtributoFueraDeRangoException.class, ContraseniaIncorrecta.class})
+    public ResponseEntity<Map<String, Object>> handleDatosInvalidos(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.BAD_REQUEST, e.getClass().getSimpleName(), mensaje(e, "Datos inválidos"));
+    }
+
+    @ExceptionHandler(UsuarioNoAutenticadoException.class)
+    public ResponseEntity<Map<String, Object>> handleNoAutenticado(UsuarioNoAutenticadoException e) {
+        return handlePublicacionError(HttpStatus.UNAUTHORIZED, "UsuarioNoAutenticado", mensaje(e, "No hay un usuario logueado"));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleRutaInexistente(NoResourceFoundException e) {
+        return handlePublicacionError(HttpStatus.NOT_FOUND, "NoEncontrado", "La ruta solicitada no existe");
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMetodoNoPermitido(HttpRequestMethodNotSupportedException e) {
+        return handlePublicacionError(HttpStatus.METHOD_NOT_ALLOWED, "MetodoNoPermitido", e.getMessage());
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, Object>> handleCuerpoInvalido(Exception e) {
+        return handlePublicacionError(HttpStatus.BAD_REQUEST, "SolicitudInvalida", "El cuerpo o los parámetros de la solicitud no son válidos");
+    }
+
+    private static String mensaje(RuntimeException e, String porDefecto) {
+        return e.getMessage() != null ? e.getMessage() : porDefecto;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAll(Exception e) {
         log.error("Excepción no controlada en controlador: ", e);
+        // No se devuelven mensajes internos ni causas (podían exponer SQL o detalles de la base).
         Map<String, Object> body = new HashMap<>();
         body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        body.put("error", e.getClass().getSimpleName());
-        body.put("message", e.getMessage());
-        if (e.getCause() != null) {
-            body.put("cause", e.getCause().getMessage());
-        }
+        body.put("error", "ErrorInterno");
+        body.put("message", "Ocurrió un error inesperado. Intentá de nuevo más tarde.");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }

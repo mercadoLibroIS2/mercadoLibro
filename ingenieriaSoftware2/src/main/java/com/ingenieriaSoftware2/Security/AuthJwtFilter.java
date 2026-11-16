@@ -40,21 +40,28 @@ public class AuthJwtFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7);
-        nombreUsuario = jwtService.extraerNombreUsuario(jwt);
+        try {
+            nombreUsuario = jwtService.extraerNombreUsuario(jwt);
 
-        if (nombreUsuario != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = usuarioService.loadUserByUsername(nombreUsuario);
+            if (nombreUsuario != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = usuarioService.loadUserByUsername(nombreUsuario);
 
-            if (jwtService.validarToken(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-                log.debug("Usuario autenticado: {}", nombreUsuario);
+                if (jwtService.validarToken(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    log.debug("Usuario autenticado: {}", nombreUsuario);
+                }
             }
+        } catch (RuntimeException e) {
+            // Token vencido, mal firmado o de un usuario que ya no existe: se sigue sin autenticar
+            // y Spring Security responde 401/403 en lugar de un 500.
+            log.debug("Token JWT rechazado: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);

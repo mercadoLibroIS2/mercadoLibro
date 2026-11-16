@@ -11,7 +11,7 @@ public interface CompraService {
 
     CompraResponseDTO realizarCompra(CompraRequestDTO request, UUID compradorId);
 
-    CompraResponseDTO obtenerPorId(CompraId compraId);
+    CompraResponseDTO obtenerPorId(CompraId compraId, UUID usuarioId);
 
     List<CompraResponseDTO> listarPorComprador(UUID compradorId);
 

@@ -1,0 +1,14 @@
+-- Solo para el modo local con H2 (se carga desde la URL por defecto en application.properties).
+-- En Supabase/Postgres estos tipos ya existen como ENUM; H2 no los conoce y sin esto
+-- Hibernate no podía crear las tablas de intercambios, movimientos y notificaciones.
+CREATE DOMAIN IF NOT EXISTS ESTADO_INTERCAMBIO AS ENUM (
+  'PENDIENTE', 'RECHAZADO', 'ACEPTADO', 'CANCELADO', 'COMPLETADO',
+  'CONFIRMADO_POR_PROPONENTE', 'CONFIRMADO_POR_RECEPTOR'
+);
+CREATE DOMAIN IF NOT EXISTS TIPO_MOVIMIENTO AS ENUM (
+  'INGRESO', 'EGRESO', 'RESERVA', 'LIBERACION_RESERVA', 'DEVOLUCION', 'BONIFICACION'
+);
+CREATE DOMAIN IF NOT EXISTS TIPO_NOTIFICACION AS ENUM (
+  'INTERCAMBIO_SOLICITADO', 'INTERCAMBIO_ACEPTADO', 'INTERCAMBIO_COMPLETADO',
+  'RESENIA_RECIBIDA', 'PUNTOS_GANADOS', 'PUNTOS_GASTADOS'
+);

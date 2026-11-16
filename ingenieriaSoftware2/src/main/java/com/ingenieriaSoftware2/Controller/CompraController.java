@@ -31,8 +31,9 @@ public class CompraController {
     }
 
     @GetMapping("/detalle")
-    public ResponseEntity<CompraResponseDTO> obtenerPorId(@Valid @ModelAttribute CompraIdParams id) {
-        return ResponseEntity.ok(compraService.obtenerPorId(id.toId()));
+    public ResponseEntity<CompraResponseDTO> obtenerPorId(@AuthenticationPrincipal Usuario usuario,
+                                                          @Valid @ModelAttribute CompraIdParams id) {
+        return ResponseEntity.ok(compraService.obtenerPorId(id.toId(), usuario.getId()));
     }
 
     @GetMapping("/mis-compras")

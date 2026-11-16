@@ -31,12 +31,13 @@ public class ReseniaController {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
     private SecurityUtils securityUtils;
 
     @PostMapping
     public ResponseEntity<ReseniaResponseDTO> crearResenia(@Valid @RequestBody ReseniaRequestDTO dto) {
         // El usuario sale del token, nunca del body ni de la URL
-        UUID usuarioId = securityUtils.getUsuarioIdLogueado(); // ajustá al nombre real del método
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
         ReseniaResponseDTO creada = reseniaService.crearResenia(dto, usuarioId);
         return ResponseEntity.status(HttpStatus.CREATED).body(creada);
     }

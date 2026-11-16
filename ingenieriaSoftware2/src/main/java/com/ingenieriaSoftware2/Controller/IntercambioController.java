@@ -31,8 +31,9 @@ public class IntercambioController {
     }
 
     @GetMapping("/detalle")
-    public ResponseEntity<IntercambioResponseDTO> obtenerPorId(@Valid @ModelAttribute IntercambioIdParams id) {
-        return ResponseEntity.ok(intercambioService.obtenerPorId(id.toId()));
+    public ResponseEntity<IntercambioResponseDTO> obtenerPorId(@AuthenticationPrincipal Usuario usuario,
+                                                               @Valid @ModelAttribute IntercambioIdParams id) {
+        return ResponseEntity.ok(intercambioService.obtenerPorId(id.toId(), usuario.getId()));
     }
 
     @GetMapping("/enviados")
@@ -67,8 +68,9 @@ public class IntercambioController {
     }
 
     @GetMapping("/estado")
-    public ResponseEntity<EstadoIntercambio> consultarEstado(@Valid @ModelAttribute IntercambioIdParams id) {
-        return ResponseEntity.ok(intercambioService.consultarEstado(id.toId()));
+    public ResponseEntity<EstadoIntercambio> consultarEstado(@AuthenticationPrincipal Usuario usuario,
+                                                             @Valid @ModelAttribute IntercambioIdParams id) {
+        return ResponseEntity.ok(intercambioService.consultarEstado(id.toId(), usuario.getId()));
     }
 
     @GetMapping("/recibidos")

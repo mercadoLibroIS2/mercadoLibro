@@ -3,14 +3,15 @@ package com.ingenieriaSoftware2.Controller;
 import com.ingenieriaSoftware2.DTO.Request.CambiarContraseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
 import com.ingenieriaSoftware2.DTO.Response.PerfilResponseDTO;
+import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Service.Interfaces.UsuarioService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/usuario")
@@ -35,15 +36,22 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.buscarUsuarioPorNombre(nombre));
     }
 
-    @PostMapping("/{usuarioId}/libros-seguidos/{isbn}")
-    public ResponseEntity<Void> seguirLibro(@PathVariable UUID usuarioId, @PathVariable String isbn) {
-        usuarioService.seguirLibro(usuarioId, isbn);
+    // El usuario sale del token: no se puede leer ni modificar la lista de otra persona.
+    @PostMapping("/me/libros-seguidos/{isbn}")
+    public ResponseEntity<Void> seguirLibro(@AuthenticationPrincipal Usuario usuario, @PathVariable String isbn) {
+        usuarioService.seguirLibro(usuario.getId(), isbn);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{usuarioId}/libros-seguidos")
-    public ResponseEntity<List<LibroResponseDTO>> obtenerLibrosSeguidos(@PathVariable UUID usuarioId) {
-        return ResponseEntity.ok(usuarioService.obtenerLibrosSeguidos(usuarioId));
+    @DeleteMapping("/me/libros-seguidos/{isbn}")
+    public ResponseEntity<Void> dejarDeSeguirLibro(@AuthenticationPrincipal Usuario usuario, @PathVariable String isbn) {
+        usuarioService.dejarDeSeguirLibro(usuario.getId(), isbn);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/me/libros-seguidos")
+    public ResponseEntity<List<LibroResponseDTO>> obtenerLibrosSeguidos(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(usuarioService.obtenerLibrosSeguidos(usuario.getId()));
     }
 
 

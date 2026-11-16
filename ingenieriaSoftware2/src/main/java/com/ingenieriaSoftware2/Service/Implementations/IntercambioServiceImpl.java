@@ -122,9 +122,10 @@ public class IntercambioServiceImpl implements IntercambioService {
 
     @Override
     @Transactional
-    public IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId) {
+    public IntercambioResponseDTO obtenerPorId(IntercambioId intercambioId, UUID usuarioId) {
         Intercambio intercambio = intercambioRepository.findById(intercambioId)
                 .orElseThrow(() -> new IntercambioNoExiste());
+        validarEsParticipante(intercambio, buscarUsuario(usuarioId));
         return intercambioMapper.toDTO(intercambio);
     }
 
@@ -262,10 +263,11 @@ public class IntercambioServiceImpl implements IntercambioService {
 
     @Override
     @Transactional
-    public EstadoIntercambio consultarEstado(IntercambioId intercambioId) {
-        return intercambioRepository.findById(intercambioId)
-                .orElseThrow(() -> new IntercambioNoExiste())
-                .getEstado();
+    public EstadoIntercambio consultarEstado(IntercambioId intercambioId, UUID usuarioId) {
+        Intercambio intercambio = intercambioRepository.findById(intercambioId)
+                .orElseThrow(() -> new IntercambioNoExiste());
+        validarEsParticipante(intercambio, buscarUsuario(usuarioId));
+        return intercambio.getEstado();
     }
 
     @Override

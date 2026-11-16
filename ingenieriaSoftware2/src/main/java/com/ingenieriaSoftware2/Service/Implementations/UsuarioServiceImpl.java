@@ -88,6 +88,13 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     @Transactional
+    public void dejarDeSeguirLibro(UUID usuarioId, String isbn) {
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
+        usuario.getLibrosSeguidos().removeIf(libro -> isbn.equals(libro.getIsbn()));
+    }
+
+    @Override
+    @Transactional
     public List<LibroResponseDTO> obtenerLibrosSeguidos(UUID usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
         return usuario.getLibrosSeguidos().stream().map(libroMapper::toDTO).toList();
