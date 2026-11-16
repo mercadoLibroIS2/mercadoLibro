@@ -7,7 +7,30 @@ const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 
 const usersByEmail = new Map(SEED_USERS.map((user) => [user.email, user]))
 
-async function mockBackend(page: Page) {
+// Las cadenas las detecta y persiste el backend: el mock mantiene su propio estado "servidor"
+function chainToBackend(chain: TradeChain) {
+  return {
+    id: chain.id,
+    puntosBonus: 50,
+    estado: chain.status,
+    participantesEmails: chain.steps.map((step) => step.userId),
+    pasos: chain.steps.map((step) => ({
+      emailEntrega: step.userId,
+      nombreEntrega: step.userName,
+      emailRecibe: chain.steps.find((other) => other.receivesBook.id === step.givesBook.id)?.userId || step.userId,
+      isbn: step.givesBook.isbn,
+      horaPublicacion: step.givesBook.createdAt,
+      titulo: step.givesBook.title,
+      autor: step.givesBook.author,
+      estadoFisico: null,
+      valorPuntosSolicitado: step.givesBook.points,
+      confirmado: step.confirmed,
+    })),
+  }
+}
+
+async function mockBackend(page: Page, initialChains: TradeChain[] = generateInitialChains(SEED_BOOKS, SEED_USERS)) {
+  const serverChains: TradeChain[] = structuredClone(initialChains)
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -61,6 +84,29 @@ async function mockBackend(page: Page) {
 
     if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    if (url.pathname.includes("/api/cadenaIntercambio")) {
+      const accessToken = request.headers().authorization?.replace(/^Bearer\s+/i, "")
+      const userId = accessToken?.replace(/^p5-token-/, "") || ""
+      const action = url.pathname.match(/cadenaIntercambio\/([^/]+)\/(aceptar|rechazar)$/)
+      if (action) {
+        const chain = serverChains.find((candidate) => candidate.id === decodeURIComponent(action[1]))!
+        if (action[2] === "rechazar") {
+          chain.status = "CANCELADA"
+        } else {
+          chain.steps = chain.steps.map((step) => (step.userId === userId ? { ...step, confirmed: true } : step))
+          chain.status = chain.steps.every((step) => step.confirmed) ? "COMPLETADA" : "EN_CURSO"
+        }
+        await route.fulfill({ json: chainToBackend(chain) })
+        return
+      }
+      await route.fulfill({
+        json: serverChains
+          .filter((chain) => chain.steps.some((step) => step.userId === userId))
+          .map(chainToBackend),
+      })
       return
     }
 
@@ -307,7 +353,7 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
     ...chain,
     steps: chain.steps.map((step) => ({ ...step, confirmed: false })),
   }))
-  await mockBackend(page)
+  await mockBackend(page, chains)
   await loadSeedState(page, { chains })
 
   // Orden de los pasos en generateInitialChains: Lucía (0), Mateo (2), Tomás (1)
@@ -322,8 +368,9 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
     await expect(card).toBeVisible()
     await card.getByRole("button", { name: "Aceptar mi parte del circuito" }).click()
 
+    // La confirmación pasa por la API: esperar a que el estado se actualice
+    await expect.poll(async () => (await persistedChains(page))[0].steps[index].confirmed).toBe(true)
     const [updatedChain] = await persistedChains(page)
-    expect(updatedChain.steps[index].confirmed).toBe(true)
     if (index === 2) {
       expect(updatedChain.steps.map((step) => step.confirmed)).toEqual([true, true, true])
     }
@@ -381,7 +428,7 @@ test("no detecta ni muestra una cadena si falta un libro disponible para cerrar 
   const noCycleChains = generateInitialChains(noCycleBooks, SEED_USERS)
   expect(noCycleChains).toHaveLength(0)
 
-  await mockBackend(page)
+  await mockBackend(page, noCycleChains)
   await loadSeedState(page, { books: noCycleBooks, chains: noCycleChains })
   await signIn(page)
   await openChains(page)
