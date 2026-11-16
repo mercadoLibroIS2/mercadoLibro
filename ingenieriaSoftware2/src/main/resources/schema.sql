@@ -65,6 +65,7 @@ ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_COMPLETADO';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'RESENIA_RECIBIDA';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'LIBRO_SEGUIDO_PUBLICADO';
 
 
 -- =======================================================

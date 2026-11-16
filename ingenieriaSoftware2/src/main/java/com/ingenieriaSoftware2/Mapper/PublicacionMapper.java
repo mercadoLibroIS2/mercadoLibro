@@ -22,6 +22,10 @@ public class PublicacionMapper {
                 ? "https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg"
                 : "";
 
+        String nombrePropietario = publicacion.getPropietario() != null
+                ? publicacion.getPropietario().getNombre()
+                : null;
+
         return new PublicacionResponseDTO(
                 publicacionId,
                 titulo,
@@ -31,7 +35,9 @@ public class PublicacionMapper {
                 publicacion.getValorPuntosSolicitado(),
                 publicacion.getValorReferenciaCalculado(),
                 publicacion.getColorSemaforo(),
-                publicacion.getComentario()
+                publicacion.getComentario(),
+                nombrePropietario,
+                publicacion.getEstadoPublicacion()
         );
     }
 }

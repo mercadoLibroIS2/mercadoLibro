@@ -109,7 +109,7 @@ class PublicacionServiceImplTest {
         verify(libroRepository).save(libroCaptor.capture());
         assertEquals(100, libroCaptor.getValue().getValorReferencia());
 
-        verify(notificacionService).crear("seguidor@example.com", TipoNotificacion.INTERCAMBIO_SOLICITADO);
+        verify(notificacionService).crear("seguidor@example.com", TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO);
         verify(notificacionService, never()).crear(eq("duena@example.com"), any());
     }
 

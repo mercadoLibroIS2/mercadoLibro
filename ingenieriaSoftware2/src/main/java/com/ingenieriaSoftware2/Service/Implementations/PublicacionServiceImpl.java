@@ -116,7 +116,7 @@ public class PublicacionServiceImpl implements PublicacionService {
             for (Usuario seguidor : libro.getSeguidores()) {
                 if (seguidor != null && seguidor.getEmail() != null && !seguidor.getEmail().equals(propietario.getEmail())) {
                     try {
-                        notificacionService.crear(seguidor.getEmail(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
+                        notificacionService.crear(seguidor.getEmail(), TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO);
                     } catch (Exception ignored) {
                     }
                 }
