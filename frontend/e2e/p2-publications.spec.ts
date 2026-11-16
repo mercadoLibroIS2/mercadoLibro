@@ -59,7 +59,7 @@ async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: bo
     }
 
     if (url.pathname.endsWith("/api/auth/logout")) {
-      await route.fulfill({ status: 204, body: "" })
+      await route.fulfill({ status: 200, body: "" })
       return
     }
 
