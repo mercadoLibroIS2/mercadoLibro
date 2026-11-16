@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Share2 } from "lucide-react"
 import { StoreProvider, useStore } from "./store"
 import { Navbar } from "./navbar"
 import { Sidebar } from "./sidebar"
@@ -37,12 +38,18 @@ function AuthedRouter() {
       return <NotificationsScreen />
     case "cadenas":
       return (
-        <div className="mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-8">
-          <div className="mb-4 sm:mb-6 border-b border-stone-200 pb-3 sm:pb-4">
-            <h1 className="font-serif text-xl sm:text-3xl font-bold text-stone-900">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="mb-6 border-b border-stone-200/80 pb-5">
+            <div className="flex items-center gap-1.5 text-amber-800 mb-1.5">
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em]">
+                Intercambio Inteligente
+              </span>
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
               Cadenas Multiusuario de Intercambio
             </h1>
-            <p className="text-sm md:text-base md:text-lg text-stone-600 mt-1">
+            <p className="mt-1.5 text-sm sm:text-[15px] leading-relaxed text-stone-600 max-w-2xl">
               Circuitos inteligentes detectados para que todos consigan el libro que buscan.
             </p>
           </div>
@@ -67,9 +74,7 @@ function GuestRouter() {
 function Shell() {
   const { currentUser, screen } = useStore()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [hydrated, setHydrated] = useState(false)
 
-  // Load user sidebar preference from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY)
@@ -77,12 +82,10 @@ function Shell() {
         setSidebarOpen(JSON.parse(saved))
       }
     } catch {
-      // ignore
+      // ignore storage read errors
     }
-    setHydrated(true)
   }, [])
 
-  // Instantly scroll to top when switching tabs/screens to avoid cut-off headers
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, left: 0, behavior: "instant" })
@@ -95,7 +98,7 @@ function Shell() {
       try {
         localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(next))
       } catch {
-        // ignore
+        // ignore storage write errors
       }
       return next
     })
@@ -103,7 +106,7 @@ function Shell() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-stone-50 font-sans text-stone-700 antialiased selection:bg-amber-100 selection:text-amber-900">
+      <div className="min-h-screen bg-[#faf8f5] font-sans text-stone-800 antialiased selection:bg-amber-100 selection:text-amber-950">
         <main>
           <GuestRouter />
         </main>
@@ -113,35 +116,23 @@ function Shell() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50/70 font-sans text-stone-700 antialiased selection:bg-amber-100 selection:text-amber-900">
-      {/* Left Sidebar on desktop */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={toggleSidebar}
-      />
+    <div className="min-h-screen bg-[#faf8f5] font-sans text-stone-800 antialiased selection:bg-amber-100 selection:text-amber-950">
+      <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
 
-      {/* Main Content Area */}
       <div
-        className={`flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "lg:pl-80 pl-0" : "pl-0"
+        className={`flex min-h-screen flex-col transition-[padding] duration-200 ease-out ${
+          sidebarOpen ? "lg:pl-72 pl-0" : "pl-0"
         }`}
       >
-        {/* Top Navbar */}
-        <Navbar
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={toggleSidebar}
-        />
+        <Navbar sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
 
-        {/* Page Content with safe padding for mobile bottom bar */}
         <main className="flex-1 pb-28 lg:pb-12">
           <AuthedRouter />
         </main>
       </div>
 
-      {/* Mobile Native Bottom Navigation Bar */}
       <BottomNav />
 
-      {/* Global Modals */}
       <BookDetailModal />
       <TradeRequestModal />
       <ReviewModal />

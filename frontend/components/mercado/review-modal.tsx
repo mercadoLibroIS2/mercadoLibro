@@ -1,9 +1,17 @@
 "use client"
 
-import { useState } from "react"
-import { BookOpen, Star, X, Sparkles } from "lucide-react"
+import { useEffect, useState, type FormEvent } from "react"
+import { AlertCircle, BookOpen, Sparkles, Star, X } from "lucide-react"
 import { useStore } from "./store"
 import { isUserMatch } from "@/lib/mercado-types"
+
+const RATING_LABELS: Record<number, string> = {
+  5: "Excelente experiencia (5/5)",
+  4: "Muy bueno (4/5)",
+  3: "Bueno (3/5)",
+  2: "Regular (2/5)",
+  1: "Malo (1/5)",
+}
 
 export function ReviewModal() {
   const { reviewTrade, setReviewTrade, currentUser, books, addReview } = useStore()
@@ -12,20 +20,37 @@ export function ReviewModal() {
   const [comment, setComment] = useState<string>("")
   const [error, setError] = useState<string>("")
 
+  useEffect(() => {
+    setRating(5)
+    setHoverRating(0)
+    setComment("")
+    setError("")
+  }, [reviewTrade?.id])
+
+  useEffect(() => {
+    if (!reviewTrade) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setReviewTrade(null)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [reviewTrade, setReviewTrade])
+
   if (!reviewTrade || !currentUser) return null
 
   const isRequester = isUserMatch(currentUser, reviewTrade.requesterId)
-  const targetUserId = isRequester
-    ? reviewTrade.ownerId
-    : reviewTrade.requesterId
+  const targetUserId = isRequester ? reviewTrade.ownerId : reviewTrade.requesterId
   const targetUserName = isRequester
     ? reviewTrade.ownerName
     : reviewTrade.requesterName
 
   const requestedBook = books.find((b) => b.id === reviewTrade.requestedBookId)
   const bookTitle = requestedBook?.title || "Libro intercambiado"
+  const activeRating = hoverRating || rating
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!comment.trim()) {
       setError("Por favor escribí un breve comentario sobre la experiencia.")
@@ -42,131 +67,154 @@ export function ReviewModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-900/60 p-0 sm:p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-md overflow-hidden rounded-t-3xl sm:rounded-3xl border border-stone-200 bg-white p-4 sm:p-6 shadow-2xl animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-        {/* Mobile Pull Handle */}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-modal-title"
+      onClick={() => setReviewTrade(null)}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-stone-200/90 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-4 sm:rounded-3xl sm:p-6 sm:zoom-in-95 duration-200"
+      >
         <div className="flex justify-center pb-2 sm:hidden">
-          <div className="h-1.5 w-12 rounded-full bg-stone-300" />
+          <div className="h-1 w-10 rounded-full bg-stone-300" aria-hidden="true" />
         </div>
 
         <button
+          type="button"
           onClick={() => setReviewTrade(null)}
-          className="absolute right-3.5 top-3.5 rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+          aria-label="Cerrar modal de calificación"
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4.5 w-4.5" aria-hidden="true" />
         </button>
 
-        <div className="text-center pt-2">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 mb-2.5">
-            <Star className="h-6 w-6 fill-amber-600 text-amber-600" />
+        <div className="pt-1 text-center">
+          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
+            <Star className="h-6 w-6 fill-amber-500 text-amber-600" aria-hidden="true" />
           </span>
-          <h3 className="font-serif text-xl font-bold text-stone-900">
+          <h3
+            id="review-modal-title"
+            className="font-serif text-xl font-bold tracking-tight text-stone-900"
+          >
             Calificar a {targetUserName}
           </h3>
-          <p className="text-sm md:text-base md:text-lg text-stone-600 mt-1">
+          <p className="mt-1 text-sm text-stone-500">
             Tu opinión ayuda a construir confianza en la comunidad.
           </p>
 
-          {/* Book Context Card */}
           {requestedBook && (
-            <div className="mt-3.5 flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 text-left">
+            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3 text-left">
               {requestedBook.coverUrl ? (
                 <img
                   src={requestedBook.coverUrl}
                   alt=""
-                  className="h-12 w-9 rounded-lg object-cover ring-1 ring-stone-200 shrink-0"
+                  className="h-12 w-9 shrink-0 rounded-lg border border-stone-200 object-cover"
                 />
               ) : (
-                <div className="flex h-12 w-9 items-center justify-center rounded-lg bg-stone-200 text-stone-500 shrink-0">
-                  <BookOpen className="h-4 w-4" />
+                <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-500">
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
                 </div>
               )}
-              <div className="truncate flex-1">
-                <span className="text-sm md:text-base font-bold text-amber-800 uppercase block">
-                  Ejemplar intercambiado:
+              <div className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                  Ejemplar intercambiado
                 </span>
-                <p className="text-base md:text-lg font-bold text-stone-900 truncate">{requestedBook.title}</p>
-                <p className="text-sm md:text-base md:text-lg text-stone-600 truncate">{requestedBook.author}</p>
+                <p className="truncate text-sm font-semibold text-stone-900">
+                  {requestedBook.title}
+                </p>
+                <p className="truncate text-xs text-stone-500">
+                  {requestedBook.author}
+                </p>
               </div>
             </div>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4 overflow-y-auto">
-          {/* Star selector */}
-          <div className="flex flex-col items-center justify-center gap-1.5">
-            <div className="flex items-center gap-2">
+        <form onSubmit={handleSubmit} noValidate className="mt-5 flex flex-col gap-4 overflow-y-auto">
+          {/* Star selector (first 5 button[type="button"] in form for E2E parity) */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-1.5" role="group" aria-label="Puntuación de 1 a 5 estrellas">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   type="button"
                   key={star}
+                  aria-label={`${star} ${star === 1 ? "estrella" : "estrellas"}`}
+                  aria-pressed={rating === star}
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
-                  className="p-1 transition-transform hover:scale-110 active:scale-95"
+                  className="rounded-lg p-1.5 transition-transform hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                 >
                   <Star
                     className={`h-8 w-8 transition-colors ${
-                      (hoverRating || rating) >= star
+                      activeRating >= star
                         ? "fill-amber-500 text-amber-500"
                         : "text-stone-300"
                     }`}
+                    aria-hidden="true"
                   />
                 </button>
               ))}
             </div>
-            <span className="text-base md:text-lg font-bold text-amber-950">
-              {rating === 5
-                ? "Excelente experiencia (5/5)"
-                : rating === 4
-                ? "Muy bueno (4/5)"
-                : rating === 3
-                ? "Bueno (3/5)"
-                : rating === 2
-                ? "Regular (2/5)"
-                : "Malo (1/5)"}
-            </span>
+            <p className="text-xs sm:text-sm font-semibold text-amber-900">
+              {RATING_LABELS[activeRating]}
+            </p>
           </div>
 
-          {/* Comment text */}
-          <div>
-            <label className="block text-base md:text-lg font-bold text-stone-700 mb-1.5">
-              Comentario sobre el trueque *
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="review-comment"
+              className="text-sm font-semibold tracking-tight text-stone-800"
+            >
+              Comentario de la experiencia
             </label>
             <textarea
+              id="review-comment"
               rows={3}
-              required
-              placeholder="¿Cómo estuvo el estado del libro, la puntualidad y el trato?..."
               value={comment}
               onChange={(e) => {
                 setComment(e.target.value)
                 if (error) setError("")
               }}
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50 p-3 text-base md:text-lg text-stone-900 placeholder:text-stone-400 outline-none focus:border-amber-700 focus:bg-white"
+              placeholder="¿Cómo estuvo el estado del libro, la puntualidad y el trato?..."
+              aria-invalid={error ? true : undefined}
+              className={
+                "w-full resize-none rounded-xl border bg-white px-3.5 py-2.5 text-sm leading-relaxed text-stone-900 outline-none transition-all placeholder:text-stone-400 " +
+                (error
+                  ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
+                  : "border-stone-200/90 hover:border-stone-300 focus:border-amber-700 focus:ring-3 focus:ring-amber-700/15")
+              }
             />
-            {error && <p className="mt-1 text-sm md:text-base md:text-lg font-medium text-red-600">{error}</p>}
+            {error && (
+              <p
+                role="alert"
+                className="flex items-center gap-1.5 text-xs font-medium text-rose-600"
+              >
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{error}</span>
+              </p>
+            )}
           </div>
 
-          {/* Bonus pill */}
-          <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm md:text-base md:text-lg text-amber-950">
-            <Sparkles className="h-4.5 w-4.5 text-amber-700 shrink-0" />
-            <p>
-              ¡Recibirás <strong>+5 puntos</strong> de bonificación por tu reseña!
-            </p>
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3.5 py-2.5 text-xs font-medium text-emerald-900">
+            <Sparkles className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+            <span>Recibís +5 puntos de bonificación por compartir tu reseña.</span>
           </div>
 
-          {/* Buttons */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-stone-100 pt-3.5">
+          <div className="flex items-center justify-end gap-2.5 border-t border-stone-100 pt-3">
             <button
               type="button"
               onClick={() => setReviewTrade(null)}
-              className="rounded-xl border border-stone-200 px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+              className="h-11 rounded-xl border border-stone-200/90 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
             >
               Omitir
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-amber-800 px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
+              className="h-11 flex-1 rounded-xl bg-amber-800 px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
             >
               Publicar Calificación
             </button>

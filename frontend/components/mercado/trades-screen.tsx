@@ -1,31 +1,52 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ComponentType } from "react"
 import {
   ArrowRightLeft,
+  BookOpen,
+  CheckCheck,
   CheckCircle,
   Clock,
   Coins,
-  BookOpen,
-  Star,
-  Share2,
-  CheckCheck,
+  History as HistoryIcon,
   Inbox,
   Send,
-  History as HistoryIcon,
+  Share2,
+  Star,
 } from "lucide-react"
 import { useStore } from "./store"
 import { ChainsView } from "./chains-view"
-import type { TradeRequest, User } from "@/lib/mercado-types"
-import { isUserMatch } from "@/lib/mercado-types"
+import { isUserMatch, type TradeRequest } from "@/lib/mercado-types"
 
 type TradeTab = "recibidas" | "enviadas" | "en_curso" | "historial" | "cadenas"
+
+const STATUS_BADGES: Record<TradeRequest["status"], { label: string; className: string }> = {
+  PENDIENTE: {
+    label: "Pendiente",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+  },
+  ACEPTADO: {
+    label: "En Curso",
+    className: "border-sky-200 bg-sky-50 text-sky-800",
+  },
+  COMPLETADO: {
+    label: "Completado",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  RECHAZADO: {
+    label: "Rechazado",
+    className: "border-rose-200 bg-rose-50 text-rose-800",
+  },
+  CANCELADO: {
+    label: "Cancelado",
+    className: "border-stone-200 bg-stone-100 text-stone-700",
+  },
+}
 
 export function TradesScreen() {
   const {
     trades,
     currentUser,
-    books,
     acceptTrade,
     rejectTrade,
     cancelTrade,
@@ -47,32 +68,40 @@ export function TradesScreen() {
   )
   const ongoingTrades = trades.filter(
     (t) =>
-      (isUserMatch(currentUser, t.ownerId) || isUserMatch(currentUser, t.requesterId)) &&
+      (isUserMatch(currentUser, t.ownerId) ||
+        isUserMatch(currentUser, t.requesterId)) &&
       t.status === "ACEPTADO"
   )
   const historyTrades = trades.filter(
     (t) =>
-      (isUserMatch(currentUser, t.ownerId) || isUserMatch(currentUser, t.requesterId)) &&
-      (t.status === "COMPLETADO" || t.status === "RECHAZADO" || t.status === "CANCELADO")
+      (isUserMatch(currentUser, t.ownerId) ||
+        isUserMatch(currentUser, t.requesterId)) &&
+      (t.status === "COMPLETADO" ||
+        t.status === "RECHAZADO" ||
+        t.status === "CANCELADO")
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-3 sm:px-6 lg:px-8 py-4 sm:py-8 overflow-x-hidden">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       {/* Header */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center gap-1.5 text-amber-800 mb-1">
-          <ArrowRightLeft className="h-4 w-4" />
-          <span className="text-sm md:text-base font-bold uppercase tracking-wider">
-            Gestión de Trueques
-          </span>
+      <div className="mb-6">
+        <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-800">
+          <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Gestión de Trueques</span>
         </div>
-        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
+        <h1 className="mt-1 font-serif text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
           Mis Intercambios
         </h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Administrá solicitudes recibidas, envíos en curso, historial y cadenas circulares.
+        </p>
       </div>
 
-      {/* Tabs Pills */}
-      <div className="w-full flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      {/* Tabs */}
+      <div
+        aria-label="Categorías de intercambios"
+        className="flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+      >
         <TabPill
           active={activeTab === "recibidas"}
           onClick={() => setActiveTab("recibidas")}
@@ -109,13 +138,14 @@ export function TradesScreen() {
         />
       </div>
 
-      {/* Tab Content */}
-      <div className="mt-3 sm:mt-6">
+      {/* Content */}
+      <div className="mt-4 sm:mt-6">
         {activeTab === "recibidas" && (
           <TradeList
             trades={receivedRequests}
             emptyMessage="No tenés solicitudes recibidas pendientes."
             type="received"
+            currentUserId={currentUser.id}
             onAccept={acceptTrade}
             onReject={rejectTrade}
             onBookClick={setSelectedBookId}
@@ -128,6 +158,7 @@ export function TradesScreen() {
             trades={sentRequests}
             emptyMessage="No tenés solicitudes enviadas pendientes."
             type="sent"
+            currentUserId={currentUser.id}
             onCancel={cancelTrade}
             onBookClick={setSelectedBookId}
             onUserClick={viewUserProfile}
@@ -137,11 +168,11 @@ export function TradesScreen() {
         {activeTab === "en_curso" && (
           <TradeList
             trades={ongoingTrades}
-            emptyMessage="No tenés intercambios en curso en este momento."
+            emptyMessage="No tenés intercambios en curso actualmente."
             type="ongoing"
             currentUserId={currentUser.id}
-            onConfirmReceipt={confirmTradeReceipt}
             onCancel={cancelTrade}
+            onConfirmReceipt={confirmTradeReceipt}
             onBookClick={setSelectedBookId}
             onUserClick={viewUserProfile}
           />
@@ -150,10 +181,10 @@ export function TradesScreen() {
         {activeTab === "historial" && (
           <TradeList
             trades={historyTrades}
-            emptyMessage="Aún no contás con intercambios finalizados."
+            emptyMessage="Aún no completaste ni cerraste intercambios."
             type="history"
             currentUserId={currentUser.id}
-            onReviewClick={(trade) => setReviewTrade(trade)}
+            onReviewClick={setReviewTrade}
             onBookClick={setSelectedBookId}
             onUserClick={viewUserProfile}
           />
@@ -176,23 +207,25 @@ function TabPill({
   onClick: () => void
   count?: number
   label: string
-  icon: typeof Inbox
+  icon: ComponentType<{ className?: string }>
 }) {
   return (
     <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-full px-4 py-2 text-base md:text-lg font-bold whitespace-nowrap transition-all ${
+      className={`inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
         active
           ? "bg-amber-800 text-white shadow-xs"
-          : "bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 hover:text-stone-900"
+          : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
       }`}
     >
-      <Icon className={`h-4 w-4 ${active ? "text-white" : "text-stone-400"}`} />
+      <Icon className="h-4 w-4" aria-hidden="true" />
       <span>{label}</span>
-      {count !== undefined && count > 0 && (
+      {typeof count === "number" && count > 0 && (
         <span
-          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-sm md:text-base font-bold ${
-            active ? "bg-white text-amber-900" : "bg-amber-800 text-white"
+          className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums leading-none ${
+            active ? "bg-white/20 text-white" : "bg-stone-100 text-stone-700"
           }`}
         >
           {count}
@@ -212,49 +245,54 @@ function renderOngoingAction(
     if (isRequester) {
       return (
         <button
-          onClick={() => onConfirmReceipt && onConfirmReceipt(trade.id)}
-          className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-emerald-800 transition-all active:scale-95"
+          type="button"
+          onClick={() => onConfirmReceipt?.(trade.id)}
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
         >
-          <CheckCheck className="h-4.5 w-4.5" />
+          <CheckCheck className="h-4 w-4" aria-hidden="true" />
           <span>Confirmar Recepción (+10 pts)</span>
         </button>
       )
     }
     if (trade.ownerConfirmed) {
       return (
-        <span className="flex items-center gap-2 text-base md:text-lg font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl">
-          <CheckCircle className="h-4.5 w-4.5" />
-          Entrega registrada (Esperando recepción del comprador)
+        <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-800">
+          <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Entrega registrada (Esperando recepción del comprador)</span>
         </span>
       )
     }
     return (
       <button
-        onClick={() => onConfirmReceipt && onConfirmReceipt(trade.id)}
-        className="flex items-center gap-2 rounded-xl bg-amber-800 px-4 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-all active:scale-95"
+        type="button"
+        onClick={() => onConfirmReceipt?.(trade.id)}
+        className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
       >
-        <CheckCheck className="h-4.5 w-4.5" />
+        <CheckCheck className="h-4 w-4" aria-hidden="true" />
         <span>Confirmar Entrega del Libro</span>
       </button>
     )
   }
 
-  // Direct trade
-  if ((isRequester && trade.requesterConfirmed) || (isOwner && trade.ownerConfirmed)) {
+  if (
+    (isRequester && trade.requesterConfirmed) ||
+    (isOwner && trade.ownerConfirmed)
+  ) {
     return (
-      <span className="flex items-center gap-2 text-base md:text-lg font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl">
-        <CheckCircle className="h-4.5 w-4.5" />
-        Tu recepción está confirmada (Esperando a la otra parte)
+      <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-800">
+        <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>Tu recepción está confirmada (Esperando a la otra parte)</span>
       </span>
     )
   }
 
   return (
     <button
-      onClick={() => onConfirmReceipt && onConfirmReceipt(trade.id)}
-      className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-emerald-800 transition-all active:scale-95"
+      type="button"
+      onClick={() => onConfirmReceipt?.(trade.id)}
+      className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
     >
-      <CheckCheck className="h-4.5 w-4.5" />
+      <CheckCheck className="h-4 w-4" aria-hidden="true" />
       <span>Confirmar Recepción de Libro (+5 pts)</span>
     </button>
   )
@@ -264,7 +302,6 @@ function TradeList({
   trades,
   emptyMessage,
   type,
-  currentUserId,
   onAccept,
   onReject,
   onCancel,
@@ -290,11 +327,15 @@ function TradeList({
 
   if (trades.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300 bg-white p-8 sm:p-12 text-center">
-        <ArrowRightLeft className="h-10 w-10 text-stone-300 mb-3" />
-        <p className="font-serif text-base sm:text-lg font-bold text-stone-800">{emptyMessage}</p>
-        <p className="mt-1 text-sm md:text-base md:text-lg text-stone-500 max-w-sm">
-          Explorá el catálogo para descubrir libros o publicá ejemplares para intercambiar.
+      <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300/90 bg-white p-10 text-center sm:p-14">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
+          <ArrowRightLeft className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <p className="font-serif text-lg font-bold text-stone-900">
+          {emptyMessage}
+        </p>
+        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-stone-500">
+          Explorá el catálogo para descubrir ejemplares o publicá tus libros para empezar a intercambiar.
         </p>
       </div>
     )
@@ -304,149 +345,185 @@ function TradeList({
     <div className="space-y-4">
       {trades.map((trade) => {
         const requestedBook = books.find((b) => b.id === trade.requestedBookId)
-        const offeredBook = trade.offeredBookId ? books.find((b) => b.id === trade.offeredBookId) : null
+        const offeredBook = trade.offeredBookId
+          ? books.find((b) => b.id === trade.offeredBookId)
+          : null
+
         const isRequester = isUserMatch(currentUser, trade.requesterId)
         const isOwner = isUserMatch(currentUser, trade.ownerId)
-        const hasReviewed = isRequester ? trade.reviewedByRequester : trade.reviewedByOwner
+        const hasReviewed = isRequester
+          ? Boolean(trade.reviewedByRequester)
+          : Boolean(trade.reviewedByOwner)
+        const statusMeta = STATUS_BADGES[trade.status]
 
         return (
-          <div
+          <article
             key={trade.id}
-            className="rounded-2xl sm:rounded-3xl border border-stone-200 bg-white p-4 sm:p-5 shadow-xs"
+            className="rounded-2xl sm:rounded-3xl border border-stone-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(28,25,23,0.03)] sm:p-5"
           >
-            {/* Top Meta */}
-            <div className="flex items-center justify-between gap-2 border-b border-stone-100 pb-3 text-sm md:text-base md:text-lg">
-              <span
-                className={`rounded-lg px-3 py-1 text-sm md:text-base md:text-lg font-bold uppercase tracking-wider ${
-                  trade.type === "PUNTOS"
-                    ? "bg-amber-100 text-amber-900 border border-amber-200"
-                    : "bg-blue-100 text-blue-900 border border-blue-200"
-                }`}
-              >
-                {trade.type === "PUNTOS" ? "Por Puntos" : "Directo"}
-              </span>
+            {/* Card top metadata */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                    trade.type === "PUNTOS"
+                      ? "border-amber-200 bg-amber-50 text-amber-900"
+                      : "border-sky-200 bg-sky-50 text-sky-900"
+                  }`}
+                >
+                  {trade.type === "PUNTOS" ? "Canje por Puntos" : "Trueque Directo"}
+                </span>
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusMeta.className}`}
+                >
+                  {statusMeta.label}
+                </span>
+              </div>
 
-              <span
-                className={`rounded-full px-3 py-1 text-sm md:text-base md:text-lg font-bold ${
-                  trade.status === "PENDIENTE"
-                    ? "bg-amber-100 text-amber-800"
-                    : trade.status === "ACEPTADO"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : trade.status === "COMPLETADO"
-                    ? "bg-stone-900 text-white"
-                    : "bg-rose-100 text-rose-800"
-                }`}
-              >
-                {trade.status === "ACEPTADO" ? "EN CURSO" : trade.status}
+              <span className="text-xs text-stone-400">
+                {new Date(trade.createdAt).toLocaleDateString("es-AR", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
               </span>
             </div>
 
-            {/* Exchange Summary Grid */}
-            <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Book & Counterparty Pair */}
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {/* Requested Book */}
-              <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-3">
-                {requestedBook?.coverUrl ? (
-                  <img
-                    src={requestedBook.coverUrl}
-                    alt=""
-                    className="h-14 w-10 rounded-lg object-cover ring-1 ring-stone-200 shrink-0 cursor-pointer"
-                    onClick={() => onBookClick(requestedBook.id)}
-                  />
-                ) : (
-                  <div className="flex h-14 w-10 items-center justify-center rounded-lg bg-stone-200 text-stone-500 shrink-0">
-                    <BookOpen className="h-5 w-5" />
-                  </div>
-                )}
-                <div className="truncate flex-1">
-                  <span className="text-sm md:text-base font-bold text-amber-800 uppercase block">
-                    Libro Solicitado:
+              <div className="flex items-center gap-3 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3">
+                <button
+                  type="button"
+                  disabled={!requestedBook}
+                  onClick={() => requestedBook && onBookClick(requestedBook.id)}
+                  aria-label={
+                    requestedBook
+                      ? `Ver detalle de ${requestedBook.title}`
+                      : "Libro solicitado"
+                  }
+                  className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                >
+                  {requestedBook?.coverUrl ? (
+                    <img
+                      src={requestedBook.coverUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <BookOpen className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                    Libro solicitado
                   </span>
-                  <p
+                  <button
+                    type="button"
+                    disabled={!requestedBook}
                     onClick={() => requestedBook && onBookClick(requestedBook.id)}
-                    className="text-base md:text-lg font-bold text-stone-900 truncate hover:text-amber-900 cursor-pointer"
+                    className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     {requestedBook?.title || "Libro"}
-                  </p>
-                  <p
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => onUserClick(trade.ownerId)}
-                    className="text-sm md:text-base md:text-lg text-stone-600 truncate hover:underline cursor-pointer"
+                    className="mt-0.5 block max-w-full truncate text-left text-xs text-stone-600 hover:text-stone-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     Dueño: {trade.ownerName}
-                  </p>
+                  </button>
                 </div>
               </div>
 
-              {/* Offered Element */}
-              <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-3">
+              {/* Counterpart / Offered Element */}
+              <div className="flex items-center gap-3 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3">
                 {trade.type === "PUNTOS" ? (
                   <>
-                    <div className="flex h-14 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-800 shrink-0">
-                      <Coins className="h-6 w-6" />
+                    <div className="flex h-14 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-200/80 bg-amber-50 text-amber-800">
+                      <Coins className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <div className="truncate flex-1">
-                      <span className="text-sm md:text-base font-bold text-amber-800 uppercase block">
-                        Contraprestación:
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                        Contraprestación
                       </span>
-                      <p className="text-base md:text-lg font-bold text-amber-950 truncate">
+                      <p className="truncate text-sm font-semibold tabular-nums text-stone-900">
                         {trade.points} Puntos en Garantía
                       </p>
-                      <p
+                      <button
+                        type="button"
                         onClick={() => onUserClick(trade.requesterId)}
-                        className="text-sm md:text-base md:text-lg text-stone-600 truncate hover:underline cursor-pointer"
+                        className="mt-0.5 block max-w-full truncate text-left text-xs text-stone-600 hover:text-stone-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
                         Solicitante: {trade.requesterName}
-                      </p>
+                      </button>
                     </div>
                   </>
                 ) : (
                   <>
-                    {offeredBook?.coverUrl ? (
-                      <img
-                        src={offeredBook.coverUrl}
-                        alt=""
-                        className="h-14 w-10 rounded-lg object-cover ring-1 ring-stone-200 shrink-0 cursor-pointer"
-                        onClick={() => offeredBook && onBookClick(offeredBook.id)}
-                      />
-                    ) : (
-                      <div className="flex h-14 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700 shrink-0">
-                        <BookOpen className="h-5 w-5" />
-                      </div>
-                    )}
-                    <div className="truncate flex-1">
-                      <span className="text-sm md:text-base font-bold text-blue-800 uppercase block">
-                        Libro a Cambio:
+                    <button
+                      type="button"
+                      disabled={!offeredBook}
+                      onClick={() => offeredBook && onBookClick(offeredBook.id)}
+                      aria-label={
+                        offeredBook
+                          ? `Ver detalle de ${offeredBook.title}`
+                          : "Libro ofrecido"
+                      }
+                      className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-sky-50 text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                    >
+                      {offeredBook?.coverUrl ? (
+                        <img
+                          src={offeredBook.coverUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <BookOpen className="h-5 w-5" aria-hidden="true" />
+                      )}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wider text-sky-800">
+                        Libro a cambio
                       </span>
-                      <p
+                      <button
+                        type="button"
+                        disabled={!offeredBook}
                         onClick={() => offeredBook && onBookClick(offeredBook.id)}
-                        className="text-base md:text-lg font-bold text-stone-900 truncate hover:text-blue-900 cursor-pointer"
+                        className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
                         {offeredBook?.title || "Libro ofrecido"}
-                      </p>
-                      <p
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onUserClick(trade.requesterId)}
-                        className="text-sm md:text-base md:text-lg text-stone-600 truncate hover:underline cursor-pointer"
+                        className="mt-0.5 block max-w-full truncate text-left text-xs text-stone-600 hover:text-stone-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
                         Ofrecido por: {trade.requesterName}
-                      </p>
+                      </button>
                     </div>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-4 pt-3.5 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
+            {/* Footer Actions */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3.5">
               {type === "received" && onAccept && onReject && (
-                <div className="flex items-center gap-2.5 w-full sm:w-auto ml-auto">
+                <div className="ml-auto flex w-full items-center gap-2.5 sm:w-auto">
                   <button
+                    type="button"
                     onClick={() => onReject(trade.id)}
-                    className="flex-1 sm:flex-initial rounded-xl border border-stone-200 px-4 py-2.5 text-base md:text-lg font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+                    className="h-10 flex-1 rounded-xl border border-stone-200/90 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 sm:flex-initial focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     Rechazar
                   </button>
                   <button
+                    type="button"
                     onClick={() => onAccept(trade.id)}
-                    className="flex-1 sm:flex-initial rounded-xl bg-amber-800 px-5 py-2.5 text-base md:text-lg font-bold text-white shadow-xs hover:bg-amber-900 transition-colors"
+                    className="h-10 flex-1 rounded-xl bg-amber-800 px-5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-amber-900 sm:flex-initial focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     Aceptar Solicitud
                   </button>
@@ -455,41 +532,46 @@ function TradeList({
 
               {type === "sent" && onCancel && (
                 <button
+                  type="button"
                   onClick={() => onCancel(trade.id)}
-                  className="rounded-xl border border-red-200 px-4 py-2.5 text-base md:text-lg font-semibold text-red-600 hover:bg-red-50 ml-auto transition-colors"
+                  className="ml-auto h-10 rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                 >
                   Cancelar Solicitud
                 </button>
               )}
 
               {type === "ongoing" && (
-                <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-                  {/* Cancel / Dispute button to prevent stuck trades */}
+                <div className="flex w-full flex-wrap items-center justify-between gap-2.5">
                   {onCancel && (
                     <div>
                       {confirmCancelId === trade.id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm md:text-base md:text-lg text-red-700 font-medium">¿Confirmás cancelar?</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs sm:text-sm font-medium text-rose-700">
+                            ¿Confirmás cancelar?
+                          </span>
                           <button
+                            type="button"
                             onClick={() => {
                               onCancel(trade.id)
                               setConfirmCancelId(null)
                             }}
-                            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm md:text-base md:text-lg font-bold text-white hover:bg-red-700"
+                            className="h-9 rounded-lg bg-rose-600 px-3 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                           >
                             Sí, cancelar
                           </button>
                           <button
+                            type="button"
                             onClick={() => setConfirmCancelId(null)}
-                            className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-sm md:text-base md:text-lg font-semibold text-stone-600 hover:bg-stone-100"
+                            className="h-9 rounded-lg border border-stone-200 bg-white px-3 text-xs sm:text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                           >
                             No
                           </button>
                         </div>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => setConfirmCancelId(trade.id)}
-                          className="rounded-xl border border-stone-200 px-3.5 py-2 text-sm md:text-base md:text-lg font-medium text-stone-600 hover:text-red-600 hover:border-red-200 transition-colors"
+                          className="h-10 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-medium text-stone-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                         >
                           Cancelar trueque
                         </button>
@@ -497,16 +579,20 @@ function TradeList({
                     </div>
                   )}
 
-                  {/* Main Role Confirmation */}
                   <div className="ml-auto">
-                    {renderOngoingAction(trade, isRequester, isOwner, onConfirmReceipt)}
+                    {renderOngoingAction(
+                      trade,
+                      isRequester,
+                      isOwner,
+                      onConfirmReceipt
+                    )}
                   </div>
                 </div>
               )}
 
               {type === "history" && onReviewClick && (
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-sm md:text-base md:text-lg text-stone-600">
+                <div className="flex w-full flex-wrap items-center justify-between gap-2.5">
+                  <span className="text-xs sm:text-sm text-stone-600">
                     {trade.status === "COMPLETADO"
                       ? "Intercambio completado con éxito."
                       : trade.status === "CANCELADO"
@@ -517,17 +603,24 @@ function TradeList({
                   {trade.status === "COMPLETADO" && (
                     <div>
                       {hasReviewed ? (
-                        <span className="flex items-center gap-1.5 text-sm md:text-base md:text-lg font-semibold text-stone-500">
-                          <CheckCircle className="h-4 w-4 text-emerald-600" />
-                          Calificado
+                        <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-stone-500">
+                          <CheckCircle
+                            className="h-4 w-4 text-emerald-600"
+                            aria-hidden="true"
+                          />
+                          <span>Calificado</span>
                         </span>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => onReviewClick(trade)}
-                          className="flex items-center gap-1.5 rounded-xl bg-amber-100 border border-amber-300 px-3.5 py-2 text-sm md:text-base md:text-lg font-bold text-amber-900 hover:bg-amber-200 transition-colors"
+                          className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                         >
-                          <Star className="h-4 w-4 fill-amber-600 text-amber-600" />
-                          Calificar (+5 pts)
+                          <Star
+                            className="h-4 w-4 fill-amber-500 text-amber-600"
+                            aria-hidden="true"
+                          />
+                          <span>Calificar (+5 pts)</span>
                         </button>
                       )}
                     </div>
@@ -535,7 +628,7 @@ function TradeList({
                 </div>
               )}
             </div>
-          </div>
+          </article>
         )
       })}
     </div>

@@ -1,20 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
-  X,
-  Coins,
-  Star,
-  BookOpen,
   ArrowRightLeft,
+  BookOpen,
+  Coins,
+  Edit,
+  ShieldCheck,
+  Sparkles,
+  Star,
   Target,
   Trash2,
-  Edit,
-  Info,
+  X,
 } from "lucide-react"
 import { useStore } from "./store"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
 import { isUserMatch } from "@/lib/mercado-types"
+
+const DEAL_PILLS = {
+  green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  yellow: "border-amber-200 bg-amber-50 text-amber-800",
+  red: "border-rose-200 bg-rose-50 text-rose-800",
+} as const
 
 export function BookDetailModal() {
   const {
@@ -30,263 +37,299 @@ export function BookDetailModal() {
   } = useStore()
 
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [imgFailed, setImgFailed] = useState(false)
 
-  if (!selectedBookId) return null
   const book = books.find((b) => b.id === selectedBookId)
-  if (!book) return null
+
+  useEffect(() => {
+    setConfirmDelete(false)
+    setImgFailed(false)
+  }, [selectedBookId])
+
+  useEffect(() => {
+    if (!book) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelectedBookId(null)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [book, setSelectedBookId])
+
+  if (!book || !currentUser) return null
 
   const isOwner = isUserMatch(currentUser, book.ownerId)
-  const evaluation = evaluatePriceDeal(
+  const isAvailable = book.availability === "DISPONIBLE"
+  const dealInfo = evaluatePriceDeal(
     book.points,
     book.category,
     book.condition,
-    book.externalRating || 4.5
+    book.externalRating
   )
-
-  const isAvailable = book.availability === "DISPONIBLE"
-  const canAfford = (currentUser?.availablePoints || 0) >= book.points
+  const canAfford = currentUser.availablePoints >= book.points
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-900/60 p-0 sm:p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-t-3xl sm:rounded-3xl border border-stone-200 bg-white shadow-2xl animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-        {/* Mobile Pull Handle */}
-        <div className="flex justify-center pt-2.5 pb-1 sm:hidden">
-          <div className="h-1.5 w-12 rounded-full bg-stone-300" />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="book-detail-title"
+      onClick={() => setSelectedBookId(null)}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-900/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl border border-stone-200/90 bg-white shadow-2xl animate-in slide-in-from-bottom-4 sm:rounded-3xl sm:zoom-in-95 duration-200"
+      >
+        <div className="flex justify-center pt-2.5 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-stone-300" aria-hidden="true" />
         </div>
 
-        {/* Close Button */}
         <button
+          type="button"
           onClick={() => setSelectedBookId(null)}
-          className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-stone-600 shadow-sm backdrop-blur-sm hover:bg-white hover:text-stone-900 transition-colors"
+          aria-label="Cerrar detalle del libro"
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-stone-200/80 bg-white/95 text-stone-500 shadow-xs transition-colors hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
 
-        <div className="overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-5">
-            {/* Left Cover */}
-            <div className="md:col-span-2 relative aspect-[16/10] md:aspect-auto w-full bg-stone-100 flex items-center justify-center overflow-hidden">
-              {book.coverUrl ? (
-                <img
-                  src={book.coverUrl}
-                  alt={book.title}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <BookOpen className="h-14 w-14 text-stone-300" />
-              )}
+        <div className="overflow-y-auto p-5 sm:p-7">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+            {/* Cover column */}
+            <div className="md:col-span-5 flex flex-col gap-3">
+              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-100 shadow-sm">
+                {book.coverUrl && !imgFailed ? (
+                  <img
+                    src={book.coverUrl}
+                    alt={`Portada de ${book.title}`}
+                    onError={() => setImgFailed(true)}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-stone-100 to-amber-50/60 p-6 text-center text-stone-400">
+                    <BookOpen className="h-10 w-10" aria-hidden="true" />
+                    <span className="text-xs font-medium text-stone-500">
+                      Sin portada disponible
+                    </span>
+                  </div>
+                )}
 
-              <div className="absolute left-3 top-3">
-                <span className="rounded-full bg-stone-900/80 px-2.5 py-0.5 text-sm md:text-base font-semibold text-white backdrop-blur-sm">
-                  {book.category}
-                </span>
+                {book.availability !== "DISPONIBLE" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-stone-900/55 backdrop-blur-[2px]">
+                    <span className="rounded-xl bg-white/95 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-stone-900 shadow-sm">
+                      {book.availability}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-stone-200/80 bg-[#faf8f5] px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                    Valor solicitado
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xl font-bold tabular-nums text-stone-900">
+                    <Coins className="h-5 w-5 text-amber-700" aria-hidden="true" />
+                    <span>{book.points} pts</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-medium text-stone-500">Referencia</p>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-stone-700">
+                    {dealInfo.referencePrice} pts
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Right Information & Actions */}
-            <div className="md:col-span-3 flex flex-col p-4 sm:p-6">
-              {/* Title & Author */}
-              <div>
-                <h2 className="font-serif text-xl sm:text-3xl font-bold text-stone-900 leading-tight">
-                  {book.title}
-                </h2>
-                <p className="text-base md:text-lg font-medium text-stone-600 mt-1">de {book.author}</p>
-              </div>
+            {/* Info column */}
+            <div className="md:col-span-7 flex flex-col justify-between gap-5">
+              <div className="flex flex-col gap-4 pr-0 md:pr-8">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-stone-200/80 bg-stone-100/80 px-2.5 py-0.5 text-xs font-medium text-stone-700">
+                      {book.category}
+                    </span>
+                    <span className="rounded-full border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
+                      {book.condition}
+                    </span>
+                  </div>
 
-              {/* Attributes */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-lg bg-stone-100 px-2.5 py-1 text-sm md:text-base md:text-lg font-semibold text-stone-800">
-                  Estado: {book.condition}
-                </span>
-                {book.isbn && (
-                  <span className="rounded-lg bg-stone-100 px-2.5 py-1 text-sm md:text-base md:text-lg text-stone-600 font-mono">
-                    ISBN: {book.isbn}
-                  </span>
-                )}
-              </div>
+                  <h2
+                    id="book-detail-title"
+                    className="mt-2.5 font-serif text-2xl font-bold leading-tight tracking-tight text-stone-900 sm:text-[26px]"
+                  >
+                    {book.title}
+                  </h2>
+                  <p className="mt-1 text-sm sm:text-[15px] font-medium text-stone-600">
+                    por {book.author}
+                  </p>
+                </div>
 
-              {(book.edition || book.description) && (
-                <div className="mt-3 space-y-2 text-sm md:text-lg text-stone-600">
-                  {book.edition && (
-                    <p>
-                      <span className="font-semibold text-stone-800">Edición:</span> {book.edition}
+                {/* Metadata pills */}
+                <div className="grid grid-cols-2 gap-2.5 rounded-xl border border-stone-200/80 bg-[#faf8f5] p-3 text-xs">
+                  <div>
+                    <span className="text-stone-500">ISBN: </span>
+                    <p className="mt-0.5 truncate font-mono font-semibold text-stone-800">
+                      {book.isbn || "No especificado"}
                     </p>
-                  )}
-                  {book.description && (
-                    <p className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                  </div>
+                  <div>
+                    <span className="text-stone-500">Valoración externa</span>
+                    <p className="mt-0.5 flex items-center gap-1 font-semibold text-stone-800 tabular-nums">
+                      <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
+                      <span>{(book.externalRating ?? 4.2).toFixed(1)} / 5.0</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Semáforo summary */}
+                <div
+                  className={`flex items-start gap-2.5 rounded-xl border p-3.5 ${DEAL_PILLS[dealInfo.deal]}`}
+                >
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-snug">{dealInfo.label}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed opacity-90">
+                      {dealInfo.hint}
+                    </p>
+                  </div>
+                </div>
+
+                {book.description && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                      Notas del ejemplar
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-stone-700">
                       {book.description}
                     </p>
-                  )}
-                </div>
-              )}
-
-              {/* Price & Semáforo */}
-              <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm md:text-base font-bold uppercase tracking-wider text-stone-500">
-                      Valor de Intercambio
-                    </span>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <Coins className="h-5 w-5 text-amber-700" />
-                      <span className="font-serif text-2xl sm:text-3xl font-bold text-amber-900">
-                        {book.points} pts
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => setShowPriceBreakdown(!showPriceBreakdown)}
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm md:text-base md:text-lg font-bold transition-transform active:scale-95 ${
-                      evaluation.deal === "green"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : evaluation.deal === "yellow"
-                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                        : "border-rose-200 bg-rose-50 text-rose-700"
-                    }`}
-                  >
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        evaluation.deal === "green"
-                          ? "bg-emerald-500"
-                          : evaluation.deal === "yellow"
-                          ? "bg-amber-500"
-                          : "bg-rose-500"
-                      }`}
-                    />
-                    <span>{evaluation.label}</span>
-                    <Info className="h-3.5 w-3.5 ml-0.5 opacity-70" />
-                  </div>
-                </div>
-
-                {showPriceBreakdown && (
-                  <div className="mt-3 pt-3 border-t border-stone-200 text-sm md:text-base md:text-lg text-stone-600 space-y-1.5">
-                    <div className="flex justify-between">
-                      <span>Valor de referencia sugerido:</span>
-                      <strong className="text-stone-800">{evaluation.referencePrice} pts</strong>
-                    </div>
-                    <p className="mt-1 text-sm md:text-base md:text-lg text-stone-600 italic bg-white p-2.5 rounded-xl border border-stone-200">
-                      {evaluation.hint}
-                    </p>
                   </div>
                 )}
-              </div>
 
-              {/* Owner Info */}
-              <div className="mt-3.5 rounded-2xl border border-stone-200 p-3 flex items-center justify-between">
-                <div
-                  onClick={() => {
-                    setSelectedBookId(null)
-                    viewUserProfile(book.ownerId)
-                  }}
-                  className="flex items-center gap-3 cursor-pointer group"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-800 font-serif font-bold text-white text-base">
-                    {book.ownerName.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-base md:text-lg font-bold text-stone-900 group-hover:text-amber-900 transition-colors">
+                {/* Owner card */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200/80 bg-white p-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-900">
+                      {book.ownerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-stone-900">
                         {book.ownerName}
                       </p>
-                      {isOwner && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-sm md:text-base font-semibold text-amber-800">
-                          Vos
+                      <div className="flex items-center gap-1.5 text-xs text-stone-500">
+                        <span className="inline-flex items-center gap-0.5 font-semibold text-amber-700 tabular-nums">
+                          <Star className="h-3 w-3 fill-amber-500 text-amber-500" aria-hidden="true" />
+                          {book.ownerRating.toFixed(1)}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 text-sm md:text-base text-stone-500">
-                      <span className="flex items-center gap-0.5 text-amber-600 font-bold">
-                        <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                        {book.ownerRating.toFixed(1)}
-                      </span>
-                      <span>•</span>
-                      <span>{book.ownerTrades} trueques</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{book.ownerTrades} trueques</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedBookId(null)
-                    viewUserProfile(book.ownerId)
-                  }}
-                  className="rounded-xl border border-stone-200 px-3 py-1.5 text-sm md:text-base md:text-lg font-medium text-stone-700 hover:bg-stone-50 transition-colors"
-                >
-                  Ver Perfil
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBookId(null)
+                      viewUserProfile(book.ownerId)
+                    }}
+                    className="h-9 shrink-0 rounded-lg border border-stone-200/90 bg-white px-3 text-xs sm:text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                  >
+                    Ver Perfil
+                  </button>
+                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-4 pt-3 border-t border-stone-100 flex flex-col gap-2">
+              {/* Action Footer */}
+              <div className="border-t border-stone-100 pt-4">
                 {isOwner ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <button
-                      onClick={() => {
-                        startEditingBook(book.id)
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-base md:text-lg font-semibold text-white hover:bg-stone-800 transition-colors"
+                      type="button"
+                      onClick={() => startEditingBook(book.id)}
+                      className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-stone-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
-                      <Edit className="h-4 w-4" />
-                      Modificar Publicación
+                      <Edit className="h-4 w-4" aria-hidden="true" />
+                      <span>Modificar Publicación</span>
                     </button>
 
                     {confirmDelete ? (
                       <button
+                        type="button"
+                        disabled={deleting}
                         onClick={async () => {
-                          if (await deleteBook(book.id)) {
-                            setSelectedBookId(null)
+                          setDeleting(true)
+                          try {
+                            if (await deleteBook(book.id)) {
+                              setSelectedBookId(null)
+                            }
+                          } finally {
+                            setDeleting(false)
                           }
                         }}
-                        className="flex items-center justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-3 text-base md:text-lg font-semibold text-white hover:bg-red-700 transition-colors"
+                        className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                       >
-                        <Trash2 className="h-4 w-4" />
-                        ¿Confirmar?
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        <span>¿Confirmar?</span>
                       </button>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => setConfirmDelete(true)}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-4 py-3 text-base md:text-lg font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                        className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                       >
-                        <Trash2 className="h-4 w-4" />
-                        Eliminar
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        <span>Eliminar</span>
                       </button>
                     )}
                   </div>
                 ) : isAvailable ? (
                   <div className="flex flex-col gap-2.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedBookId(null)
                           setTradeModalBook(book, "PUNTOS")
                         }}
                         disabled={!canAfford}
-                        className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-base md:text-lg font-bold shadow-sm transition-all active:scale-95 ${
+                        className={`flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition-all active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
                           canAfford
                             ? "bg-amber-800 text-white hover:bg-amber-900"
-                            : "bg-stone-200 text-stone-400 cursor-not-allowed"
+                            : "cursor-not-allowed bg-stone-100 text-stone-400"
                         }`}
                       >
-                        <Coins className="h-4.5 w-4.5" />
-                        Solicitar ({book.points} pts)
+                        <Coins className="h-4 w-4" aria-hidden="true" />
+                        <span>Solicitar ({book.points} pts)</span>
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedBookId(null)
                           setTradeModalBook(book, "DIRECTO")
                         }}
-                        className="flex items-center justify-center gap-2 rounded-xl border border-amber-800 bg-amber-50/60 px-4 py-3 text-base md:text-lg font-bold text-amber-950 hover:bg-amber-100 transition-colors active:scale-95"
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-800/30 bg-amber-50/80 px-4 text-sm font-semibold text-amber-950 transition-colors hover:bg-amber-100 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
-                        <ArrowRightLeft className="h-4.5 w-4.5 text-amber-800" />
-                        Trueque Directo
+                        <ArrowRightLeft className="h-4 w-4 text-amber-800" aria-hidden="true" />
+                        <span>Trueque Directo</span>
                       </button>
                     </div>
 
+                    {!canAfford && (
+                      <p className="flex items-center justify-center gap-1.5 text-xs text-stone-500">
+                        <ShieldCheck className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+                        <span>
+                          Te faltan {book.points - currentUser.availablePoints} pts para solicitar por puntos; podés proponer un Trueque Directo.
+                        </span>
+                      </p>
+                    )}
+
                     <button
+                      type="button"
                       onClick={() => {
                         addToTracker({
                           isbn: book.isbn,
@@ -299,14 +342,14 @@ export function BookDetailModal() {
                         })
                         setSelectedBookId(null)
                       }}
-                      className="flex items-center justify-center gap-1.5 text-sm md:text-base md:text-lg font-semibold text-stone-500 hover:text-stone-800 py-1 transition-colors"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs sm:text-sm font-medium text-stone-500 transition-colors hover:bg-stone-50 hover:text-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
-                      <Target className="h-4 w-4" />
-                      Agregar al Tracker de Libros
+                      <Target className="h-4 w-4" aria-hidden="true" />
+                      <span>Agregar al Tracker de Libros</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="rounded-xl bg-stone-100 p-3 text-center text-base md:text-lg font-semibold text-stone-600">
+                  <div className="rounded-xl border border-stone-200/80 bg-stone-50 px-4 py-3 text-center text-sm font-semibold text-stone-600">
                     Publicación reservada o intercambiada.
                   </div>
                 )}

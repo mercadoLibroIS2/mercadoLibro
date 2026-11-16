@@ -18,7 +18,7 @@ interface FormState {
 const EMPTY: FormState = { name: "", username: "", email: "", password: "", confirm: "" }
 
 export function RegisterScreen() {
-  const { register, setScreen, signUpWithSupabase } = useStore()
+  const { setScreen, signUpWithSupabase } = useStore()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<Partial<FormState>>({})
   const [serverError, setServerError] = useState<string | null>(null)
@@ -27,6 +27,8 @@ export function RegisterScreen() {
 
   function set<K extends keyof FormState>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }))
+    if (serverError) setServerError(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -75,39 +77,47 @@ export function RegisterScreen() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[75vh] max-w-md flex-col justify-center px-4 py-10">
-      <div className="rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
-        <div className="mb-5 flex flex-col items-center text-center">
-          <span className="mb-2 flex items-center gap-2 text-amber-800">
-            <BookOpen className="h-6 w-6" />
-            <span className="font-serif text-xl font-bold tracking-tight">MercadoLibro</span>
+    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-10">
+      <div className="rounded-3xl border border-stone-200/80 bg-white p-6 sm:p-8 shadow-[0_8px_30px_rgba(28,25,23,0.05)]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-800 text-stone-50 shadow-sm shadow-amber-900/20">
+            <BookOpen className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <span className="font-serif text-lg font-bold tracking-tight text-amber-900">
+            MercadoLibro
           </span>
-          <h1 className="mt-1 font-serif text-2xl font-bold text-stone-900">
+          <h1 className="mt-2 font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
             Creá tu cuenta
           </h1>
-          <p className="mt-1 text-sm md:text-base text-stone-500">
+          <p className="mt-1.5 text-sm sm:text-[15px] leading-relaxed text-stone-600">
             Unite a la comunidad de intercambio de libros sin dinero.
           </p>
         </div>
 
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <Gift className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-          <p className="text-sm md:text-base text-amber-900 leading-relaxed">
-            <strong className="font-bold">¡100 puntos virtuales de regalo!</strong> Al registrarte recibirás automáticamente 100 puntos en tu billetera (RF14) para tu primer intercambio.
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3.5">
+          <Gift className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+          <p className="text-xs sm:text-sm text-amber-950 leading-relaxed">
+            <strong className="font-semibold">¡100 puntos virtuales de regalo!</strong> Al registrarte recibirás automáticamente 100 puntos en tu billetera (RF14) para tu primer intercambio.
           </p>
         </div>
 
         {serverError && (
-          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm md:text-base font-medium text-rose-800 animate-in fade-in">
-            <AlertCircle className="h-5 w-5 shrink-0 text-rose-600" />
-            <p>{serverError}</p>
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 text-sm font-medium text-rose-800 animate-in fade-in duration-150"
+          >
+            <AlertCircle className="mt-0.5 h-4.5 w-4.5 shrink-0 text-rose-600" aria-hidden="true" />
+            <p className="leading-snug">{serverError}</p>
           </div>
         )}
 
         {infoMessage && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-sm md:text-base font-medium text-emerald-800 animate-in fade-in">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            <p>{infoMessage}</p>
+          <div
+            role="status"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3.5 text-sm font-medium text-emerald-800 animate-in fade-in duration-150"
+          >
+            <CheckCircle2 className="mt-0.5 h-4.5 w-4.5 shrink-0 text-emerald-600" aria-hidden="true" />
+            <p className="leading-snug">{infoMessage}</p>
           </div>
         )}
 
@@ -116,6 +126,7 @@ export function RegisterScreen() {
             id="reg-name"
             label="Nombre completo"
             placeholder="Ana García"
+            autoComplete="name"
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
             error={errors.name}
@@ -124,6 +135,7 @@ export function RegisterScreen() {
             id="reg-username"
             label="Nombre de usuario"
             placeholder="anagarcia"
+            autoComplete="username"
             value={form.username}
             onChange={(e) => set("username", e.target.value)}
             error={errors.username}
@@ -133,6 +145,7 @@ export function RegisterScreen() {
             label="Email"
             type="email"
             placeholder="ana@ejemplo.com"
+            autoComplete="email"
             value={form.email}
             onChange={(e) => set("email", e.target.value)}
             error={errors.email}
@@ -143,6 +156,7 @@ export function RegisterScreen() {
               label="Contraseña"
               type="password"
               placeholder="••••••••"
+              autoComplete="new-password"
               value={form.password}
               onChange={(e) => set("password", e.target.value)}
               error={errors.password}
@@ -152,6 +166,7 @@ export function RegisterScreen() {
               label="Confirmar contraseña"
               type="password"
               placeholder="••••••••"
+              autoComplete="new-password"
               value={form.confirm}
               onChange={(e) => set("confirm", e.target.value)}
               error={errors.confirm}
@@ -160,28 +175,28 @@ export function RegisterScreen() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-amber-800 px-4 py-2.5 text-sm md:text-base font-bold text-stone-50 transition-colors hover:bg-amber-900 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm active:scale-95"
+            className="mt-2 flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-800 px-4 text-sm sm:text-[15px] font-semibold text-stone-50 shadow-sm shadow-amber-900/15 transition-all duration-150 ease-out hover:bg-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4.5 w-4.5 animate-spin" aria-hidden="true" />
                 <span>Creando cuenta...</span>
               </>
             ) : (
               <>
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-4.5 w-4.5" aria-hidden="true" />
                 <span>Crear cuenta y recibir 100 pts</span>
               </>
             )}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm md:text-base text-stone-600">
+        <p className="mt-6 border-t border-stone-100 pt-5 text-center text-sm text-stone-600">
           ¿Ya tenés cuenta?{" "}
           <button
             type="button"
             onClick={() => setScreen("login")}
-            className="font-bold text-amber-800 underline-offset-2 hover:underline"
+            className="font-semibold text-amber-800 underline-offset-4 transition-colors hover:text-amber-950 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/50 rounded-sm px-1"
           >
             Iniciá sesión
           </button>
