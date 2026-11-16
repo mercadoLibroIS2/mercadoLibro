@@ -1,4 +1,11 @@
-import { expect, test, type Page, type Route } from "@playwright/test"
+import {
+  expect,
+  request as playwrightRequest,
+  test,
+  type APIRequestContext,
+  type Page,
+  type Route,
+} from "@playwright/test"
 import {
   SEED_BOOKS,
   SEED_NOTIFICATIONS,
@@ -70,6 +77,38 @@ async function mockBackend(page: Page) {
     }
 
     if (url.pathname.endsWith("/api/auth/logout")) {
+      await route.fulfill({ status: 200, json: { message: "Logout exitoso" } })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/resenia") && request.method() === "POST") {
+      await route.fulfill({
+        status: 201,
+        json: {
+          calificacion: Number(body?.calificacion || 5),
+          comentario: String(body?.comentario || ""),
+        },
+      })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/notificacion") && request.method() === "GET") {
+      await route.fulfill({
+        json: {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          number: 0,
+          size: 20,
+        },
+      })
+      return
+    }
+
+    if (
+      url.pathname.startsWith("/api/notificacion/") &&
+      request.method() === "PATCH"
+    ) {
       await route.fulfill({ status: 204, body: "" })
       return
     }
@@ -418,4 +457,90 @@ test("un intercambio incompleto o cancelado no permite dejar una reseña", async
 
   await expect(page.getByRole("button", { name: "Calificar (+5 pts)" })).toHaveCount(0)
   await expect(page.getByText("Intercambio cancelado. Puntos y libros liberados.")).toBeVisible()
+})
+
+async function createBackendContext(): Promise<APIRequestContext> {
+  return playwrightRequest.newContext({
+    baseURL: process.env.P6_API_URL,
+  })
+}
+
+async function registerBackendUser(api: APIRequestContext) {
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const data = {
+    nombre: `P6 Usuario ${uniqueId}`,
+    email: `p6-${uniqueId}@example.test`,
+    contrasenia: `P6-${uniqueId}-Ab!`,
+  }
+  const response = await api.post("/api/auth/registro", { data })
+  expect(response.status()).toBe(201)
+  return {
+    ...data,
+    token: ((await response.json()) as { token: string }).token,
+  }
+}
+
+test.describe("contratos REST de notificaciones y reseñas", () => {
+  test("lista notificaciones, cuenta no leídas y protege mutaciones por usuario", async () => {
+    test.skip(!process.env.P6_API_URL, "Definí P6_API_URL para ejecutar la capa REST.")
+    const api = await createBackendContext()
+    try {
+      const user = await registerBackendUser(api)
+      const headers = { Authorization: `Bearer ${user.token}` }
+
+      const list = await api.get("/api/notificacion?soloNoLeidas=false", { headers })
+      expect(list.status()).toBe(200)
+      await expect(list.json()).resolves.toMatchObject({
+        content: [],
+        totalElements: 0,
+      })
+
+      const count = await api.get("/api/notificacion/no-leidas/count", { headers })
+      expect(count.status()).toBe(200)
+      await expect(count.json()).resolves.toBe(0)
+
+      const markAll = await api.patch("/api/notificacion/marcar-todas", { headers })
+      expect(markAll.status()).toBe(204)
+
+      const missing = await api.patch(
+        "/api/notificacion/00000000-0000-0000-0000-000000000000/leida",
+        { headers },
+      )
+      expect(missing.status()).toBe(404)
+    } finally {
+      await api.dispose()
+    }
+  })
+
+  test("expone listados de reseñas y rechaza calificaciones fuera de rango", async () => {
+    test.skip(!process.env.P6_API_URL, "Definí P6_API_URL para ejecutar la capa REST.")
+    const api = await createBackendContext()
+    try {
+      const user = await registerBackendUser(api)
+      const headers = { Authorization: `Bearer ${user.token}` }
+
+      const allReviews = await api.get("/api/resenia", { headers })
+      expect(allReviews.status()).toBe(200)
+      await expect(allReviews.json()).resolves.toEqual([])
+
+      const userReviews = await api.get(
+        `/api/resenia/usuario/${encodeURIComponent(user.email)}`,
+        { headers },
+      )
+      expect(userReviews.status()).toBe(200)
+      await expect(userReviews.json()).resolves.toEqual([])
+
+      const invalid = await api.post("/api/resenia", {
+        headers,
+        data: {
+          intercambioId: null,
+          calificacion: 6,
+          comentario: "Puntuación inválida",
+        },
+      })
+      expect(invalid.status()).toBe(400)
+    } finally {
+      await api.dispose()
+    }
+  })
 })
