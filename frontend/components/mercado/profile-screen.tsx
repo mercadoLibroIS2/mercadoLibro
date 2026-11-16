@@ -150,7 +150,9 @@ export function ProfileScreen() {
                 <span className="inline-flex items-center gap-1 font-semibold text-amber-700 tabular-nums">
                   <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
                   <span>
-                    {targetUser.rating.toFixed(1)} ({targetUser.totalReviews})
+                    {targetUser.totalReviews > 0
+                      ? `${targetUser.rating.toFixed(1)} (${targetUser.totalReviews})`
+                      : "Sin reseñas"}
                   </span>
                 </span>
                 {targetUser.city && (
@@ -438,9 +440,11 @@ export function ProfileScreen() {
                         {positive && !String(mov.amount).startsWith("+") ? "+" : ""}
                         {mov.amount} pts
                       </p>
-                      <p className="text-xs tabular-nums text-stone-400">
-                        Saldo: {mov.balanceAfter} pts
-                      </p>
+                      {typeof mov.balanceAfter === "number" && (
+                        <p className="text-xs tabular-nums text-stone-400">
+                          Saldo: {mov.balanceAfter} pts
+                        </p>
+                      )}
                     </div>
                   </div>
                 )

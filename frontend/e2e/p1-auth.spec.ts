@@ -250,7 +250,7 @@ test("el usuario autenticado puede ver su perfil propio", async ({ page }) => {
 
   await expect(page.getByText("Tu Cuenta")).toBeVisible()
   await expect(page.getByRole("heading", { name: "P1 Test User" })).toBeVisible()
-  await expect(page.getByText("@P1 Test User")).toBeVisible()
+  await expect(page.getByText("@p1testuser")).toBeVisible()
 })
 
 test("un usuario guardado localmente no queda autenticado sin sesión activa", async ({ page }) => {

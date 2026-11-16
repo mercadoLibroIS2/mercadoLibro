@@ -33,6 +33,7 @@ import {
   SEED_USERS,
 } from "@/lib/seed-data"
 import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
+import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA, backendErrorMessage } from "@/lib/puntos"
 import { generateInitialChains } from "@/lib/chain-detector"
 import {
   apiLogin,
@@ -84,7 +85,117 @@ import {
   ESTADO_TO_CONDITION,
   type PublicacionResponse,
   type IntercambioResponse,
+  type IntercambioIdParams,
+  type CompraIdParams,
 } from "@/lib/api"
+
+const ESTADO_PUBLICACION_TO_AVAILABILITY: Record<string, Book["availability"]> = {
+  DISPONIBLE: "DISPONIBLE",
+  RESERVADA: "RESERVADO",
+  VENDIDA: "INTERCAMBIADO",
+  ELIMINADA: "ELIMINADO",
+}
+
+/**
+ * Con sesión del backend (JWT) toda operación se hace contra la API y sus errores se muestran.
+ * Sin sesión (ingreso demo local del guion) las operaciones siguen siendo solo locales.
+ */
+function hasBackendSession(): boolean {
+  return Boolean(getAuthToken())
+}
+
+// Marca como calificados los intercambios que ya tienen reseña del participante en el backend
+function markReviewedTrades(trades: TradeRequest[], reviews: Review[]): TradeRequest[] {
+  const same = (a?: string, b?: string) => Boolean(a && b && a.toLowerCase() === b.toLowerCase())
+  return trades.map((t) => {
+    const tradeReviews = reviews.filter((r) => r.tradeId === t.id)
+    if (tradeReviews.length === 0) return t
+    return {
+      ...t,
+      reviewedByRequester: t.reviewedByRequester || tradeReviews.some((r) => same(r.fromUserId, t.requesterId)),
+      reviewedByOwner: t.reviewedByOwner || tradeReviews.some((r) => same(r.fromUserId, t.ownerId)),
+    }
+  })
+}
+
+function slugUsername(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, "")
+}
+
+// Textos de las notificaciones del backend (solo envía el tipo).
+const BACKEND_NOTIFICATIONS: Record<
+  string,
+  { type: NotificationItem["type"]; title: string; message: string; linkScreen?: NotificationItem["linkScreen"] }
+> = {
+  INTERCAMBIO_SOLICITADO: {
+    type: "TRADE_REQUEST",
+    title: "Nueva solicitud",
+    message: "Alguien quiere uno de tus libros. Revisá tus solicitudes recibidas.",
+    linkScreen: "intercambios",
+  },
+  INTERCAMBIO_ACEPTADO: {
+    type: "TRADE_ACCEPTED",
+    title: "Solicitud aceptada",
+    message: "Aceptaron tu propuesta. Coordiná la entrega desde En Curso.",
+    linkScreen: "intercambios",
+  },
+  INTERCAMBIO_COMPLETADO: {
+    type: "TRADE_COMPLETED",
+    title: "Intercambio completado",
+    message: "Ambas partes confirmaron la recepción. ¡No te olvides de calificar!",
+    linkScreen: "intercambios",
+  },
+  RESENIA_RECIBIDA: {
+    type: "TRADE_COMPLETED",
+    title: "Recibiste una reseña",
+    message: "Otro lector calificó tu intercambio. Mirala en tu perfil.",
+    linkScreen: "perfil",
+  },
+  PUNTOS_GANADOS: {
+    type: "POINTS_RECEIVED",
+    title: "Sumaste puntos",
+    message: "Se acreditaron puntos en tu cuenta. Revisá tus movimientos en el perfil.",
+    linkScreen: "perfil",
+  },
+  PUNTOS_GASTADOS: {
+    type: "POINTS_RECEIVED",
+    title: "Usaste puntos",
+    message: "Se descontaron puntos de tu cuenta. Revisá tus movimientos en el perfil.",
+    linkScreen: "perfil",
+  },
+  LIBRO_SEGUIDO_PUBLICADO: {
+    type: "TRACKER_MATCH",
+    title: "Publicaron un libro que seguís",
+    message: "Un título de tu Tracker ya está disponible en el catálogo.",
+    linkScreen: "inicio",
+  },
+}
+
+const ORIGEN_MOVIMIENTO: Record<string, string> = {
+  ALTA_INICIAL: "Puntos de bienvenida",
+  INTERCAMBIO: "Intercambio",
+  COMPRA: "Compra",
+  RESENIA: "Reseña",
+  RESENA: "Reseña",
+}
+
+function backendMovementType(tipo: string, origen: string): PointMovement["type"] {
+  if (origen === "ALTA_INICIAL") return "INICIAL"
+  if (origen === "RESENIA" || origen === "RESENA") return "RECOMPENSA_RESEÑA"
+  switch (tipo) {
+    case "BONIFICACION":
+      return "BONO_INTERCAMBIO"
+    case "RESERVA":
+      return "RESERVA"
+    case "LIBERACION_RESERVA":
+    case "DEVOLUCION":
+      return "LIBERACION"
+    case "EGRESO":
+      return "TRANSFERENCIA_ENVIADA"
+    default:
+      return "TRANSFERENCIA_RECIBIDA"
+  }
+}
 
 function publicacionResponseToBook(
   pub: PublicacionResponse,
@@ -103,16 +214,16 @@ function publicacionResponseToBook(
     title: pub.titulo || fallbackMeta?.title || seedMatch?.title || `Libro (${isbn})`,
     author: pub.autor || fallbackMeta?.author || seedMatch?.author || "Autor desconocido",
     category: fallbackMeta?.category || seedMatch?.category || "General",
-    condition: ESTADO_TO_CONDITION[pub.estadoFisico] || seedMatch?.condition || "Bueno",
-    points: pub.valorPuntosSolicitado || seedMatch?.points || 10,
-    referencePrice: pub.valorReferenciaCalculado ?? seedMatch?.referencePrice,
-    description: pub.comentario || seedMatch?.description || "",
+    condition: ESTADO_TO_CONDITION[pub.estadoFisico] || "Bueno",
+    points: pub.valorPuntosSolicitado ?? 0,
+    referencePrice: pub.valorReferenciaCalculado ?? undefined,
+    description: pub.comentario || "",
     coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || seedMatch?.coverUrl || `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
     ownerId: email,
-    ownerName: seedMatch?.ownerName || (email ? email.split("@")[0] : "Lector"),
+    ownerName: pub.nombrePropietario || (email ? email.split("@")[0] : "Lector"),
     ownerRating: 5.0,
     ownerTrades: 0,
-    availability: "DISPONIBLE",
+    availability: ESTADO_PUBLICACION_TO_AVAILABILITY[pub.estadoPublicacion || "DISPONIBLE"] || "DISPONIBLE",
     createdAt: hora,
   }
 }
@@ -124,6 +235,7 @@ function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionRespon
   }
 
   const backendBooks: Book[] = []
+  const seenIds = new Set<string>()
   for (const pub of pubs) {
     const rawIsbn = pub.publicacionId?.isbn || ""
     const cleanIsbn = rawIsbn.replace(/[^0-9X]/gi, "")
@@ -137,7 +249,9 @@ function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionRespon
       book.ownerId.includes("testuser") ||
       book.ownerId.includes("mail@gmail")
 
-    if (!isJunkNoise) {
+    // "disponibles" y "mis-publicaciones" se solapan: evitar duplicados por id de publicación
+    if (!isJunkNoise && !seenIds.has(book.id) && book.availability !== "ELIMINADO") {
+      seenIds.add(book.id)
       backendBooks.push(book)
     }
   }
@@ -201,6 +315,8 @@ function intercambioResponseToTrade(dto: IntercambioResponse): TradeRequest {
     updatedAt: new Date().toISOString(),
     requesterConfirmed: dto.estado === "CONFIRMADO_POR_PROPONENTE",
     ownerConfirmed: dto.estado === "CONFIRMADO_POR_RECEPTOR",
+    requestedBookTitle: dto.tituloSolicitado || undefined,
+    offeredBookTitle: dto.tituloOfrecido || undefined,
   }
 }
 
@@ -234,6 +350,7 @@ function compraResponseToTrade(dto: any): TradeRequest {
     updatedAt: dto.fecha || horaPub,
     requesterConfirmed: dto.estado === "ENTREGADA",
     ownerConfirmed: dto.estado === "ENVIADA" || dto.estado === "ENTREGADA",
+    requestedBookTitle: dto.titulo || undefined,
   }
 }
 
@@ -539,26 +656,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...ventas.map(compraResponseToTrade),
       ]
 
-      const backendMovements: PointMovement[] = (historial || []).map((m, idx) => ({
-        id: `mov-${idx}-${m.fecha}`,
-        userId,
-        type: (m.tipo as any) || "INICIAL",
-        amount: m.monto,
-        balanceAfter: 0,
-        description: `${m.origen || "Sistema"}: ${m.tipo}`,
-        date: m.fecha,
-      }))
+      const backendMovements: PointMovement[] = (historial || []).map((m, idx) => {
+        const type = backendMovementType(m.tipo, m.origen)
+        const negative = type === "RESERVA" || type === "TRANSFERENCIA_ENVIADA"
+        return {
+          id: `mov-${idx}-${m.fecha}`,
+          userId,
+          type,
+          amount: negative ? -Math.abs(m.monto) : Math.abs(m.monto),
+          // El backend no informa el saldo resultante de cada movimiento
+          balanceAfter: undefined,
+          description: ORIGEN_MOVIMIENTO[m.origen] || m.origen || "Sistema",
+          date: m.fecha,
+        }
+      })
 
-      const backendNotifs: NotificationItem[] = (notifs || []).map((n) => ({
-        id: n.id,
-        userId,
-        type: (n.tipo as any) || "TRADE_REQUEST",
-        title: (n.tipo || "").replace(/_/g, " "),
-        message: `Notificación de ${n.tipo}`,
-        read: n.leida,
-        archived: n.archivada,
-        date: n.fechaCreacion,
-      }))
+      const backendNotifs: NotificationItem[] = (notifs || []).map((n) => {
+        const meta = BACKEND_NOTIFICATIONS[n.tipo] || {
+          type: "TRADE_REQUEST" as const,
+          title: "Aviso",
+          message: "Tenés novedades en tu cuenta.",
+        }
+        return {
+          id: n.id,
+          userId,
+          type: meta.type,
+          title: meta.title,
+          message: meta.message,
+          read: n.leida,
+          archived: n.archivada,
+          date: n.fechaCreacion,
+          linkScreen: meta.linkScreen,
+        }
+      })
 
       setState((prev) => {
         const isDemoUser = prev.currentUser?.email?.endsWith("@mercadolibro.demo")
@@ -570,6 +700,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...updatedCurrentUser,
             availablePoints: saldo.saldoDisponible,
             reservedPoints: saldo.saldoReservado,
+            totalTrades: backendTrades.filter((t) => t.status === "COMPLETADO").length,
           }
           updatedUsers = prev.users.map((u) =>
             isUserMatch(u, updatedCurrentUser!.email) ? updatedCurrentUser! : u
@@ -646,7 +777,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           currentUser: updatedCurrentUser,
           users: updatedUsers,
           books: mergedBooks,
-          trades: !isDemoUser && backendTrades.length > 0 ? backendTrades : prev.trades,
+          trades: !isDemoUser && backendTrades.length > 0 ? markReviewedTrades(backendTrades, mergedReviews) : prev.trades,
           pointMovements: !isDemoUser && backendMovements.length > 0 ? backendMovements : prev.pointMovements,
           notifications: !isDemoUser && backendNotifs.length > 0 ? backendNotifs : prev.notifications,
           reviews: mergedReviews,
@@ -712,7 +843,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : {
                 id: authData.id,
                 name: userProfile?.nombre || authData.username,
-                username: authData.username || authData.email.split("@")[0],
+                username: slugUsername(authData.username || authData.email.split("@")[0]),
                 email: authData.email,
                 avatar: "",
                 rating: userProfile?.reputacionPromedio || 5.0,
@@ -803,7 +934,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const appUser: User = {
           id: authData.id,
           name: authData.username || cleanName,
-          username: authData.username || username,
+          username: slugUsername(username || authData.username || cleanName),
           email: authData.email,
           avatar: "",
           rating: 5.0,
@@ -846,7 +977,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         loadUserData(authData.id)
 
         setScreen("bienvenida")
-        showToast("¡Cuenta creada con éxito en el backend!")
+        showToast("¡Cuenta creada con éxito!")
         return { success: true }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Error al conectar con el backend"
@@ -967,13 +1098,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ownerName: currentUser.name,
           ownerRating: currentUser.rating || 5.0,
           ownerTrades: currentUser.totalTrades || 0,
-          referencePrice: calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
+          referencePrice:
+            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
         }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
         return true
       } catch (error) {
-        console.warn("[Backend] Fallback local creando publicación:", error)
+        if (hasBackendSession()) {
+          showToast(`No se pudo publicar el libro: ${backendErrorMessage(error)}`)
+          return false
+        }
         const nowIso = new Date().toISOString()
         const localBook: Book = {
           id: `${data.isbn.trim()}|${currentUser.email}|${nowIso}`,
@@ -1010,16 +1145,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? bookId.split("|")
         : [book.isbn, book.ownerId, book.createdAt]
 
-      await apiEditPublication(
-        { isbn, emailPropietario, horaPublicacion },
-        {
-          estadoFisico: CONDITION_TO_ESTADO[patch.condition] || "BUEN_ESTADO",
-          valorPuntosSolicitado: patch.points,
-          comentario: patch.description || "",
+      if (hasBackendSession()) {
+        try {
+          await apiEditPublication(
+            { isbn, emailPropietario, horaPublicacion },
+            {
+              estadoFisico: CONDITION_TO_ESTADO[patch.condition] || "BUEN_ESTADO",
+              valorPuntosSolicitado: patch.points,
+              comentario: patch.description || "",
+            }
+          )
+        } catch (error) {
+          showToast(`No se pudo actualizar la publicación: ${backendErrorMessage(error)}`)
+          return false
         }
-      ).catch((error) => {
-        console.warn("[Backend] Fallback local actualizando publicación:", error)
-      })
+      }
 
       setState((prev) => ({
         ...prev,
@@ -1061,13 +1201,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? bookId.split("|")
         : [book.isbn, book.ownerId, book.createdAt]
 
-      await apiDeletePublication({
-        isbn,
-        emailPropietario,
-        horaPublicacion,
-      }).catch((error) => {
-        console.warn("[Backend] Fallback local eliminando publicación:", error)
-      })
+      if (hasBackendSession()) {
+        try {
+          await apiDeletePublication({ isbn, emailPropietario, horaPublicacion })
+        } catch (error) {
+          showToast(`No se pudo eliminar la publicación: ${backendErrorMessage(error)}`)
+          return false
+        }
+      }
 
       setState((prev) => ({ ...prev, books: prev.books.filter((candidate) => candidate.id !== bookId) }))
       showToast("Publicación eliminada correctamente.")
@@ -1075,6 +1216,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [state.books, state.trades, state.currentUser, showToast]
   )
+
+  // Ejecuta en el backend la acción sobre un intercambio/compra real y devuelve false si
+  // falla, mostrando el motivo. Antes los errores se ignoraban y la interfaz simulaba un
+  // éxito que el backend nunca registró. Los intercambios con usuarios demo siguen siendo locales.
+  const runTradeBackendAction = useCallback(
+    async (
+      trade: TradeRequest,
+      actions: {
+        intercambio?: (id: IntercambioIdParams) => Promise<unknown>
+        compra?: (id: CompraIdParams) => Promise<unknown>
+      },
+      errorPrefix: string
+    ): Promise<boolean> => {
+      if (!hasBackendSession()) return true
+      try {
+        const intercambioId = parseIntercambioId(trade.id)
+        if (intercambioId && actions.intercambio) {
+          await actions.intercambio(intercambioId)
+          return true
+        }
+        const compraId = parseCompraId(trade.id)
+        if (compraId && actions.compra) {
+          await actions.compra(compraId)
+        }
+        return true
+      } catch (err) {
+        showToast(`${errorPrefix}: ${backendErrorMessage(err)}`)
+        return false
+      }
+    },
+    [showToast]
+  )
+
+  // Después de una operación real, el saldo, los movimientos y los estados salen del backend
+  const refreshFromBackend = useCallback(() => {
+    if (state.currentUser && hasBackendSession()) {
+      loadUserData(state.currentUser.id)
+    }
+  }, [state.currentUser])
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
   const requestTradeWithPoints = useCallback(
@@ -1098,23 +1278,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? bookId.split("|")
         : [book.isbn, book.ownerId, book.createdAt]
 
-      // Intentar sincronizar con el backend sin bloquear ni perder el estado local
-      apiRealizarCompra({
-        isbn,
-        emailPropietario,
-        horaPublicacion,
-      })
-        .then(() =>
-          apiConfirmarPagoCompra({
-            compradorEmail: state.currentUser!.email,
+      const isRealPurchase = hasBackendSession()
+      if (isRealPurchase) {
+        try {
+          await apiRealizarCompra({ isbn, emailPropietario, horaPublicacion })
+          await apiConfirmarPagoCompra({
+            compradorEmail: state.currentUser.email,
             isbn,
             propietarioEmail: emailPropietario,
             horaPublicacion,
-          }).catch(() => {})
-        )
-        .catch((apiErr) => {
-          console.warn("[Backend] apiRealizarCompra fallback local:", apiErr)
-        })
+          })
+        } catch (err) {
+          showToast(`No se pudo enviar la solicitud: ${backendErrorMessage(err)}`)
+          return false
+        }
+      }
 
       const tradeId = `compra:${state.currentUser.email}|${isbn}|${emailPropietario}|${horaPublicacion}`
       const nowIso = new Date().toISOString()
@@ -1175,9 +1353,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       showToast(`¡Solicitud enviada! Se reservaron ${book.points} puntos de tu saldo en garantía.`)
+      if (isRealPurchase) refreshFromBackend()
       return true
     },
-    [state.currentUser, state.books, showToast]
+    [state.currentUser, state.books, showToast, refreshFromBackend]
   )
 
   const requestDirectTrade = useCallback(
@@ -1203,16 +1382,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? offeredBook.id.split("|")
         : [offeredBook.isbn, offeredBook.ownerId, offeredBook.createdAt]
 
-      apiProponerIntercambio({
-        isbnOfrecida: offeredIsbn,
-        horaPublicacionOfrecida: offeredHour,
-        isbnSolicitada: targetIsbn,
-        emailPropietarioSolicitada: targetOwner,
-        horaPublicacionSolicitada: targetHour,
-        puntosComprometidos: 0,
-      }).catch((error) => {
-        console.warn("[Backend] Fallback local proponiendo intercambio directo:", error)
-      })
+      const isRealProposal = hasBackendSession()
+      if (isRealProposal) {
+        try {
+          await apiProponerIntercambio({
+            isbnOfrecida: offeredIsbn,
+            horaPublicacionOfrecida: offeredHour,
+            isbnSolicitada: targetIsbn,
+            emailPropietarioSolicitada: targetOwner,
+            horaPublicacionSolicitada: targetHour,
+            puntosComprometidos: 0,
+          })
+        } catch (err) {
+          showToast(`No se pudo enviar la propuesta: ${backendErrorMessage(err)}`)
+          return false
+        }
+      }
 
       const nowIso = new Date().toISOString()
       const tradeId = `${targetBook.id}:${offeredBook.id}`
@@ -1238,9 +1423,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
 
       showToast(`Propuesta directa enviada a ${targetBook.ownerName}.`)
+      if (isRealProposal) refreshFromBackend()
       return true
     },
-    [state.currentUser, state.books, showToast]
+    [state.currentUser, state.books, showToast, refreshFromBackend]
   )
 
   const acceptTrade = useCallback(
@@ -1248,19 +1434,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
 
-      try {
-        const intercambioId = parseIntercambioId(tradeId)
-        if (intercambioId) {
-          await apiAceptarIntercambio(intercambioId).catch(() => {})
-        } else {
-          const compraId = parseCompraId(tradeId)
-          if (compraId) {
-            await apiMarcarCompraEnviada(compraId, "Envío coordinado por el vendedor").catch(() => {})
-          }
-        }
-      } catch (err) {
-        console.warn("[Trade] acceptTrade fallback local:", err)
-      }
+      const ok = await runTradeBackendAction(
+        trade,
+        {
+          intercambio: apiAceptarIntercambio,
+          compra: (id) => apiMarcarCompraEnviada(id, "Envío coordinado por el vendedor"),
+        },
+        "No se pudo aceptar la solicitud"
+      )
+      if (!ok) return
 
       const requestedBook = state.books.find((b) => b.id === trade.requestedBookId)
       const nowIso = new Date().toISOString()
@@ -1289,8 +1471,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notifications: [notif, ...prev.notifications],
       }))
       showToast("Has aceptado el intercambio. El libro queda bloqueado para entrega.")
+      refreshFromBackend()
     },
-    [state.trades, state.books, state.currentUser, showToast]
+    [state.trades, state.books, state.currentUser, showToast, runTradeBackendAction, refreshFromBackend]
   )
 
   const rejectTrade = useCallback(
@@ -1298,19 +1481,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
 
-      try {
-        const intercambioId = parseIntercambioId(tradeId)
-        if (intercambioId) {
-          await apiRechazarIntercambio(intercambioId, "Propuesta no aceptada").catch(() => {})
-        } else {
-          const compraId = parseCompraId(tradeId)
-          if (compraId) {
-            await apiCancelarCompra(compraId, "Compra rechazada por el vendedor").catch(() => {})
-          }
-        }
-      } catch (err) {
-        console.warn("[Trade] rejectTrade fallback local:", err)
-      }
+      const ok = await runTradeBackendAction(
+        trade,
+        {
+          intercambio: (id) => apiRechazarIntercambio(id, "Propuesta no aceptada"),
+          compra: (id) => apiCancelarCompra(id, "Compra rechazada por el vendedor"),
+        },
+        "No se pudo rechazar la solicitud"
+      )
+      if (!ok) return
 
       const nowIso = new Date().toISOString()
       const movements: PointMovement[] = []
@@ -1379,8 +1558,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
       showToast("Solicitud rechazada. Puntos y libros liberados.")
+      refreshFromBackend()
     },
-    [state.trades, state.users, state.currentUser, showToast]
+    [state.trades, state.users, state.currentUser, showToast, runTradeBackendAction, refreshFromBackend]
   )
 
   const cancelTrade = useCallback(
@@ -1388,19 +1568,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const trade = state.trades.find((t) => t.id === tradeId)
       if (!trade || !state.currentUser) return
 
-      try {
-        const intercambioId = parseIntercambioId(tradeId)
-        if (intercambioId) {
-          await apiCancelarIntercambio(intercambioId).catch(() => {})
-        } else {
-          const compraId = parseCompraId(tradeId)
-          if (compraId) {
-            await apiCancelarCompra(compraId, "Cancelado por el usuario").catch(() => {})
-          }
-        }
-      } catch (err) {
-        console.warn("[Trade] cancelTrade fallback local:", err)
-      }
+      const ok = await runTradeBackendAction(
+        trade,
+        {
+          intercambio: apiCancelarIntercambio,
+          compra: (id) => apiCancelarCompra(id, "Cancelado por el usuario"),
+        },
+        "No se pudo cancelar el intercambio"
+      )
+      if (!ok) return
 
       const nowIso = new Date().toISOString()
       const movements: PointMovement[] = []
@@ -1457,8 +1633,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
       showToast("Intercambio cancelado. Libros y puntos liberados con éxito.")
+      refreshFromBackend()
     },
-    [state.trades, state.users, state.currentUser, showToast]
+    [state.trades, state.users, state.currentUser, showToast, runTradeBackendAction, refreshFromBackend]
   )
 
   const confirmTradeReceipt = useCallback(
@@ -1480,23 +1657,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? Boolean(updatedTrade.requesterConfirmed)
           : Boolean(updatedTrade.requesterConfirmed && updatedTrade.ownerConfirmed)
 
-      try {
-        const intercambioId = parseIntercambioId(tradeId)
-        if (intercambioId) {
-          await apiCompletarIntercambio(intercambioId).catch(() => {})
-        } else {
-          const compraId = parseCompraId(tradeId)
-          if (compraId) {
-            await apiMarcarCompraEntregada(compraId).catch(() => {})
-          }
-        }
-      } catch (err) {
-        console.warn("[Trade] confirmReceipt fallback local:", err)
-      }
+      // Compra: el vendedor confirma el envío (PAGADA → ENVIADA) y luego el comprador la
+      // recepción (ENVIADA → ENTREGADA). Antes ambos llamaban a /entregar y el backend lo rechazaba.
+      const ok = await runTradeBackendAction(
+        trade,
+        {
+          intercambio: apiCompletarIntercambio,
+          compra: isOwner
+            ? (id) => apiMarcarCompraEnviada(id, "Envío coordinado por el vendedor")
+            : apiMarcarCompraEntregada,
+        },
+        isOwner && trade.type === "PUNTOS" ? "No se pudo confirmar la entrega" : "No se pudo confirmar la recepción"
+      )
+      if (!ok) return
 
       const nowIso = new Date().toISOString()
       const movements: PointMovement[] = []
-      const bonusAmount = trade.type === "PUNTOS" ? 10 : 5
+      // Igual que el backend: solo el trueque directo da bonificación; la compra no.
+      const bonusAmount = trade.type === "PUNTOS" ? 0 : BONO_INTERCAMBIO_DIRECTO
       const requestedBook = state.books.find((b) => b.id === trade.requestedBookId)
 
       if (shouldComplete) {
@@ -1534,7 +1712,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })
         }
 
-        movements.push({
+        if (bonusAmount > 0) movements.push({
           id: `pm-bonus-1-${Date.now()}`,
           userId: trade.requesterId,
           type: "BONO_INTERCAMBIO",
@@ -1544,7 +1722,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           date: nowIso,
           tradeId,
         })
-        movements.push({
+        if (bonusAmount > 0) movements.push({
           id: `pm-bonus-2-${Date.now()}`,
           userId: trade.ownerId,
           type: "BONO_INTERCAMBIO",
@@ -1600,7 +1778,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       if (shouldComplete) {
-        showToast(`¡Intercambio completado con éxito! Recibieron un bono de +${bonusAmount} puntos cada uno.`)
+        showToast(
+          bonusAmount > 0
+            ? `¡Intercambio completado con éxito! Recibieron un bono de +${bonusAmount} puntos cada uno.`
+            : "¡Compra completada con éxito!"
+        )
         setReviewTrade(updatedTrade)
       } else {
         if (trade.type === "PUNTOS" && isOwner) {
@@ -1609,33 +1791,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           showToast("Confirmación registrada. Esperando a la otra parte para finalizar.")
         }
       }
+      refreshFromBackend()
     },
-    [state.trades, state.books, state.users, state.currentUser, showToast]
+    [state.trades, state.books, state.users, state.currentUser, showToast, runTradeBackendAction, refreshFromBackend]
   )
 
   const addReview = useCallback(
     async (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => {
       if (!state.currentUser) return
 
+      const trade = state.trades.find((t) => t.id === tradeId)
       const intercambioId = parseIntercambioId(tradeId)
-      if (intercambioId) {
-        apiCreateReview({
-          intercambioId: {
-            isbnSolicitada: intercambioId.isbnSolicitada,
-            propietarioSolicitada: intercambioId.propietarioSolicitada,
-            horaSolicitada: intercambioId.horaSolicitada,
-            isbnOfrecida: intercambioId.isbnOfrecida,
-            propietarioOfrecida: intercambioId.propietarioOfrecida,
-            horaOfrecida: intercambioId.horaOfrecida,
-          },
-          calificacion: Math.min(5, Math.max(1, Math.round(rating))),
-          comentario: comment || "",
-        }).catch((err) => {
-          console.warn("[Backend] Fallback local creando reseña:", err)
-        })
+      const isRealTrade = Boolean(intercambioId) && hasBackendSession()
+      if (intercambioId && isRealTrade) {
+        try {
+          // Nombres de campo de IntercambioId (backend), no los de IntercambioIdParams
+          await apiCreateReview({
+            intercambioId: {
+              isbnSolicitante: intercambioId.isbnSolicitada,
+              propietarioIdSolicitante: intercambioId.propietarioSolicitada,
+              horaDePublicacionSolicitante: intercambioId.horaSolicitada,
+              isbnOfrecida: intercambioId.isbnOfrecida,
+              propietarioIdOfrecida: intercambioId.propietarioOfrecida,
+              horaDePublicacionOfrecida: intercambioId.horaOfrecida,
+            },
+            calificacion: Math.min(5, Math.max(1, Math.round(rating))),
+            comentario: comment || "",
+          })
+        } catch (err) {
+          showToast(`No se pudo publicar la reseña: ${backendErrorMessage(err)}`)
+          return
+        }
       }
 
-      const trade = state.trades.find((t) => t.id === tradeId)
       const requestedBook = trade ? state.books.find((b) => b.id === trade.requestedBookId) : null
       const finalTitle =
         (!bookTitle || bookTitle.startsWith("Intercambio #")) && requestedBook?.title
@@ -1661,9 +1849,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: `pm-rev-${Date.now()}`,
         userId: state.currentUser.email,
         type: "RECOMPENSA_RESEÑA",
-        amount: 5,
-        balanceAfter: state.currentUser.availablePoints + 5,
-        description: `Recompensa por dejar una reseña a ${targetUserObj?.name || toUserId} (+5 pts)`,
+        amount: BONO_RESENIA,
+        balanceAfter: state.currentUser.availablePoints + BONO_RESENIA,
+        description: `Recompensa por dejar una reseña a ${targetUserObj?.name || toUserId} (+${BONO_RESENIA} pts)`,
         date: nowIso,
         tradeId,
       }
@@ -1678,7 +1866,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             return { ...u, rating: newAverage, totalReviews: u.totalReviews + 1 }
           }
           if (isUserMatch(u, prev.currentUser?.email)) {
-            return { ...u, availablePoints: u.availablePoints + 5 }
+            return { ...u, availablePoints: u.availablePoints + BONO_RESENIA }
           }
           return u
         })
@@ -1703,10 +1891,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
 
-      showToast("¡Reseña publicada! Ganaste +5 puntos por colaborar con la comunidad.")
+      showToast(`¡Reseña publicada! Ganaste +${BONO_RESENIA} puntos por colaborar con la comunidad.`)
       setReviewTrade(null)
+      if (isRealTrade) refreshFromBackend()
     },
-    [state.currentUser, state.trades, state.books, state.users, showToast]
+    [state.currentUser, state.trades, state.books, state.users, showToast, refreshFromBackend]
   )
 
   const addToTracker = useCallback(

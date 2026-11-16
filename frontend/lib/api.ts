@@ -45,6 +45,8 @@ export interface PublicacionResponse {
   valorReferenciaCalculado: number
   colorSemaforo: ColorSemaforo
   comentario: string
+  nombrePropietario?: string | null
+  estadoPublicacion?: "DISPONIBLE" | "RESERVADA" | "VENDIDA" | "ELIMINADA"
 }
 
 export interface AuthResponse {
@@ -510,21 +512,25 @@ export interface CompraIdParams {
   horaPublicacion: string
 }
 
+// Formato: "isbn|email|hora:isbn|email|hora". Las horas ISO también contienen ":",
+// así que no se puede separar por ":" directamente: se separa por "|" y el tramo
+// central ("hora:isbn") se corta en su último ":" (el ISBN nunca contiene ":").
 export function parseIntercambioId(id: string): IntercambioIdParams | null {
-  if (id.startsWith("compra:") || !id.includes(":")) return null
-  const [reqPart, offPart] = id.split(":")
-  if (!reqPart || !offPart) return null
-  const reqSub = reqPart.split("|")
-  const offSub = offPart.split("|")
-  if (reqSub.length < 3 || offSub.length < 3) return null
-  return {
-    isbnSolicitada: reqSub[0],
-    propietarioSolicitada: reqSub[1],
-    horaSolicitada: reqSub[2],
-    isbnOfrecida: offSub[0],
-    propietarioOfrecida: offSub[1],
-    horaOfrecida: offSub[2],
+  if (id.startsWith("compra:")) return null
+  const parts = id.split("|")
+  if (parts.length !== 5) return null
+  const middle = parts[2]
+  const sep = middle.lastIndexOf(":")
+  if (sep <= 0) return null
+  const params = {
+    isbnSolicitada: parts[0],
+    propietarioSolicitada: parts[1],
+    horaSolicitada: middle.slice(0, sep),
+    isbnOfrecida: middle.slice(sep + 1),
+    propietarioOfrecida: parts[3],
+    horaOfrecida: parts[4],
   }
+  return Object.values(params).every(Boolean) ? params : null
 }
 
 export function parseCompraId(id: string): CompraIdParams | null {

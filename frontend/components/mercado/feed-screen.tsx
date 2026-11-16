@@ -25,6 +25,8 @@ export function FeedScreen() {
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredBooks = books.filter((book) => {
+    // Los ya intercambiados o eliminados no se muestran (los reservados sí, marcados como tales)
+    if (book.availability === "INTERCAMBIADO" || book.availability === "ELIMINADO") return false
     if (
       (book.title.startsWith("Libro (") && book.author === "Autor desconocido") ||
       book.author === "Autor desconocido" ||

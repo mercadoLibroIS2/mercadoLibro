@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, BookOpen, Sparkles, Star, X } from "lucide-react"
 import { useStore } from "./store"
 import { isUserMatch } from "@/lib/mercado-types"
+import { BONO_RESENIA } from "@/lib/puntos"
 
 const RATING_LABELS: Record<number, string> = {
   5: "Excelente experiencia (5/5)",
@@ -201,7 +202,7 @@ export function ReviewModal() {
 
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3.5 py-2.5 text-xs font-medium text-emerald-900">
             <Sparkles className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
-            <span>Recibís +5 puntos de bonificación por compartir tu reseña.</span>
+            <span>Recibís +{BONO_RESENIA} puntos de bonificación por compartir tu reseña.</span>
           </div>
 
           <div className="flex items-center justify-end gap-2.5 border-t border-stone-100 pt-3">

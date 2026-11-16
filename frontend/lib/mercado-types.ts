@@ -142,6 +142,9 @@ export interface TradeRequest {
   ownerConfirmed?: boolean
   reviewedByRequester?: boolean
   reviewedByOwner?: boolean
+  /** Títulos que informa el backend: los libros reservados ya no están en el catálogo. */
+  requestedBookTitle?: string
+  offeredBookTitle?: string
 }
 
 export type PointMovementType =
@@ -158,7 +161,8 @@ export interface PointMovement {
   userId: string
   type: PointMovementType
   amount: number
-  balanceAfter: number
+  /** Puede faltar en movimientos que vienen del backend. */
+  balanceAfter?: number
   description: string
   date: string
   tradeId?: string

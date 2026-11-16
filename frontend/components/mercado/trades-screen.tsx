@@ -17,6 +17,7 @@ import {
 import { useStore } from "./store"
 import { ChainsView } from "./chains-view"
 import { isUserMatch, type TradeRequest } from "@/lib/mercado-types"
+import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA } from "@/lib/puntos"
 
 type TradeTab = "recibidas" | "enviadas" | "en_curso" | "historial" | "cadenas"
 
@@ -235,6 +236,13 @@ function TabPill({
   )
 }
 
+// Miniatura de portada con el mismo respaldo que BookCard cuando la imagen no carga
+function CoverThumb({ src }: { src?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) return <BookOpen className="h-5 w-5" aria-hidden="true" />
+  return <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+}
+
 function renderOngoingAction(
   trade: TradeRequest,
   isRequester: boolean,
@@ -242,6 +250,15 @@ function renderOngoingAction(
   onConfirmReceipt?: (id: string) => void
 ) {
   if (trade.type === "PUNTOS") {
+    if (isRequester && !trade.ownerConfirmed) {
+      // El backend solo acepta la recepción después de que el vendedor registró la entrega
+      return (
+        <span className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs sm:text-sm font-semibold text-amber-900">
+          <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Esperando que el vendedor registre la entrega</span>
+        </span>
+      )
+    }
     if (isRequester) {
       return (
         <button
@@ -250,7 +267,7 @@ function renderOngoingAction(
           className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
         >
           <CheckCheck className="h-4 w-4" aria-hidden="true" />
-          <span>Confirmar Recepción (+10 pts)</span>
+          <span>Confirmar Recepción</span>
         </button>
       )
     }
@@ -293,7 +310,7 @@ function renderOngoingAction(
       className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
     >
       <CheckCheck className="h-4 w-4" aria-hidden="true" />
-      <span>Confirmar Recepción de Libro (+5 pts)</span>
+      <span>Confirmar Recepción de Libro (+{BONO_INTERCAMBIO_DIRECTO} pts)</span>
     </button>
   )
 }
@@ -404,15 +421,7 @@ function TradeList({
                   }
                   className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                 >
-                  {requestedBook?.coverUrl ? (
-                    <img
-                      src={requestedBook.coverUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <BookOpen className="h-5 w-5" aria-hidden="true" />
-                  )}
+                  <CoverThumb src={requestedBook?.coverUrl} />
                 </button>
 
                 <div className="min-w-0 flex-1">
@@ -425,7 +434,7 @@ function TradeList({
                     onClick={() => requestedBook && onBookClick(requestedBook.id)}
                     className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
-                    {requestedBook?.title || "Libro"}
+                    {requestedBook?.title || trade.requestedBookTitle || "Libro"}
                   </button>
                   <button
                     type="button"
@@ -473,15 +482,7 @@ function TradeList({
                       }
                       className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-sky-50 text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
-                      {offeredBook?.coverUrl ? (
-                        <img
-                          src={offeredBook.coverUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <BookOpen className="h-5 w-5" aria-hidden="true" />
-                      )}
+                      <CoverThumb src={offeredBook?.coverUrl} />
                     </button>
 
                     <div className="min-w-0 flex-1">
@@ -494,7 +495,7 @@ function TradeList({
                         onClick={() => offeredBook && onBookClick(offeredBook.id)}
                         className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
-                        {offeredBook?.title || "Libro ofrecido"}
+                        {offeredBook?.title || trade.offeredBookTitle || "Libro ofrecido"}
                       </button>
                       <button
                         type="button"
@@ -620,7 +621,7 @@ function TradeList({
                             className="h-4 w-4 fill-amber-500 text-amber-600"
                             aria-hidden="true"
                           />
-                          <span>Calificar (+5 pts)</span>
+                          <span>Calificar (+{BONO_RESENIA} pts)</span>
                         </button>
                       )}
                     </div>
