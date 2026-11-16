@@ -278,6 +278,30 @@
           ]
         },
         {
+          "name": "Consultar perfil público por nombre",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/usuario/{{testUsername}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Perfil público responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Perfil público conserva identidad y reputación', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.nombre).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "  pm.expect(body).to.have.property('reputacionPromedio');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Consultar saldo de puntos",
           "request": {
             "method": "GET",
@@ -485,6 +509,68 @@
                   "  pm.expect(body).to.be.an('array');",
                   "  pm.expect(body.some(function (item) { return item.publicacionId && item.publicacionId.horaPublicacion === pm.collectionVariables.get('publicationTime'); })).to.eql(true);",
                   "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Seguir el libro publicado",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/usuario/{{userId}}/libros-seguidos/{{publicationIsbn}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Seguir libro responde HTTP 204', function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar libros seguidos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/usuario/{{userId}}/libros-seguidos"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Libros seguidos responde HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Incluye el ISBN seguido', function () {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  pm.expect(body.some(function (item) { return item.isbn === pm.collectionVariables.get('publicationIsbn'); })).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dejar de seguir el libro",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/usuario/{{userId}}/libros-seguidos/{{publicationIsbn}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Dejar de seguir responde HTTP 204', function () { pm.response.to.have.status(204); });"
                 ]
               }
             }

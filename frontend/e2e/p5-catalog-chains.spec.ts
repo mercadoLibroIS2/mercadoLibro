@@ -363,6 +363,35 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
   await expect(page.locator("div.fixed.inset-0").getByRole("heading", { name: "El Aleph" })).toBeVisible()
 })
 
+test("el tracker guarda criterios, muestra coincidencias y permite dejar de seguir un libro", async ({
+  page,
+}) => {
+  await mockBackend(page)
+  await loadSeedState(page)
+  await signIn(page)
+
+  await page.locator("aside").getByRole("button", { name: "Tracker de Libros", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "Tracker de Libros" })).toBeVisible()
+  await page.getByRole("button", { name: "Seguir nuevo libro" }).click()
+
+  await page.getByLabel("Título buscado").fill("Rayuela")
+  await page.getByLabel("Autor (opcional)").fill("Julio Cortázar")
+  await page.getByLabel("Tope máximo de puntos").fill("60")
+  await page.getByRole("button", { name: "Bueno", exact: true }).click()
+  await page.getByLabel("Notas privadas").fill("Edición anotada")
+  await page.getByRole("button", { name: "Guardar en Tracker" }).click()
+
+  const tracked = page.locator("article").filter({ hasText: "Rayuela" })
+  await expect(tracked).toBeVisible()
+  await expect(tracked).toContainText("Hasta 60 pts")
+  await expect(tracked).toContainText("Bueno")
+  await expect(tracked).toContainText("Coincidencias encontradas (1)")
+  await expect(tracked).toContainText("Edición anotada")
+
+  await tracked.getByRole("button", { name: "Dejar de seguir Rayuela" }).click()
+  await expect(page.getByText("No tenés libros en seguimiento actualmente")).toBeVisible()
+})
+
 test("la cadena propuesta forma un ciclo cerrado con participantes distintos y muestra confirmaciones", async ({
   page,
 }) => {
