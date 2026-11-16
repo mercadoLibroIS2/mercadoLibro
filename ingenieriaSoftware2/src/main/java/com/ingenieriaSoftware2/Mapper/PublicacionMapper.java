@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Mapper;
 
+import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Publicacion;
@@ -22,9 +23,8 @@ public class PublicacionMapper {
                 ? "https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg"
                 : "";
 
-        String nombrePropietario = publicacion.getPropietario() != null
-                ? publicacion.getPropietario().getNombre()
-                : null;
+        Usuario propietario = publicacion.getPropietario();
+        String nombrePropietario = propietario != null ? propietario.getNombre() : null;
 
         return new PublicacionResponseDTO(
                 publicacionId,
