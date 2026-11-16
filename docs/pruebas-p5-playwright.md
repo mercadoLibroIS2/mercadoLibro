@@ -1,28 +1,74 @@
 # Pruebas E2E Playwright — P5: Catálogo, Google Books y cadenas
 
-## Ejecución
+## Alcance
 
-Desde `frontend`:
+La suite está en `frontend/e2e/p5-catalog-chains.spec.ts` y prueba la
+implementación actual en dos capas:
+
+1. **Frontend determinista**, con Next.js y respuestas mockeadas en el límite
+   REST. No depende de Google Books ni de datos persistentes del backend.
+2. **Contratos REST de cadenas**, opcionales y ejecutados contra el backend
+   real cuando se define `P5_API_URL`.
+
+El catálogo usa `SEED_BOOKS`, mientras que las cadenas que se muestran en la
+UI se generan con `generateInitialChains` y se persisten en
+`localStorage`. Los endpoints REST de cadenas se validan por separado porque
+la store actual todavía conserva el estado visual local.
+
+## Requisitos
+
+### Pruebas de frontend
+
+No es necesario iniciar manualmente el backend. Desde `frontend`:
 
 ```bash
 npm run test:e2e:p5
 ```
 
-El comando levanta Next.js automáticamente en `http://127.0.0.1:3101`. Se puede definir otra URL con `P5_APP_URL`. Supabase Auth y REST se simulan con respuestas de prueba; no se usan cuentas ni datos remotos.
+La configuración levanta Next.js en `http://127.0.0.1:3101`. Se puede
+personalizar con `P5_APP_URL`.
 
-## Casos E2E del frontend actualmente implementado
+### Pruebas REST de cadenas
 
-La suite está en `frontend/e2e/p5-catalog-chains.spec.ts` y cubre:
+Para ejecutar también los dos casos de contrato contra Spring Boot:
 
-| Área | Cobertura |
+1. Iniciar el backend en `http://127.0.0.1:8086`.
+2. Ejecutar:
+
+```bash
+P5_API_URL=http://127.0.0.1:8086 npm run test:e2e:p5
+```
+
+Los casos crean usuarios con emails únicos, por lo que no necesitan datos
+semilla. Si `P5_API_URL` no está definido, esos dos casos quedan omitidos y
+la capa frontend sigue ejecutándose.
+
+## Cobertura
+
+| Área | Escenarios |
 |---|---|
-| Catálogo | Listado completo de libros semilla; búsqueda por título, autor e ISBN; filtros por categoría, estado y puntos; limpieza de filtros y estado vacío; ficha con metadatos y disponibilidad; autocomplete con mínimo de dos caracteres y exclusión de libros no disponibles. |
-| Cadenas | Valida el ciclo cerrado de tres participantes, participantes únicos, libros entregados/recibidos y confirmaciones; muestra las cadenas solo a usuarios participantes; permite rechazo y cancelación; confirma participantes secuencialmente hasta completar; comprueba persistencia en `localStorage`; no muestra ciclos cuando una publicación necesaria no está disponible. |
+| Catálogo | Listado completo; búsqueda por título, autor e ISBN; filtros por categoría, disponibilidad y puntos; limpieza de filtros; estado sin resultados; ficha con metadatos y publicación reservada; autocomplete desde dos caracteres y exclusión de publicaciones no disponibles. |
+| Google Books | ISBN válido en el formulario de publicación, autocompletado de título/autor/categoría/metadatos y sugerencia de puntos; ISBN con formato inválido; ISBN sin resultados (404); error del proveedor (503) mostrado al usuario. |
+| Cadenas en UI | Ciclo de tres participantes con libros distintos; relación entrega/recibe cerrada; visibilidad restringida a participantes; aceptación secuencial hasta `COMPLETADA`; rechazo persistente hasta `CANCELADA`; ausencia de ciclo cuando falta una publicación disponible. |
+| Cadenas REST | Creación `POST /api/cadenaIntercambio` con estado `PROPUESTA`; aceptación de participantes hasta `EN_CURSO` y `COMPLETADA`; rechazo mediante `PATCH .../rechazar`; listado autenticado. |
 
-Se ajustó la vista para filtrar cadenas por participación del usuario y se protegieron las acciones de confirmar/rechazar frente a usuarios no participantes, confirmaciones duplicadas y estados terminales.
+## Mock de Google Books
 
-## Limitación: integración de Google Books
+Los casos de navegador interceptan específicamente
+`GET /api/libro/google-books/isbn/{isbn}`. Esto evita depender de cuotas,
+latencia o disponibilidad de Google/Open Library, pero conserva el contrato
+que consume `apiFindGoogleBookByIsbn`. También se prueban explícitamente las
+respuestas 404 y 503; no se convierten en éxitos silenciosos.
 
-No hay actualmente flujo de búsqueda contra Google Books en el frontend ni endpoints/servicios de Google Books en Spring Boot. El catálogo que se prueba está construido con datos semilla locales; el backend `LibroController` tampoco implementa operaciones de consulta. Por eso no es posible escribir pruebas E2E reales de búsqueda, metadatos, ISBN inexistente, límites/cuotas o errores de Google Books sin implementar primero esa integración. La suite verifica búsqueda local del catálogo por título/autor/ISBN, pero **no representa ni simula como implementada la integración externa**.
+## Limitaciones conocidas
 
-Las cadenas también son actualmente una función local de demostración: `generateInitialChains` construye un ciclo de tres usuarios semilla y el estado se guarda en `localStorage`. El backend no implementa detección, persistencia ni endpoints de cadenas; las pruebas de estados/acciones validan el comportamiento actual del frontend y no una cadena compartida entre sesiones o dispositivos.
+- La detección y la confirmación visual de cadenas todavía viven en el store
+  local del frontend. La suite REST verifica el controlador y servicio
+  `CadenaIntercambioController`, pero no afirma que ambas representaciones
+  estén sincronizadas entre dispositivos.
+- Los casos REST no prueban la disponibilidad de un proveedor externo de
+  Google Books; esa dependencia se cubre mediante mocks en la UI. La
+  integración externa se prueba de forma aislada en el backend.
+- La ejecución contra una base H2 compartida puede dejar usuarios y cadenas
+  creados por los casos REST. Los identificadores y emails son únicos para
+  evitar colisiones.
