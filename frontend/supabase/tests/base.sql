@@ -49,6 +49,20 @@ create table public.categoria (
   nombre varchar(255) primary key,
   categoria_padre_id varchar(255) references public.categoria(nombre)
 );
+-- Réplica del trigger roto que existe en la base de la demo (usa NEW.id,
+-- columna que no existe). La migración 2 debe redefinir la función.
+create function public.fn_evitar_ciclo_categoria() returns trigger
+language plpgsql as $$
+begin
+  if NEW.categoria_padre_id = NEW.id then
+    raise exception 'ciclo';
+  end if;
+  return NEW;
+end;
+$$;
+create trigger trg_evitar_ciclo_categoria
+  before insert or update on public.categoria
+  for each row execute function public.fn_evitar_ciclo_categoria();
 create table public.libro_categoria (
   isbn varchar(255) not null references public.libro(isbn),
   nombre_categoria varchar(255) not null references public.categoria(nombre),

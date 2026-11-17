@@ -14,6 +14,41 @@
 --    La categoría es del libro (ISBN). Cualquier usuario autenticado puede
 --    asignarla si el libro todavía no tiene una; no se puede pisar ni borrar.
 -- ------------------------------------------------------------------------------
+
+-- La base de la demo tiene un trigger creado a mano que compara
+-- NEW.categoria_padre_id con NEW.id, pero la clave de categoria es "nombre":
+-- cualquier insert fallaba con 'record "new" has no field "id"'.
+-- Se redefine la función (el trigger existente la sigue usando) con la columna
+-- correcta, evitando autorreferencias y ciclos en la jerarquía.
+create or replace function public.fn_evitar_ciclo_categoria()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_actual varchar(255) := NEW.categoria_padre_id;
+  v_pasos  integer := 0;
+begin
+  if NEW.categoria_padre_id is null then
+    return NEW;
+  end if;
+  if NEW.categoria_padre_id = NEW.nombre then
+    raise exception 'Una categoría no puede ser su propia categoría padre';
+  end if;
+  while v_actual is not null loop
+    if v_actual = NEW.nombre then
+      raise exception 'La categoría padre genera un ciclo en la jerarquía';
+    end if;
+    v_pasos := v_pasos + 1;
+    exit when v_pasos > 1000;
+    select c.categoria_padre_id into v_actual
+      from public.categoria c
+     where c.nombre = v_actual;
+  end loop;
+  return NEW;
+end;
+$$;
+
 insert into public.categoria (nombre)
 values
   ('Ficción'), ('No ficción'), ('Ciencia'), ('Historia'), ('Infantil'), ('Poesía'),
