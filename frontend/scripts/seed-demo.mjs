@@ -33,6 +33,11 @@ const PUBLICATIONS = [
   ["mateo", "9788433973382", "COMO_NUEVO", 70, "Anagrama, colección Compactos.", "Ciencia"],
 ]
 
+/** Quita saltos de línea y caracteres de control antes de loguear texto que viene del servidor. */
+function clean(value) {
+  return String(value).replace(/[\u0000-\u001f\u007f]+/g, " ").slice(0, 300)
+}
+
 async function call(path, { token, method = "GET", body } = {}) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     method,
@@ -88,7 +93,7 @@ async function main() {
       })
       console.log(`+ publicación ${isbn} de ${owner}`)
     } catch (err) {
-      console.warn(`! no se pudo publicar ${isbn}: ${err.message}`)
+      console.warn(`! no se pudo publicar ${isbn}: ${clean(err.message)}`)
     }
   }
 
@@ -98,6 +103,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err.message)
+  console.error(clean(err.message))
   process.exit(1)
 })
