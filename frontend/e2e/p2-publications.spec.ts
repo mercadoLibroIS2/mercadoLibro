@@ -260,6 +260,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
 
   const newIsbn = "979-1-23456-789-0"
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Puntos solicitados *").fill("0")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("Ingresá un número de puntos válido mayor a 0")).toBeVisible()
@@ -274,6 +275,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   expect(database.publications).toHaveLength(SEED_BOOKS.length)
 
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Puntos solicitados *").fill("1")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
@@ -293,6 +295,7 @@ test("publicar registra todos los datos opcionales y presenta el libro en el cat
 
   const targetSeed = SEED_BOOKS[1] // Clean Code
   await page.getByLabel("ISBN del libro *").fill(targetSeed.isbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Estado físico *").selectOption("Como nuevo")
   await page.getByLabel("Puntos solicitados *").fill("120")
   await page.getByLabel("Descripción y estado (opcional)").fill("Ejemplar cuidado, sin marcas.")

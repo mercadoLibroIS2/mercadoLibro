@@ -21,7 +21,17 @@ public class IntercambioMapper {
                 id.getHoraDePublicacionSolicitante(),
                 intercambio.getEstado(),
                 intercambio.getPuntosComprometidos(),
-                intercambio.getMotivoRechazo()
+                intercambio.getMotivoRechazo(),
+                nombreDuenio(intercambio.getPublicacionOfrecida()),
+                nombreDuenio(intercambio.getPublicacionSolicitante())
         );
+    }
+
+    private static String nombreDuenio(com.ingenieriaSoftware2.Entity.Publicacion publicacion) {
+        if (publicacion == null) {
+            return null;
+        }
+        com.ingenieriaSoftware2.Entity.Usuario duenio = publicacion.getPropietario();
+        return duenio != null ? duenio.getNombre() : null;
     }
 }

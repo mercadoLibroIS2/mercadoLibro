@@ -37,7 +37,18 @@ public class PublicacionMapper {
                 publicacion.getColorSemaforo(),
                 publicacion.getComentario(),
                 nombrePropietario,
-                publicacion.getEstadoPublicacion()
+                publicacion.getEstadoPublicacion(),
+                propietario != null ? propietario.getReputacionPromedio() : null,
+                publicacion.getLibro() != null && publicacion.getLibro().getPuntuacionExterna() != null
+                        ? publicacion.getLibro().getPuntuacionExterna().doubleValue()
+                        : null,
+                publicacion.getLibro() != null
+                        ? publicacion.getLibro().getCategorias().stream()
+                                .map(c -> c.getNombre())
+                                .sorted()
+                                .findFirst()
+                                .orElse(null)
+                        : null
         );
     }
 }

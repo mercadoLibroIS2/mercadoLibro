@@ -116,8 +116,10 @@ public class ReseniaServiceImpl implements ReseniaService {
 
         if (notificacionService != null) {
             try {
-                notificacionService.crear(emailEvaluado, TipoNotificacion.RESENIA_RECIBIDA);
-                notificacionService.crear(email, TipoNotificacion.PUNTOS_GANADOS);
+                notificacionService.crear(emailEvaluado, TipoNotificacion.RESENIA_RECIBIDA,
+                        reviewer.getNombre() + " te calificó con " + dto.calificacion() + " de 5 estrellas.");
+                notificacionService.crear(email, TipoNotificacion.PUNTOS_GANADOS,
+                        "Sumaste +" + puntosResenia + " pts por dejar una reseña.");
             } catch (Exception ignored) {
             }
         }

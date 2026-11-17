@@ -11,7 +11,8 @@ public record NotificacionResponseDTO(
         TipoNotificacion tipo,
         boolean leida,
         boolean archivada,
-        LocalDateTime fechaCreacion
+        LocalDateTime fechaCreacion,
+        String mensaje
 ) {
     public static NotificacionResponseDTO from(Notificacion notificacion) {
         return new NotificacionResponseDTO(
@@ -19,7 +20,8 @@ public record NotificacionResponseDTO(
                 notificacion.getTipo(),
                 Boolean.TRUE.equals(notificacion.getLeida()),
                 Boolean.TRUE.equals(notificacion.getArchivada()),
-                notificacion.getFechaCreacion()
+                notificacion.getFechaCreacion(),
+                notificacion.getMensaje()
         );
     }
 }

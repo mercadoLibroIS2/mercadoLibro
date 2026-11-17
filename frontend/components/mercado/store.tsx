@@ -206,6 +206,12 @@ const BACKEND_NOTIFICATIONS: Record<
     message: "Se descontaron puntos de tu cuenta. Revisá tus movimientos en el perfil.",
     linkScreen: "perfil",
   },
+  CADENA_DETECTADA: {
+    type: "CHAIN_DETECTED",
+    title: "Nueva cadena de intercambio",
+    message: "Encontramos una cadena circular en la que participás. Revisala y confirmá tu parte.",
+    linkScreen: "cadenas",
+  },
   LIBRO_SEGUIDO_PUBLICADO: {
     type: "TRACKER_MATCH",
     title: "Publicaron un libro que seguís",
@@ -256,7 +262,7 @@ function publicacionResponseToBook(
     isbn,
     title: pub.titulo || fallbackMeta?.title || seedMatch?.title || `Libro (${isbn})`,
     author: pub.autor || fallbackMeta?.author || seedMatch?.author || "Autor desconocido",
-    category: fallbackMeta?.category || seedMatch?.category || "General",
+    category: pub.categoria || fallbackMeta?.category || seedMatch?.category || "General",
     condition: ESTADO_TO_CONDITION[pub.estadoFisico] || "Bueno",
     points: pub.valorPuntosSolicitado ?? 0,
     referencePrice: pub.valorReferenciaCalculado ?? undefined,
@@ -264,8 +270,9 @@ function publicacionResponseToBook(
     coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || seedMatch?.coverUrl || `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
     ownerId: email,
     ownerName: pub.nombrePropietario || (email ? email.split("@")[0] : "Lector"),
-    ownerRating: 5.0,
+    ownerRating: pub.reputacionPropietario ?? 0,
     ownerTrades: 0,
+    externalRating: pub.puntuacionExterna ?? undefined,
     availability: ESTADO_PUBLICACION_TO_AVAILABILITY[pub.estadoPublicacion || "DISPONIBLE"] || "DISPONIBLE",
     createdAt: hora,
   }
@@ -354,9 +361,9 @@ function intercambioResponseToTrade(dto: IntercambioResponse): TradeRequest {
     requestedBookId: reqBookId,
     offeredBookId: offBookId,
     requesterId: dto.propietarioOfrecida,
-    requesterName: dto.propietarioOfrecida.split("@")[0],
+    requesterName: dto.nombrePropietarioOfrecida || dto.propietarioOfrecida.split("@")[0],
     ownerId: dto.propietarioSolicitada,
-    ownerName: dto.propietarioSolicitada.split("@")[0],
+    ownerName: dto.nombrePropietarioSolicitada || dto.propietarioSolicitada.split("@")[0],
     points: dto.puntosComprometidos || 0,
     createdAt: dto.horaPublicacionSolicitada || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -389,9 +396,9 @@ function compraResponseToTrade(dto: any): TradeRequest {
     status,
     requestedBookId: reqBookId,
     requesterId: comprador,
-    requesterName: comprador ? comprador.split("@")[0] : "Comprador",
+    requesterName: dto.nombreComprador || (comprador ? comprador.split("@")[0] : "Comprador"),
     ownerId: vendedor,
-    ownerName: vendedor ? vendedor.split("@")[0] : "Vendedor",
+    ownerName: dto.nombreVendedor || (vendedor ? vendedor.split("@")[0] : "Vendedor"),
     points: dto.puntos || dto.precioPuntos || 0,
     createdAt: dto.fecha || horaPub,
     updatedAt: dto.fecha || horaPub,
@@ -621,7 +628,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   username: profile.nombre.toLowerCase().replace(/\s+/g, ""),
                   email: profile.email,
                   avatar: "",
-                  rating: profile.reputacionPromedio || 5.0,
+                  rating: profile.reputacionPromedio || 0,
                   totalReviews: 0,
                   totalTrades: 0,
                   availablePoints: profile.saldoDisponible ?? 0,
@@ -729,7 +736,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           userId,
           type: meta.type,
           title: meta.title,
-          message: meta.message,
+          // El backend manda el contexto (qué libro, quién); el texto genérico queda de respaldo
+          message: n.mensaje || meta.message,
           read: n.leida,
           archived: n.archivada,
           date: n.fechaCreacion,
@@ -896,7 +904,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 username: slugUsername(authData.username || authData.email.split("@")[0]),
                 email: authData.email,
                 avatar: "",
-                rating: userProfile?.reputacionPromedio || 5.0,
+                rating: userProfile?.reputacionPromedio || 0,
                 totalReviews: 0,
                 totalTrades: 0,
                 availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? 100,
@@ -949,7 +957,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         username: username.replace("@", ""),
         email,
         avatar: "",
-        rating: 5.0,
+        rating: 0,
         totalReviews: 0,
         totalTrades: 0,
         availablePoints: 100,
@@ -987,7 +995,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           username: slugUsername(username || authData.username || cleanName),
           email: authData.email,
           avatar: "",
-          rating: 5.0,
+          rating: 0,
           totalReviews: 0,
           totalTrades: 0,
           availablePoints: authData.puntos ?? 100,
@@ -1127,7 +1135,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           data.googleBook?.portadaUrl ||
           seedMatch?.coverUrl ||
           `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
-        category: data.googleBook?.categorias?.[0] || seedMatch?.category || "Ficción",
+        category: data.category || data.googleBook?.categorias?.[0] || seedMatch?.category || "Ficción",
       }
 
       try {
@@ -1137,6 +1145,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           estadoFisico,
           valorPuntosSolicitado: data.points,
           comentario: data.description || "",
+          categoria: data.category,
         })
 
         const newBook: Book = {
@@ -1146,7 +1155,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           description: data.description || "",
           ownerId: currentUser.email,
           ownerName: currentUser.name,
-          ownerRating: currentUser.rating || 5.0,
+          ownerRating: currentUser.rating || 0,
           ownerTrades: currentUser.totalTrades || 0,
           referencePrice:
             pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
@@ -1173,7 +1182,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           coverUrl: fallbackMeta.coverUrl,
           ownerId: currentUser.email,
           ownerName: currentUser.name,
-          ownerRating: currentUser.rating || 5.0,
+          ownerRating: currentUser.rating || 0,
           ownerTrades: currentUser.totalTrades || 0,
           availability: "DISPONIBLE",
           createdAt: nowIso,

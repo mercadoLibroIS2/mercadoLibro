@@ -16,6 +16,11 @@ public record PublicacionResponseDTO(
         ColorSemaforo colorSemaforo,
         String comentario,
         String nombrePropietario,
-        EstadoPublicacion estadoPublicacion
+        EstadoPublicacion estadoPublicacion,
+        // 0 = el propietario todavía no tiene reseñas
+        Float reputacionPropietario,
+        // Puntuación de Google Books (0-5), null si no se conoce
+        Double puntuacionExterna,
+        String categoria
 ) {
 }

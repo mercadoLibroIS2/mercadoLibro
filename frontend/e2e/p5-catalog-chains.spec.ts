@@ -152,6 +152,12 @@ async function mockBackend(
       return
     }
 
+    // Referencia que calcula el backend para sugerir puntos al publicar
+    if (/\/api\/libro\/[^/]+\/referencia$/.test(url.pathname)) {
+      await route.fulfill({ json: { valorReferencia: 72, categoria: null } })
+      return
+    }
+
     // Con sesión, el catálogo sale del backend: disponibles para todos y propias (con estado) para el dueño
     if (url.pathname.endsWith("/api/publicaciones/disponibles")) {
       await route.fulfill({

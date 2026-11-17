@@ -66,6 +66,7 @@ ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'RESENIA_RECIBIDA';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'LIBRO_SEGUIDO_PUBLICADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'CADENA_DETECTADA';
 
 
 -- =======================================================
@@ -380,10 +381,14 @@ CREATE TABLE IF NOT EXISTS notificacion (
     leida                BOOLEAN   NOT NULL DEFAULT FALSE,
     archivada            BOOLEAN   NOT NULL DEFAULT FALSE,
     fecha_creacion       TIMESTAMP NOT NULL DEFAULT now(),
+    mensaje              VARCHAR(255),
     FOREIGN KEY (isbn, email_propietario_id, hora_de_publicacion)
         REFERENCES publicacion (isbn, email_propietario, hora_publicacion)
         ON DELETE CASCADE
 );
+
+-- Bases creadas antes de que existiera la columna
+ALTER TABLE notificacion ADD COLUMN IF NOT EXISTS mensaje VARCHAR(255);
 
 
 -- =======================================================

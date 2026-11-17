@@ -15,6 +15,8 @@ public record IntercambioResponseDTO(
         LocalDateTime horaPublicacionSolicitada,
         EstadoIntercambio estado,
         Integer puntosComprometidos,
-        String motivoRechazo
+        String motivoRechazo,
+        String nombrePropietarioOfrecida,
+        String nombrePropietarioSolicitada
 ) {
 }

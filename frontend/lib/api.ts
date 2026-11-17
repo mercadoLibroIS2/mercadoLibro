@@ -47,6 +47,9 @@ export interface PublicacionResponse {
   comentario: string
   nombrePropietario?: string | null
   estadoPublicacion?: "DISPONIBLE" | "RESERVADA" | "VENDIDA" | "ELIMINADA"
+  reputacionPropietario?: number | null
+  puntuacionExterna?: number | null
+  categoria?: string | null
 }
 
 export interface AuthResponse {
@@ -101,6 +104,8 @@ export interface IntercambioResponse {
     | "CONFIRMADO_POR_RECEPTOR"
   puntosComprometidos: number
   motivoRechazo?: string
+  nombrePropietarioOfrecida?: string | null
+  nombrePropietarioSolicitada?: string | null
 }
 
 export interface IntercambioIdParams {
@@ -270,6 +275,7 @@ export async function apiCreatePublication(dto: {
   estadoFisico: EstadoFisico
   valorPuntosSolicitado: number
   comentario?: string
+  categoria?: string
 }): Promise<PublicacionResponse> {
   return request<PublicacionResponse>("/api/publicaciones/publicar", {
     method: "POST",
@@ -324,6 +330,21 @@ export async function apiFindGoogleBookByIsbn(
   } catch (err: any) {
     if (err.message?.includes("404")) return null
     throw err
+  }
+}
+
+/**
+ * Referencia que usará el backend para el semáforo y la categoría ya asignada al libro.
+ * null si el libro todavía no está en la base (se importa al publicarlo por primera vez).
+ */
+export async function apiGetReferenciaLibro(
+  isbn: string,
+  estadoFisico: EstadoFisico,
+): Promise<{ valorReferencia: number | null; categoria: string | null } | null> {
+  try {
+    return await request(`/api/libro/${encodeURIComponent(isbn)}/referencia?estadoFisico=${estadoFisico}`)
+  } catch {
+    return null
   }
 }
 
@@ -613,6 +634,7 @@ export interface NotificacionBackendResponse {
   leida: boolean
   archivada: boolean
   fechaCreacion: string
+  mensaje?: string | null
 }
 
 export async function apiListNotificaciones(soloNoLeidas = false): Promise<NotificacionBackendResponse[]> {

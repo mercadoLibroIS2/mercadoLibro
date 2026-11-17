@@ -4,6 +4,8 @@ import com.ingenieriaSoftware2.DTO.Request.PublicacionRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Libro;
+import com.ingenieriaSoftware2.Entity.Categoria;
+import com.ingenieriaSoftware2.Repository.CategoriaRepository;
 import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
@@ -52,6 +54,9 @@ public class PublicacionServiceImpl implements PublicacionService {
         return ahora;
     }
 
+    @Autowired(required = false)
+    private CategoriaRepository categoriaRepository;
+
     @Autowired
     private PublicacionRepository publicacionRepository;
 
@@ -93,6 +98,8 @@ public class PublicacionServiceImpl implements PublicacionService {
             libro = libroRepository.save(libro);
         }
 
+        asignarCategoriaSiFalta(libro, request.categoria());
+
         // Postgres guarda microsegundos: si no se trunca, la hora que devuelve la API
         // no coincide con la guardada y la publicación no se encuentra después
         LocalDateTime hora = obtenerHoraPublicacionUnica();
@@ -116,7 +123,8 @@ public class PublicacionServiceImpl implements PublicacionService {
             for (Usuario seguidor : libro.getSeguidores()) {
                 if (seguidor != null && seguidor.getEmail() != null && !seguidor.getEmail().equals(propietario.getEmail())) {
                     try {
-                        notificacionService.crear(seguidor.getEmail(), TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO);
+                        notificacionService.crear(seguidor.getEmail(), TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO,
+                                propietario.getNombre() + " publicó «" + libro.getTitulo() + "», un libro que seguís.");
                     } catch (Exception ignored) {
                     }
                 }
@@ -127,6 +135,22 @@ public class PublicacionServiceImpl implements PublicacionService {
     }
 
     // Si el libro todavia no esta en la base (p. ej. H2 recien levantada), se trae de Google Books / Open Library
+    /** El primer publicador elige la categoría del libro; las siguientes publicaciones la reutilizan. */
+    private void asignarCategoriaSiFalta(Libro libro, String nombreCategoria) {
+        if (categoriaRepository == null || nombreCategoria == null || nombreCategoria.isBlank()
+                || !libro.getCategorias().isEmpty()) {
+            return;
+        }
+        String nombre = nombreCategoria.trim();
+        Categoria categoria = categoriaRepository.findById(nombre).orElseGet(() -> {
+            Categoria nueva = new Categoria();
+            nueva.setNombre(nombre);
+            return categoriaRepository.save(nueva);
+        });
+        libro.getCategorias().add(categoria);
+        libroRepository.save(libro);
+    }
+
     private Libro importarLibro(String isbn) {
         var datos = googleBooksService.buscarPorIsbn(isbn).orElseThrow(() -> new LibroNoExisteException());
 

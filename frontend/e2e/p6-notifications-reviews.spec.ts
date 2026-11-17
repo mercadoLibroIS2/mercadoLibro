@@ -466,7 +466,8 @@ test("el perfil público muestra reputación y reseñas recibidas de forma consi
 
   await page.getByText("Dueño: Tomás Rivero").click()
   await expect(page.getByRole("heading", { name: "Tomás Rivero" })).toBeVisible()
-  await expect(page.getByText("5.0 (13)")).toBeVisible()
+  // Encabezado y pestaña cuentan las mismas reseñas
+  await expect(page.getByText("5.0 (1)")).toBeVisible()
   await page.getByRole("button", { name: "Reseñas (1)" }).click()
   await expect(page.getByText("Muy buena experiencia.")).toBeVisible()
   await expect(page.getByText("Sapiens: De animales a dioses", { exact: false })).toBeVisible()

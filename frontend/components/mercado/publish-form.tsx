@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,15 +15,19 @@ import {
 import { useStore } from "./store"
 import { Field } from "./field"
 import {
+  CATEGORIES,
   CONDITIONS,
+  mapGoogleCategory,
   type Condition,
   type GoogleBookVolume,
 } from "@/lib/mercado-types"
-import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
+import { evaluatePriceDeal } from "@/lib/price-evaluator"
+import { apiGetReferenciaLibro, CONDITION_TO_ESTADO } from "@/lib/api"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
 
 interface FormState {
   isbn: string
+  category: string
   condition: Condition
   points: string
   description: string
@@ -31,7 +35,8 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   isbn: "",
-  condition: "Muy bueno",
+  category: "",
+  condition: "Bueno",
   points: "",
   description: "",
 }
@@ -70,7 +75,8 @@ export function PublishForm() {
     editingBook
       ? {
           isbn: editingBook.isbn || "",
-          condition: editingBook.condition,
+          category: (CATEGORIES as readonly string[]).includes(editingBook.category) ? editingBook.category : "",
+          condition: editingBook.condition === "Muy bueno" ? "Bueno" : editingBook.condition,
           points: String(editingBook.points),
           description: editingBook.description || "",
         }
@@ -82,6 +88,30 @@ export function PublishForm() {
   const [searchingGoogleBooks, setSearchingGoogleBooks] = useState(false)
   const [googleBooksError, setGoogleBooksError] = useState("")
   const [coverFailed, setCoverFailed] = useState(false)
+  // Referencia real del backend (solo si el libro ya existe en la base); sin ella no se sugiere nada
+  const [backendReference, setBackendReference] = useState<number | null>(null)
+
+  const cleanIsbn = form.isbn.replace(/[^0-9X]/gi, "")
+  useEffect(() => {
+    setBackendReference(null)
+    if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) return
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      const ref = await apiGetReferenciaLibro(form.isbn.trim(), CONDITION_TO_ESTADO[form.condition])
+      if (cancelled || !ref || typeof ref.valorReferencia !== "number") return
+      setBackendReference(ref.valorReferencia)
+      // Si todavía no cargó puntos, se propone el valor de referencia real
+      setForm((prev) => (prev.points ? prev : { ...prev, points: String(ref.valorReferencia) }))
+      if (ref.categoria) {
+        // El libro ya tiene categoría en la base: es la que se va a usar
+        setForm((prev) => (prev.category ? prev : { ...prev, category: ref.categoria! }))
+      }
+    }, 350)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [cleanIsbn, form.condition, form.isbn])
 
   if (!currentUser) {
     return null
@@ -119,14 +149,9 @@ export function PublishForm() {
         return
       }
       setGoogleBook(result)
-      if (!form.points || form.points === "0") {
-        const category = result.categorias?.[0] || "Ficción"
-        const suggested = calculateReferencePrice(
-          category,
-          form.condition,
-          result.ratingExterno ?? undefined
-        )
-        updateField("points", String(suggested))
+      const suggestedCategory = mapGoogleCategory(result.categorias?.[0])
+      if (suggestedCategory && !form.category) {
+        updateField("category", suggestedCategory)
       }
     } catch (error) {
       setGoogleBooksError(
@@ -137,25 +162,22 @@ export function PublishForm() {
     }
   }
 
-  const activeCategory =
-    googleBook?.categorias?.[0] || editingBook?.category || "Ficción"
-  const activeRating =
-    googleBook?.ratingExterno ?? editingBook?.externalRating ?? 4.2
   const pointsNum = Number(form.points)
   const validPoints = !Number.isNaN(pointsNum) && pointsNum > 0
-  const suggestedReference = calculateReferencePrice(
-    activeCategory,
-    form.condition,
-    activeRating
-  )
-  const dealEval = validPoints
-    ? evaluatePriceDeal(pointsNum, activeCategory, form.condition, activeRating)
-    : null
+  // Solo se sugiere y se evalúa con el valor que va a usar el backend
+  const suggestedReference = backendReference && backendReference > 0 ? backendReference : null
+  const dealEval =
+    validPoints && suggestedReference
+      ? evaluatePriceDeal(pointsNum, form.category, form.condition, undefined, suggestedReference)
+      : null
 
   function validate(): boolean {
     const next: Partial<Record<keyof FormState, string>> = {}
     if (!form.isbn.trim()) {
       next.isbn = "El ISBN es obligatorio"
+    }
+    if (!form.category) {
+      next.category = "Elegí una categoría"
     }
     if (!form.points.trim()) {
       next.points = "Ingresá el valor en puntos"
@@ -182,6 +204,7 @@ export function PublishForm() {
         points: Math.round(Number(form.points)),
         description: form.description.trim() || undefined,
         googleBook: googleBook ?? undefined,
+        category: form.category,
       }
 
       const ok = editingBook
@@ -332,6 +355,45 @@ export function PublishForm() {
 
         <div className="h-px bg-stone-100" aria-hidden="true" />
 
+        <section className="flex flex-col gap-1.5">
+          <label htmlFor="pub-category" className="text-sm font-semibold tracking-tight text-stone-800">
+            Categoría *
+          </label>
+          <select
+            id="pub-category"
+            value={form.category}
+            onChange={(e) => updateField("category", e.target.value)}
+            // La categoría pertenece al libro (la eligió quien lo publicó primero): no se edita
+            disabled={Boolean(editingBook && form.category)}
+            aria-invalid={errors.category ? true : undefined}
+            aria-describedby={errors.category ? "pub-category-error" : undefined}
+            className={
+              "h-11 w-full rounded-xl border bg-white px-3.5 text-sm sm:text-[15px] text-stone-900 shadow-[0_1px_2px_rgba(28,25,23,0.03)] outline-none transition-all duration-150 " +
+              (form.category ? "" : "text-stone-400 ") +
+              (errors.category
+                ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
+                : "border-stone-200/90 hover:border-stone-300 focus:border-amber-700 focus:ring-3 focus:ring-amber-700/15")
+            }
+          >
+            <option value="" disabled>
+              Elegí la categoría del libro
+            </option>
+            {CATEGORIES.map((category) => (
+              <option key={category} value={category} className="text-stone-900">
+                {category}
+              </option>
+            ))}
+          </select>
+          {errors.category ? (
+            <p id="pub-category-error" className="flex items-center gap-1.5 text-xs sm:text-[13px] font-medium text-rose-600">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{errors.category}</span>
+            </p>
+          ) : (
+            <p className="text-xs text-stone-500">Se usa para los filtros del catálogo y las alertas del Tracker.</p>
+          )}
+        </section>
+
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label
@@ -365,14 +427,16 @@ export function PublishForm() {
               >
                 Puntos solicitados *
               </label>
-              <button
-                type="button"
-                onClick={() => updateField("points", String(suggestedReference))}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
-              >
-                <Sparkles className="h-3 w-3" aria-hidden="true" />
-                <span>Sugerido: {suggestedReference} pts</span>
-              </button>
+              {suggestedReference && (
+                <button
+                  type="button"
+                  onClick={() => updateField("points", String(suggestedReference))}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                >
+                  <Sparkles className="h-3 w-3" aria-hidden="true" />
+                  <span>Sugerido: {suggestedReference} pts</span>
+                </button>
+              )}
             </div>
             <div className="relative">
               <Coins
@@ -386,7 +450,7 @@ export function PublishForm() {
                 step={1}
                 value={form.points}
                 onChange={(e) => updateField("points", e.target.value)}
-                placeholder={String(suggestedReference)}
+                placeholder={suggestedReference ? String(suggestedReference) : "Ej: 80"}
                 aria-invalid={errors.points ? true : undefined}
                 aria-describedby={errors.points ? "pub-points-error" : undefined}
                 className={

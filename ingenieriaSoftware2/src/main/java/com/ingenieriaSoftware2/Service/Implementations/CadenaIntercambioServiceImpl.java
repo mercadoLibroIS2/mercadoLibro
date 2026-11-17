@@ -210,8 +210,13 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         cadena.setParticipantes(participantes);
         cadenaIntercambioRepository.save(cadena);
 
-        for (Usuario u : participantes) {
-            notificar(u.getEmail(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
+        for (CadenaPaso paso : cadena.getPasos()) {
+            String recibe = cadena.getPasos().stream()
+                    .filter(otro -> otro.getEmailRecibe().equalsIgnoreCase(paso.getEmailEntrega()))
+                    .map(otro -> tituloDe(otro))
+                    .findFirst().orElse("un libro que seguís");
+            notificar(paso.getEmailEntrega(), TipoNotificacion.CADENA_DETECTADA,
+                    "Cadena de " + cadena.getPasos().size() + " lectores: entregás " + tituloDe(paso) + " y recibís " + recibe + ".");
         }
     }
 
@@ -305,8 +310,10 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
             if (movimientoPuntosService != null) {
                 movimientoPuntosService.acreditarBonificacionSistema(receptor, bonus, "Bonificación por cadena de intercambio");
             }
-            notificar(receptor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
-            notificar(receptor.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
+            notificar(receptor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO,
+                    "Se completó la cadena: recibís " + tituloDe(paso) + ".");
+            notificar(receptor.getEmail(), TipoNotificacion.PUNTOS_GANADOS,
+                    "Sumaste +" + bonus + " pts por completar una cadena de intercambio.");
         }
         cadena.setEstado(EstadoCadena.COMPLETADA);
     }
@@ -352,12 +359,21 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         }
     }
 
-    private void notificar(String email, TipoNotificacion tipo) {
+    private String tituloDe(CadenaPaso paso) {
+        Publicacion pub = publicacionRepository != null
+                ? publicacionRepository.findById(new PublicacionId(paso.getIsbn(), paso.getEmailEntrega(), paso.getHoraPublicacion())).orElse(null)
+                : null;
+        return pub != null && pub.getLibro() != null && pub.getLibro().getTitulo() != null
+                ? "«" + pub.getLibro().getTitulo() + "»"
+                : "un libro";
+    }
+
+    private void notificar(String email, TipoNotificacion tipo, String mensaje) {
         if (notificacionService == null || email == null) {
             return;
         }
         try {
-            notificacionService.crear(email, tipo);
+            notificacionService.crear(email, tipo, mensaje);
         } catch (RuntimeException ignored) {
             // Una notificación fallida no debe impedir la operación
         }

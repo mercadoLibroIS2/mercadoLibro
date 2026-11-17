@@ -179,10 +179,14 @@ export function BookDetailModal() {
                   </div>
                   <div>
                     <span className="text-stone-500">Valoración externa</span>
-                    <p className="mt-0.5 flex items-center gap-1 font-semibold text-stone-800 tabular-nums">
-                      <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
-                      <span>{(book.externalRating ?? 4.2).toFixed(1)} / 5.0</span>
-                    </p>
+                    {typeof book.externalRating === "number" ? (
+                      <p className="mt-0.5 flex items-center gap-1 font-semibold text-stone-800 tabular-nums">
+                        <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
+                        <span>{book.externalRating.toFixed(1)} / 5.0</span>
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 font-semibold text-stone-500">Sin datos</p>
+                    )}
                   </div>
                 </div>
 
@@ -223,10 +227,8 @@ export function BookDetailModal() {
                       <div className="flex items-center gap-1.5 text-xs text-stone-500">
                         <span className="inline-flex items-center gap-0.5 font-semibold text-amber-700 tabular-nums">
                           <Star className="h-3 w-3 fill-amber-500 text-amber-500" aria-hidden="true" />
-                          {book.ownerRating.toFixed(1)}
+                          {book.ownerRating > 0 ? book.ownerRating.toFixed(1) : "Sin reseñas"}
                         </span>
-                        <span aria-hidden="true">·</span>
-                        <span>{book.ownerTrades} trueques</span>
                       </div>
                     </div>
                   </div>

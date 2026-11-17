@@ -15,6 +15,7 @@ import {
   Star,
 } from "lucide-react"
 import { useStore } from "./store"
+import { BookCoverThumb } from "./cover-thumb"
 import { ChainsView } from "./chains-view"
 import { isUserMatch, type TradeRequest } from "@/lib/mercado-types"
 import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA } from "@/lib/puntos"
@@ -236,13 +237,6 @@ function TabPill({
   )
 }
 
-// Miniatura de portada con el mismo respaldo que BookCard cuando la imagen no carga
-function CoverThumb({ src }: { src?: string }) {
-  const [failed, setFailed] = useState(false)
-  if (!src || failed) return <BookOpen className="h-5 w-5" aria-hidden="true" />
-  return <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
-}
-
 function renderOngoingAction(
   trade: TradeRequest,
   isRequester: boolean,
@@ -421,7 +415,7 @@ function TradeList({
                   }
                   className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                 >
-                  <CoverThumb src={requestedBook?.coverUrl} />
+                  <BookCoverThumb src={requestedBook?.coverUrl} className="h-full w-full rounded-none border-0 bg-transparent" iconClassName="h-5 w-5" />
                 </button>
 
                 <div className="min-w-0 flex-1">
@@ -482,7 +476,7 @@ function TradeList({
                       }
                       className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-sky-50 text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
-                      <CoverThumb src={offeredBook?.coverUrl} />
+                      <BookCoverThumb src={offeredBook?.coverUrl} className="h-full w-full rounded-none border-0 bg-transparent text-sky-700" iconClassName="h-5 w-5" />
                     </button>
 
                     <div className="min-w-0 flex-1">
@@ -509,6 +503,16 @@ function TradeList({
                 )}
               </div>
             </div>
+
+            {trade.type === "DIRECTO" && trade.points > 0 && trade.status !== "COMPLETADO" && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-900">
+                <Coins className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+                <span>
+                  Incluye una compensación de {trade.points} pts por la diferencia de valor entre los libros
+                  (la paga quien entrega el libro de menor valor).
+                </span>
+              </p>
+            )}
 
             {/* Footer Actions */}
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3.5">

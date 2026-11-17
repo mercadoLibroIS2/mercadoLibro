@@ -19,14 +19,9 @@ export type Condition =
   | "Aceptable"
   | "Con marcas"
 
-export const CONDITIONS: Condition[] = [
-  "Nuevo",
-  "Como nuevo",
-  "Muy bueno",
-  "Bueno",
-  "Aceptable",
-  "Con marcas",
-]
+// Solo los estados que existen en el backend (EstadoFisico). "Muy bueno" queda en el tipo
+// por compatibilidad con datos viejos, pero no se ofrece: se guardaba como "Bueno".
+export const CONDITIONS: Condition[] = ["Nuevo", "Como nuevo", "Bueno", "Aceptable", "Con marcas"]
 
 export const CATEGORIES = [
   "Ficción",
@@ -84,7 +79,29 @@ export interface GoogleBookVolume {
 export type PublicationInput = Pick<Book, "isbn" | "condition" | "points"> &
   Pick<Book, "description"> & {
     googleBook?: GoogleBookVolume
+    category?: string
   }
+
+// Google Books devuelve categorías en inglés: se traducen a las del catálogo cuando hay equivalente
+const GOOGLE_CATEGORY_MAP: Array<[RegExp, Category]> = [
+  [/comic|graphic novel/i, "Comics y novela gráfica"],
+  [/juvenile|children/i, "Infantil"],
+  [/poetry/i, "Poesía"],
+  [/biograph/i, "Biografía"],
+  [/histor/i, "Historia"],
+  [/philosoph/i, "Filosofía"],
+  [/self-help|self help/i, "Autoayuda"],
+  [/computer|technolog|engineering/i, "Técnico"],
+  [/science|mathemat|nature/i, "Ciencia"],
+  [/fiction/i, "Ficción"],
+]
+
+export function mapGoogleCategory(raw?: string | null): Category | "" {
+  if (!raw) return ""
+  const direct = CATEGORIES.find((c) => c.toLowerCase() === raw.toLowerCase())
+  if (direct) return direct
+  return GOOGLE_CATEGORY_MAP.find(([re]) => re.test(raw))?.[1] || ""
+}
 
 export interface User {
   id: string
