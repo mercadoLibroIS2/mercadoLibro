@@ -508,8 +508,17 @@ function TradeList({
               <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-900">
                 <Coins className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
                 <span>
-                  Incluye una compensación de {trade.points} pts por la diferencia de valor entre los libros
-                  (la paga quien entrega el libro de menor valor).
+                  {(() => {
+                    if (!trade.compensationPayerId) {
+                      return `Incluye una compensación de ${trade.points} pts por la diferencia de valor entre los libros (la paga quien entrega el libro de menor valor).`
+                    }
+                    const payerIsRequester = isUserMatch({ id: trade.compensationPayerId, email: trade.compensationPayerId }, trade.requesterId)
+                    const payerName = payerIsRequester ? trade.requesterName : trade.ownerName
+                    const otherName = payerIsRequester ? trade.ownerName : trade.requesterName
+                    return isUserMatch(currentUser, trade.compensationPayerId)
+                      ? `Pagás ${trade.points} pts de compensación a ${otherName}: tu libro vale menos que el que recibís.`
+                      : `${payerName} te paga ${trade.points} pts de compensación: tu libro vale más que el suyo.`
+                  })()}
                 </span>
               </p>
             )}

@@ -17,6 +17,8 @@ public record IntercambioResponseDTO(
         Integer puntosComprometidos,
         String motivoRechazo,
         String nombrePropietarioOfrecida,
-        String nombrePropietarioSolicitada
+        String nombrePropietarioSolicitada,
+        // Quién paga puntosComprometidos (el dueño del libro de menor valor); null si no hay diferencia
+        String emailPagaCompensacion
 ) {
 }

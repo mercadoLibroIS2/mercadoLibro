@@ -106,6 +106,7 @@ export interface IntercambioResponse {
   motivoRechazo?: string
   nombrePropietarioOfrecida?: string | null
   nombrePropietarioSolicitada?: string | null
+  emailPagaCompensacion?: string | null
 }
 
 export interface IntercambioIdParams {

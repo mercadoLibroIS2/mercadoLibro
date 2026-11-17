@@ -162,6 +162,8 @@ export interface TradeRequest {
   /** Títulos que informa el backend: los libros reservados ya no están en el catálogo. */
   requestedBookTitle?: string
   offeredBookTitle?: string
+  /** Email de quien paga la compensación en un trueque directo (el dueño del libro de menor valor). */
+  compensationPayerId?: string
 }
 
 export type PointMovementType =

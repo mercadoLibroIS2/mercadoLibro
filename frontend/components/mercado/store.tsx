@@ -373,6 +373,7 @@ function intercambioResponseToTrade(dto: IntercambioResponse): TradeRequest {
     ownerConfirmed: dto.estado === "CONFIRMADO_POR_RECEPTOR",
     requestedBookTitle: dto.tituloSolicitado || undefined,
     offeredBookTitle: dto.tituloOfrecido || undefined,
+    compensationPayerId: dto.emailPagaCompensacion || undefined,
   }
 }
 
