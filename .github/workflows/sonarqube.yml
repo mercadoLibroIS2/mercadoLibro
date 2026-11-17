@@ -66,5 +66,7 @@ jobs:
         working-directory: ./ingenieriaSoftware2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          # URL pública de SonarCloud: no es un dato secreto. El secret SONAR_HOST_URL estaba
+          # vacío o sin "https://" y el análisis fallaba con "URI with undefined scheme".
+          SONAR_HOST_URL: https://sonarcloud.io
         run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=jmberglavaz_mercadoLibro
