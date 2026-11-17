@@ -13,6 +13,7 @@ import {
   Send,
   Share2,
   Star,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCoverThumb } from "./cover-thumb"
@@ -333,7 +334,7 @@ function TradeList({
   onBookClick: (id: string) => void
   onUserClick: (id: string) => void
 }) {
-  const { books, currentUser } = useStore()
+  const { books, currentUser, setReportTarget } = useStore()
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
 
   if (trades.length === 0) {
@@ -391,7 +392,24 @@ function TradeList({
                 </span>
               </div>
 
-              <span className="text-xs text-stone-400">
+              <span className="flex items-center gap-2 text-xs text-stone-400">
+                {trade.id.split("|").length === 5 && (isRequester || isOwner) && trade.status !== "RECHAZADO" && (
+                  <button
+                    type="button"
+                    title="Reportar un problema con este intercambio"
+                    onClick={() =>
+                      setReportTarget({
+                        type: "INTERCAMBIO",
+                        label: `"${requestedBook?.title || "Libro"}" con ${isRequester ? trade.ownerName : trade.requesterName}`,
+                        tradeId: trade.id,
+                      })
+                    }
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-stone-400 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                  >
+                    <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="hidden sm:inline">Reportar</span>
+                  </button>
+                )}
                 {new Date(trade.createdAt).toLocaleDateString("es-AR", {
                   day: "numeric",
                   month: "short",

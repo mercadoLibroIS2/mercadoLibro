@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/test/ping").permitAll()
                         .requestMatchers("/api/libro/google-books/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/publicaciones/disponibles", "/api/publicaciones/detalle", "/api/intercambios/estado", "/api/intercambios/detalle").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

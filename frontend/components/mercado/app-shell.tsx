@@ -20,6 +20,8 @@ import { NotificationsScreen } from "./notifications-screen"
 import { BookDetailModal } from "./book-detail-modal"
 import { TradeRequestModal } from "./trade-request-modal"
 import { ReviewModal } from "./review-modal"
+import { ReportModal } from "./report-modal"
+import { AdminScreen } from "./admin-screen"
 
 const SIDEBAR_STORAGE_KEY = "mercadolibro_sidebar_open_pref"
 
@@ -61,6 +63,8 @@ function AuthedRouter() {
       return <ProfileScreen />
     case "publicar":
       return <PublishForm />
+    case "admin":
+      return <AdminScreen />
     default:
       return <FeedScreen />
   }
@@ -136,6 +140,7 @@ function Shell() {
       <BookDetailModal />
       <TradeRequestModal />
       <ReviewModal />
+      <ReportModal />
 
       <Toast />
     </div>

@@ -55,7 +55,9 @@ public class AuthJwtFilter extends OncePerRequestFilter {
                 }
             }
 
-            if (jwtService.validarToken(jwt, userDetails)) {
+            // Una cuenta suspendida por un administrador deja de poder usar su token.
+            boolean suspendido = userDetails instanceof com.ingenieriaSoftware2.Entity.Usuario u && !u.isEsActivo();
+            if (!suspendido && jwtService.validarToken(jwt, userDetails)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,

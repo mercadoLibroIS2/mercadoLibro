@@ -39,6 +39,9 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private MovimientoPuntosService movimientoPuntosService;
 
+    @Autowired(required = false)
+    private com.ingenieriaSoftware2.Config.AdminBootstrap adminBootstrap;
+
     @Override
     @Transactional
     public AuthResponseDTO registrar(UsuarioRequestDTO usuarioRequestDTO) {
@@ -56,7 +59,9 @@ public class AuthServiceImpl implements AuthService {
         usuario.setContrasenia(
                 passwordEncoder.encode(usuarioRequestDTO.contrasenia())
         );
-        usuario.setRol(Rol.USUARIO);
+        usuario.setRol(adminBootstrap != null && adminBootstrap.esAdminConfigurado(usuarioRequestDTO.email())
+                ? Rol.ADMINISTRADOR
+                : Rol.USUARIO);
         usuario.setReputacionPromedio(0.0F);
         usuario.setEsActivo(true);
 

@@ -10,6 +10,7 @@ import {
   PlusCircle,
   LogOut,
   PanelLeftClose,
+  ShieldCheck,
 } from "lucide-react"
 import { useStore } from "./store"
 import { isUserMatch } from "@/lib/mercado-types"
@@ -65,6 +66,9 @@ export function Sidebar({
       icon: Share2,
       badge: null,
     },
+    ...(currentUser?.role === "ADMINISTRADOR"
+      ? [{ id: "admin" as const, label: "Administración", icon: ShieldCheck, badge: null }]
+      : []),
   ]
 
   const isVisible = isOpen !== false

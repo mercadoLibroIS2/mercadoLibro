@@ -246,6 +246,16 @@ public class IntercambioServiceImpl implements IntercambioService {
     public IntercambioResponseDTO cancelarIntercambio(IntercambioId intercambioId, UUID usuarioId) {
         Intercambio intercambio = bloquearIntercambio(intercambioId);
         validarEsParticipante(intercambio, buscarUsuario(usuarioId));
+        return cancelar(intercambio);
+    }
+
+    @Override
+    @Transactional
+    public IntercambioResponseDTO cancelarIntercambioComoAdmin(IntercambioId intercambioId) {
+        return cancelar(bloquearIntercambio(intercambioId));
+    }
+
+    private IntercambioResponseDTO cancelar(Intercambio intercambio) {
         validarEstado(intercambio,
                 EstadoIntercambio.PENDIENTE,
                 EstadoIntercambio.ACEPTADO,

@@ -27,6 +27,9 @@ public interface IntercambioService {
 
     IntercambioResponseDTO completarIntercambio(IntercambioId intercambioId, UUID usuarioId);
 
+    /** Cancelación forzada por un administrador al resolver un reporte (sin validar participante). */
+    IntercambioResponseDTO cancelarIntercambioComoAdmin(IntercambioId intercambioId);
+
     EstadoIntercambio consultarEstado(IntercambioId intercambioId);
 
     void cancelarPendientesDePublicacion(PublicacionId publicacionId, IntercambioId excluir);

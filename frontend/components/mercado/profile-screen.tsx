@@ -13,6 +13,8 @@ import {
   PlusCircle,
   Star,
   X,
+  Flag,
+  ShieldCheck,
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCard } from "./book-card"
@@ -76,6 +78,7 @@ export function ProfileScreen() {
     screen,
     setScreen,
     logout,
+    setReportTarget,
   } = useStore()
 
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
@@ -210,6 +213,17 @@ export function ProfileScreen() {
                 <span className="hidden sm:inline">Cambiar contraseña</span>
               </button>
 
+              {currentUser?.role === "ADMINISTRADOR" && (
+                <button
+                  type="button"
+                  onClick={() => setScreen("admin")}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                >
+                  <ShieldCheck className="h-4 w-4 text-stone-500" aria-hidden="true" />
+                  <span>Admin</span>
+                </button>
+              )}
+
               {/* Debajo de lg no hay sidebar: el cierre de sesión tiene que estar acá */}
               <button
                 type="button"
@@ -220,6 +234,22 @@ export function ProfileScreen() {
                 <span>Salir</span>
               </button>
             </div>
+          )}
+          {!isOwnProfile && currentUser && (
+            <button
+              type="button"
+              onClick={() =>
+                setReportTarget({
+                  type: "USUARIO",
+                  label: `${targetUser.name} (@${targetUser.username})`,
+                  reportedEmail: targetUser.email,
+                })
+              }
+              className="self-start inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-semibold text-stone-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+            >
+              <Flag className="h-4 w-4" aria-hidden="true" />
+              Reportar usuario
+            </button>
           )}
         </div>
 

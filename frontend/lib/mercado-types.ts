@@ -10,6 +10,7 @@ export type Screen =
   | "login"
   | "registro"
   | "bienvenida"
+  | "admin"
 
 export type Condition =
   | "Nuevo"
@@ -117,6 +118,8 @@ export interface User {
   availablePoints: number
   reservedPoints: number
   joinedDate: string
+  /** Rol en el backend: "USUARIO" o "ADMINISTRADOR". */
+  role?: string
 }
 
 export type Deal = "green" | "yellow" | "red"
@@ -220,6 +223,7 @@ export type NotificationType =
   | "TRACKER_MATCH"
   | "CHAIN_DETECTED"
   | "POINTS_RECEIVED"
+  | "REPORT_UPDATE"
 
 export interface NotificationItem {
   id: string
