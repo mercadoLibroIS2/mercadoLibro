@@ -80,7 +80,7 @@ async function mockBackend(
     }
 
     if (url.pathname.endsWith("/api/auth/logout")) {
-      await route.fulfill({ status: 204, body: "" })
+      await route.fulfill({ status: 200, body: "" })
       return
     }
 

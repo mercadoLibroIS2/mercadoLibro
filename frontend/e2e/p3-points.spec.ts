@@ -158,6 +158,9 @@ test("el registro inválido no crea una cuenta ni otorga puntos", async ({ reque
   for (const data of invalidRegistrations) {
     const response = await request.post("/api/auth/registro", { data })
     expect(response.status(), JSON.stringify(data)).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: "ValidationError",
+    })
   }
 })
 
