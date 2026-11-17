@@ -14,4 +14,7 @@ public interface PublicacionService {
     PublicacionResponseDTO verDetallesPublicacion(PublicacionId id);
     void editarPublicacion(PublicacionId id, PublicacionRequestDTO dto, String emailUsuario);
     void eliminarPublicacion(PublicacionId id, String emailUsuario);
+
+    /** Devuelve el libro de la base o lo importa (Google Books / Open Library). LibroNoExisteException si no aparece. */
+    com.ingenieriaSoftware2.Entity.Libro obtenerOImportarLibro(String isbn);
 }

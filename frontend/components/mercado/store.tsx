@@ -477,8 +477,8 @@ interface StoreContextValue extends AppState {
   addReview: (tradeId: string, toUserId: string, rating: number, comment: string, bookTitle: string) => void
 
   // Tracker
-  addToTracker: (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => void
-  removeFromTracker: (id: string) => void
+  addToTracker: (data: Pick<TrackedBook, "isbn" | "title" | "author">) => Promise<boolean>
+  removeFromTracker: (id: string) => Promise<void>
 
   // Notifications
   markNotificationRead: (id: string) => void
@@ -814,15 +814,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               bookTitle: backendTrades.find((t) => t.id === tradeId)?.requestedBookTitle || `Libro (${r.isbn})`,
             })
           }
-          const existingIds = new Set(prev.reviews.map((rev) => rev.id))
-          const newReviews = mappedReviews.filter((mr) => !existingIds.has(mr.id))
-          if (newReviews.length > 0) {
-            mergedReviews = [...newReviews, ...prev.reviews]
-          }
+          // La reseña recién publicada se agrega en el momento con un id local (rev-<timestamp>).
+          // Cuando llega la misma desde el backend se reemplaza, para no mostrarla dos veces.
+          const norm = (v?: string) => (v || "").trim().toLowerCase()
+          const backendKeys = new Set(mappedReviews.map((mr) => `${mr.tradeId}#${norm(mr.fromUserId)}`))
+          const backendContent = new Set(
+            mappedReviews.map((mr) => `${norm(mr.fromUserId)}#${norm(mr.toUserId)}#${mr.rating}#${mr.comment.trim()}`),
+          )
+          const mappedIds = new Set(mappedReviews.map((mr) => mr.id))
+          const keptLocal = prev.reviews.filter((rev) => {
+            if (mappedIds.has(rev.id)) return false
+            if (backendKeys.has(`${rev.tradeId}#${norm(rev.fromUserId)}`)) return false
+            const optimistic = /^rev-\d+$/.test(rev.id)
+            return !(
+              optimistic &&
+              backendContent.has(`${norm(rev.fromUserId)}#${norm(rev.toUserId)}#${rev.rating}#${(rev.comment || "").trim()}`)
+            )
+          })
+          mergedReviews = [...mappedReviews, ...keptLocal]
         }
 
         let mergedTrackedBooks = prev.trackedBooks
-        if (followedBooks && followedBooks.length > 0) {
+        if (hasBackendSession()) {
+          // Con sesión, los libros seguidos del usuario son exactamente los del backend
+          const tracked: TrackedBook[] = (followedBooks || []).map((fb: any) => {
+            const isbn = typeof fb === "string" ? fb : fb?.isbn || ""
+            const cleanIsbn = isbn.replace(/[^0-9X]/gi, "")
+            const matchedBook = mergedBooks.find((b) => b.isbn.replace(/[^0-9X]/gi, "") === cleanIsbn)
+            return {
+              id: `track-backend-${userId}-${isbn}`,
+              userId,
+              isbn,
+              title: fb?.titulo || matchedBook?.title || `Libro con ISBN ${isbn}`,
+              author: fb?.autores || matchedBook?.author,
+              category: fb?.categorias?.[0] || matchedBook?.category,
+              createdAt: new Date().toISOString(),
+            }
+          })
+          mergedTrackedBooks = [
+            ...tracked,
+            ...prev.trackedBooks.filter((t) => t.userId !== userId),
+          ]
+        } else if (followedBooks && followedBooks.length > 0) {
           const mappedTracked: TrackedBook[] = followedBooks.map((fb: any) => {
             const isbn = typeof fb === "string" ? fb : fb?.isbn || ""
             const cleanIsbn = isbn.replace(/[^0-9X]/gi, "")
@@ -1236,6 +1269,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               estadoFisico: CONDITION_TO_ESTADO[patch.condition] || "BUEN_ESTADO",
               valorPuntosSolicitado: patch.points,
               comentario: patch.description || "",
+              categoria: patch.category,
             }
           )
         } catch (error) {
@@ -1246,10 +1280,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       // El backend recalcula referencia y semáforo al editar: tomar su valor
       let backendReference: number | undefined
+      let backendCategory: string | undefined
       if (hasBackendSession()) {
         const mine = await apiListMyPublications().catch(() => [])
         const updated = mine.find((pub) => `${pub.publicacionId.isbn}|${pub.publicacionId.emailPropietario}|${pub.publicacionId.horaPublicacion}` === bookId)
         backendReference = updated?.valorReferenciaCalculado ?? undefined
+        backendCategory = updated?.categoria ?? undefined
       }
 
       setState((prev) => ({
@@ -1261,6 +1297,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 condition: patch.condition,
                 points: patch.points,
                 description: patch.description,
+                category: backendCategory || patch.category || candidate.category,
                 referencePrice:
                   backendReference ?? calculateReferencePrice(candidate.category, patch.condition, 4.5),
               }
@@ -1348,6 +1385,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void loadUserData(state.currentUser.id)
     }
   }, [state.currentUser])
+
+  // Sincronización con lo que hacen los demás usuarios: no hay push desde el backend, así que se
+  // recarga al volver a la pestaña y cada 45 s mientras está visible.
+  const currentUserId = state.currentUser?.id
+  useEffect(() => {
+    if (!currentUserId || !hasBackendSession()) return
+    let lastRefresh = Date.now()
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return
+      // Evita recargas encadenadas cuando focus y visibilitychange llegan juntos
+      if (Date.now() - lastRefresh < 5_000) return
+      lastRefresh = Date.now()
+      void loadUserData(currentUserId)
+    }
+    const interval = window.setInterval(refresh, 45_000)
+    window.addEventListener("focus", refresh)
+    document.addEventListener("visibilitychange", refresh)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener("focus", refresh)
+      document.removeEventListener("visibilitychange", refresh)
+    }
+    // loadUserData es estable en la práctica (solo usa setState y la API)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId])
 
   // --- Trade Operations (RF06 - RF13, RF17 - RF20) ---
   const requestTradeWithPoints = useCallback(
@@ -2005,40 +2067,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const addToTracker = useCallback(
-    (data: Omit<TrackedBook, "id" | "userId" | "createdAt">) => {
-      if (!state.currentUser) return
+    async (data: Pick<TrackedBook, "isbn" | "title" | "author">): Promise<boolean> => {
+      const user = state.currentUser
+      if (!user) return false
+      const isbn = (data.isbn || "").trim()
+      if (!isbn) {
+        showToast("No se puede seguir un libro sin ISBN.")
+        return false
+      }
+      const clean = isbn.replace(/[^0-9X]/gi, "")
+      if (state.trackedBooks.some((t) => isUserMatch(user, t.userId) && (t.isbn || "").replace(/[^0-9X]/gi, "") === clean)) {
+        showToast("Ya estás siguiendo este libro.")
+        return false
+      }
 
-      const id = "track-" + Date.now()
+      if (hasBackendSession()) {
+        try {
+          await apiFollowBook(user.id, isbn)
+        } catch (err) {
+          const message = backendErrorMessage(err)
+          showToast(
+            /libro no existe/i.test(message)
+              ? "No se pudo seguir el libro: no encontramos ese ISBN en Google Books ni en Open Library."
+              : `No se pudo seguir el libro: ${message}`,
+          )
+          return false
+        }
+      }
+
       const newTracked: TrackedBook = {
-        ...data,
-        id,
-        userId: state.currentUser.id,
+        id: `track-backend-${user.id}-${isbn}`,
+        userId: user.id,
+        isbn,
+        title: data.title,
+        author: data.author,
         createdAt: new Date().toISOString(),
       }
-
-      if (state.currentUser.id && data.isbn) {
-        apiFollowBook(state.currentUser.id, data.isbn).catch((err) =>
-          console.warn("[Backend] Error siguiendo libro:", err)
-        )
-      }
-
-      setState((prev) => ({
-        ...prev,
-        trackedBooks: [newTracked, ...prev.trackedBooks],
-      }))
-
-      showToast(`"${data.title}" se agregó a tu Tracker de libros seguidos.`)
+      setState((prev) => ({ ...prev, trackedBooks: [newTracked, ...prev.trackedBooks] }))
+      showToast(`"${data.title}" se agregó a tu Tracker. Te avisamos cuando alguien lo publique.`)
+      return true
     },
-    [state.currentUser, showToast]
+    [state.currentUser, state.trackedBooks, showToast]
   )
 
   const removeFromTracker = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const trackedBook = state.trackedBooks.find((t) => t.id === id)
-      if (trackedBook && state.currentUser?.id && trackedBook.isbn) {
-        apiUnfollowBook(state.currentUser.id, trackedBook.isbn).catch((err) =>
-          console.warn("[Backend] Error dejando de seguir libro:", err)
-        )
+      if (trackedBook && state.currentUser?.id && trackedBook.isbn && hasBackendSession()) {
+        try {
+          await apiUnfollowBook(state.currentUser.id, trackedBook.isbn)
+        } catch (err) {
+          showToast(`No se pudo dejar de seguir el libro: ${backendErrorMessage(err)}`)
+          return
+        }
       }
       setState((prev) => ({
         ...prev,

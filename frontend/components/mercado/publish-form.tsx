@@ -146,7 +146,7 @@ export function PublishForm() {
     try {
       const result = await findGoogleBookByIsbn(clean)
       if (!result) {
-        setGoogleBooksError("No se encontró ningún libro con ese ISBN en Google Books.")
+        setGoogleBooksError("No encontramos ese ISBN en Google Books ni en Open Library. Revisá el número o probá de nuevo en un rato.")
         return
       }
       setGoogleBook(result)

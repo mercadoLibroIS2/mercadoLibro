@@ -187,6 +187,12 @@ public class PublicacionServiceImpl implements PublicacionService {
 
     @Override
     @Transactional
+    public Libro obtenerOImportarLibro(String isbn) {
+        return libroRepository.findByIsbn(isbn).orElseGet(() -> importarLibro(isbn));
+    }
+
+    @Override
+    @Transactional
     public List<PublicacionResponseDTO> listarPublicaciones() {
         return publicacionRepository.listarNoEliminadas(EstadoPublicacion.ELIMINADA).stream()
                 .map(publicacionMapper::toDTO)
@@ -244,6 +250,10 @@ public class PublicacionServiceImpl implements PublicacionService {
         Integer valorRef = calculadora.calcular(id.getIsbn(), dto.estadoFisico());
         publicacion.setValorReferenciaCalculado(valorRef);
         publicacion.setColorSemaforo(calculadora.calculadoraColor(dto.valorPuntosSolicitado(), valorRef));
+        // Libros publicados antes de que existiera la categoría: se completa al editar
+        if (publicacion.getLibro() != null) {
+            asignarCategoriaSiFalta(publicacion.getLibro(), dto.categoria());
+        }
     }
 
     @Override
