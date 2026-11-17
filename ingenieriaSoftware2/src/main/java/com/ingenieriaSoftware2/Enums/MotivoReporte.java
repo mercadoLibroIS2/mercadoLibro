@@ -1,0 +1,5 @@
+package com.ingenieriaSoftware2.Enums;
+
+public enum MotivoReporte {
+    LIBRO_NO_ENTREGADO, LIBRO_EN_MAL_ESTADO, PUBLICACION_ENGANOSA, COMPORTAMIENTO_INAPROPIADO, FRAUDE, OTRO
+}

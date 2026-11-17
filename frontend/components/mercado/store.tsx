@@ -91,6 +91,7 @@ import {
   type CompraIdParams,
   type CadenaResponse,
   type CadenaPasoResponse,
+  type ReportTarget,
 } from "@/lib/api"
 
 function cadenaPasoToBook(paso: CadenaPasoResponse): Book {
@@ -213,6 +214,12 @@ const BACKEND_NOTIFICATIONS: Record<
     title: "Nueva cadena de intercambio",
     message: "Encontramos una cadena circular en la que participás. Revisala y confirmá tu parte.",
     linkScreen: "cadenas",
+  },
+  REPORTE_ACTUALIZADO: {
+    type: "REPORT_UPDATE",
+    title: "Novedades de tu reporte",
+    message: "Un administrador revisó tu reporte.",
+    linkScreen: "notificaciones",
   },
   LIBRO_SEGUIDO_PUBLICADO: {
     type: "TRACKER_MATCH",
@@ -447,6 +454,8 @@ interface StoreContextValue extends AppState {
   setSelectedCategory: (c: string) => void
   toast: string | null
   showToast: (msg: string) => void
+  reportTarget: ReportTarget | null
+  setReportTarget: (t: ReportTarget | null) => void
   isLoadingCatalog: boolean
 
   // Auth & User Switch
@@ -512,6 +521,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [screen, setScreen] = useState<Screen>("login")
   const [editingBookId, setEditingBookId] = useState<string | null>(null)
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null)
   const [tradeModalBook, setTradeModalBookState] = useState<Book | null>(null)
   const [tradeModalInitialType, setTradeModalInitialType] = useState<TradeType>("PUNTOS")
@@ -623,7 +633,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .then((profile) => {
           setState((prev) => {
             const existingDemo = prev.users.find((u) => isUserMatch(u, profile.email))
-            const appUser: User = existingDemo
+            let appUser: User = existingDemo
               ? existingDemo
               : {
                   id: profile.id,
@@ -638,6 +648,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   reservedPoints: profile.saldoReservado ?? 0,
                   joinedDate: new Date().toISOString(),
                 }
+            appUser = { ...appUser, role: profile.rol }
             return {
               ...prev,
               currentUser: appUser,
@@ -950,7 +961,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         setState((prev) => {
           const existingDemo = prev.users.find((u) => isUserMatch(u, authData.email))
-          const appUser: User = existingDemo
+          let appUser: User = existingDemo
             ? existingDemo
             : {
                 id: authData.id,
@@ -966,6 +977,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 joinedDate: new Date().toISOString(),
               }
           finalUserName = appUser.name
+          appUser = { ...appUser, role: userProfile?.rol || authData.rol }
           return {
             ...prev,
             currentUser: appUser,
@@ -2274,6 +2286,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSelectedCategory,
         toast,
         showToast,
+        reportTarget,
+        setReportTarget,
         isLoadingCatalog,
         login,
         register,

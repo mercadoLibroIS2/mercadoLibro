@@ -52,6 +52,7 @@ Backend (ver también `.env.example`):
 | `GOOGLE_BOOKS_API_KEY` | Metadatos de libros | vacía |
 | `SPRING_JPA_HIBERNATE_DDL_AUTO` | En producción no usar `update`: el esquema se aplica con `schema.sql` | `update` |
 | `APP_DEBUG_ENDPOINTS` | Habilita `/api/test/*` de diagnóstico (incluye borrar la base). **Nunca en producción** | `false` |
+| `APP_ADMIN_EMAILS` | Emails (separados por coma) con rol ADMINISTRADOR: acceden al panel de administración y resuelven reportes | vacía |
 | `PORT` | Puerto HTTP (Render lo asigna) | `8086` |
 
 Frontend: `NEXT_PUBLIC_BACKEND_URL` (URL del backend; ver `frontend/.env.example`).
@@ -63,6 +64,11 @@ desde el SQL Editor de Supabase. Todas las sentencias son idempotentes (`IF NOT 
 volver a correr completo después de cada cambio de modelo. Tablas nuevas que no lee el frontend
 (por ejemplo `cadena_paso`, `resenia_compra`) conviene dejarlas con RLS activado y sin políticas: el
 backend entra como dueño de las tablas y no se ve afectado.
+
+## Datos de demo
+
+Con el backend levantado: `cd frontend && BACKEND_URL=http://localhost:8086 node scripts/seed-demo.mjs`.
+Detalles y recorrido en [docs/demo-rama-unificada.md](docs/demo-rama-unificada.md).
 
 ## Tests
 

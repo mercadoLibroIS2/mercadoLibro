@@ -12,6 +12,7 @@ import {
   Target,
   X,
   XCircle,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
 import {
@@ -28,6 +29,7 @@ const TYPE_ICONS: Record<NotificationType, ReactNode> = {
   TRACKER_MATCH: <Target className="h-4 w-4 text-sky-700" aria-hidden="true" />,
   CHAIN_DETECTED: <Share2 className="h-4 w-4 text-indigo-700" aria-hidden="true" />,
   POINTS_RECEIVED: <Coins className="h-4 w-4 text-amber-700" aria-hidden="true" />,
+  REPORT_UPDATE: <Flag className="h-4 w-4 text-rose-700" aria-hidden="true" />,
 }
 
 export function NotificationsPopover({ onClose }: { onClose: () => void }) {

@@ -67,6 +67,7 @@ ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'LIBRO_SEGUIDO_PUBLICADO';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'CADENA_DETECTADA';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'REPORTE_ACTUALIZADO';
 
 
 -- =======================================================
@@ -423,3 +424,27 @@ CREATE TABLE IF NOT EXISTS oferta_libros_deseados (
     libro_id  VARCHAR(255) NOT NULL REFERENCES libro (isbn) ON DELETE CASCADE,
     PRIMARY KEY (oferta_id, libro_id)
 );
+
+-- =======================================================
+-- REPORTE (denuncias que revisa un administrador)
+-- =======================================================
+
+CREATE TABLE IF NOT EXISTS reporte (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_denunciante VARCHAR(255) NOT NULL REFERENCES usuario (email) ON DELETE CASCADE ON UPDATE CASCADE,
+    tipo              VARCHAR(20)  NOT NULL CHECK (tipo IN ('USUARIO', 'PUBLICACION', 'INTERCAMBIO')),
+    email_denunciado  VARCHAR(255),
+    isbn              VARCHAR(255),
+    hora_publicacion  TIMESTAMP,
+    intercambio_ref   VARCHAR(600),
+    motivo            VARCHAR(40)  NOT NULL,
+    detalle           VARCHAR(1000),
+    estado            VARCHAR(20)  NOT NULL DEFAULT 'ABIERTO'
+                      CHECK (estado IN ('ABIERTO', 'EN_REVISION', 'RESUELTO', 'DESCARTADO')),
+    resolucion        VARCHAR(1000),
+    accion_tomada     VARCHAR(30),
+    email_resolutor   VARCHAR(255),
+    fecha             TIMESTAMP    NOT NULL DEFAULT now(),
+    fecha_resolucion  TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS reporte_estado_idx ON reporte (estado, fecha DESC);

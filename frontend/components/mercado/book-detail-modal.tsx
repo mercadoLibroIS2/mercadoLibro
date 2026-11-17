@@ -12,6 +12,7 @@ import {
   Target,
   Trash2,
   X,
+  Flag,
 } from "lucide-react"
 import { useStore } from "./store"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
@@ -34,6 +35,7 @@ export function BookDetailModal() {
     addToTracker,
     setTradeModalBook,
     viewUserProfile,
+    setReportTarget,
   } = useStore()
 
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -249,6 +251,28 @@ export function BookDetailModal() {
 
               {/* Action Footer */}
               <div className="border-t border-stone-100 pt-4">
+                {!isOwner && currentUser && book.id.split("|").length === 3 && (
+                  <div className="mb-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const [isbn, ownerEmail, publicationTime] = book.id.split("|")
+                        setSelectedBookId(null)
+                        setReportTarget({
+                          type: "PUBLICACION",
+                          label: `"${book.title}" publicado por ${book.ownerName}`,
+                          reportedEmail: ownerEmail,
+                          isbn,
+                          publicationTime,
+                        })
+                      }}
+                      className="flex items-center gap-1.5 text-xs md:text-sm font-semibold text-stone-400 hover:text-rose-700 transition-colors"
+                    >
+                      <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                      Reportar publicación
+                    </button>
+                  </div>
+                )}
                 {isOwner ? (
                   <div className="flex flex-wrap items-center gap-2.5">
                     <button

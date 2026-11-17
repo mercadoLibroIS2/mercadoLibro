@@ -754,3 +754,111 @@ export async function apiRechazarCadena(cadenaId: string): Promise<any> {
 }
 
 
+
+// -------------------------------------------------------------
+// REPORTES Y ADMINISTRACIÓN
+// -------------------------------------------------------------
+
+export type ReportType = "USUARIO" | "PUBLICACION" | "INTERCAMBIO"
+export type ReportReason =
+  | "LIBRO_NO_ENTREGADO"
+  | "LIBRO_EN_MAL_ESTADO"
+  | "PUBLICACION_ENGANOSA"
+  | "COMPORTAMIENTO_INAPROPIADO"
+  | "FRAUDE"
+  | "OTRO"
+export type ReportStatus = "ABIERTO" | "EN_REVISION" | "RESUELTO" | "DESCARTADO"
+export type AdminAction = "NINGUNA" | "CANCELAR_INTERCAMBIO" | "ELIMINAR_PUBLICACION" | "SUSPENDER_USUARIO"
+
+/** Qué se reporta. Lo arma la pantalla que abre el modal de reporte. */
+export interface ReportTarget {
+  type: ReportType
+  /** Texto para mostrar qué se está reportando. */
+  label: string
+  reportedEmail?: string
+  isbn?: string
+  publicationTime?: string
+  /** Id de intercambio del frontend ("isbn|email|hora:isbn|email|hora"). */
+  tradeId?: string
+}
+
+export interface ReporteResponse {
+  id: string
+  emailDenunciante: string
+  tipo: ReportType
+  emailDenunciado: string | null
+  isbn: string | null
+  horaPublicacion: string | null
+  intercambioId: string | null
+  motivo: ReportReason
+  detalle: string | null
+  estado: ReportStatus
+  resolucion: string | null
+  accionTomada: AdminAction | null
+  emailResolutor: string | null
+  fecha: string
+  fechaResolucion: string | null
+}
+
+export interface EstadisticasAdminResponse {
+  usuarios: number
+  usuariosSuspendidos: number
+  publicacionesDisponibles: number
+  publicacionesReservadas: number
+  publicacionesVendidas: number
+  intercambiosPorEstado: Record<string, number>
+  puntosEnCirculacion: number
+  puntosReservados: number
+  reputacionPromedio: number | null
+  resenias: number
+  reportesAbiertos: number
+  reportesCerrados: number
+  usuariosSuspendidosDetalle: { email: string; nombre: string; rol: string; activo: boolean }[]
+}
+
+export async function apiCrearReporte(target: ReportTarget, motivo: ReportReason, detalle: string): Promise<ReporteResponse> {
+  const intercambio = target.tradeId ? parseIntercambioId(target.tradeId) : null
+  if (target.type === "INTERCAMBIO" && !intercambio) {
+    throw new Error("Este intercambio no se puede reportar (no está guardado en el servidor).")
+  }
+  return request<ReporteResponse>("/api/reportes", {
+    method: "POST",
+    body: JSON.stringify({
+      tipo: target.type,
+      motivo,
+      detalle: detalle.trim(),
+      emailDenunciado: target.reportedEmail || null,
+      isbn: target.isbn || null,
+      horaPublicacion: target.publicationTime || null,
+      intercambio,
+    }),
+  })
+}
+
+export async function apiMisReportes(): Promise<ReporteResponse[]> {
+  return request<ReporteResponse[]>("/api/reportes/mis-reportes")
+}
+
+export async function apiAdminReportes(): Promise<ReporteResponse[]> {
+  return request<ReporteResponse[]>("/api/admin/reportes")
+}
+
+export async function apiAdminResolverReporte(
+  id: string,
+  estado: Exclude<ReportStatus, "ABIERTO">,
+  resolucion: string,
+  accion: AdminAction,
+): Promise<ReporteResponse> {
+  return request<ReporteResponse>(`/api/admin/reportes/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ estado, resolucion: resolucion.trim() || null, accion }),
+  })
+}
+
+export async function apiAdminReactivarUsuario(email: string): Promise<void> {
+  return request<void>(`/api/admin/usuarios/${encodeURIComponent(email)}/reactivar`, { method: "PATCH" })
+}
+
+export async function apiAdminEstadisticas(): Promise<EstadisticasAdminResponse> {
+  return request<EstadisticasAdminResponse>("/api/admin/estadisticas")
+}
