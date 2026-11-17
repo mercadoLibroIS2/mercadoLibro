@@ -115,15 +115,7 @@ export function ChainsView() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-200 bg-amber-100 text-xs font-bold text-amber-900">
-                            {step.userAvatar ? (
-                              <img
-                                src={step.userAvatar}
-                                alt={step.userName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              step.userName.charAt(0).toUpperCase()
-                            )}
+                            {step.userName.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-stone-900">

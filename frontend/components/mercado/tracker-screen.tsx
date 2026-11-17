@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { useStore } from "./store"
+import { BookCoverThumb } from "./cover-thumb"
 import {
   CATEGORIES,
   CONDITIONS,
@@ -169,7 +170,8 @@ export function TrackerScreen() {
             Definir criterios de seguimiento
           </h2>
           <p className="mt-0.5 text-xs sm:text-sm text-stone-500">
-            Buscá por ISBN para autocompletar o ingresá el título manualmente.
+            Con el ISBN te avisamos por notificación apenas alguien lo publique. El tope de puntos y los
+            estados filtran las coincidencias que ves en esta pantalla.
           </p>
 
           <div className="mt-4 flex flex-col gap-4">
@@ -219,17 +221,7 @@ export function TrackerScreen() {
 
               {googleBookPreview && (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-stone-200/80 bg-[#faf8f5] p-3">
-                  {googleBookPreview.portadaUrl ? (
-                    <img
-                      src={googleBookPreview.portadaUrl}
-                      alt=""
-                      className="h-12 w-9 shrink-0 rounded-md border border-stone-200 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-stone-200 text-stone-400">
-                      <BookOpen className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                  )}
+                  <BookCoverThumb src={googleBookPreview.portadaUrl} className="h-12 w-9 rounded-md" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-stone-900">
                       {googleBookPreview.titulo}

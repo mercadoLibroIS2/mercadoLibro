@@ -91,7 +91,7 @@ export function Sidebar({
             </span>
             <div>
               <span className="block font-serif text-base font-bold tracking-tight text-stone-900 leading-tight">
-                Mercado Libro
+                MercadoLibro
               </span>
               <p className="text-xs font-medium text-stone-500">
                 Comunidad de lectura

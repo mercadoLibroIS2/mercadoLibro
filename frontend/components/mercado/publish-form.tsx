@@ -102,6 +102,7 @@ export function PublishForm() {
       setBackendReference(ref.valorReferencia)
       // Si todavía no cargó puntos, se propone el valor de referencia real
       setForm((prev) => (prev.points ? prev : { ...prev, points: String(ref.valorReferencia) }))
+      setErrors((prev) => (prev.points ? { ...prev, points: undefined } : prev))
       if (ref.categoria) {
         // El libro ya tiene categoría en la base: es la que se va a usar
         setForm((prev) => (prev.category ? prev : { ...prev, category: ref.categoria! }))
@@ -237,7 +238,7 @@ export function PublishForm() {
     .join(" · ")
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 pb-8">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-0 lg:py-8">
       <div className="flex items-start gap-3">
         {editingBook && (
           <button
@@ -271,7 +272,7 @@ export function PublishForm() {
         className="flex flex-col gap-6 rounded-2xl border border-stone-200/80 bg-white p-5 shadow-[0_1px_3px_rgba(28,25,23,0.05)] sm:p-7"
       >
         <section className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
             <div className="flex-1">
               <Field
                 id="pub-isbn"
@@ -292,7 +293,8 @@ export function PublishForm() {
                 type="button"
                 onClick={handleGoogleBooksSearch}
                 disabled={searchingGoogleBooks}
-                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-stone-50 px-4 text-sm font-semibold text-stone-800 transition-colors hover:bg-stone-100 hover:border-stone-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                // 26px = alto de la etiqueta + separación del Field, para quedar a la par del input
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-stone-50 px-4 sm:mt-[26px] text-sm font-semibold text-stone-800 transition-colors hover:bg-stone-100 hover:border-stone-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
                 {searchingGoogleBooks ? (
                   <Loader2 className="h-4 w-4 animate-spin text-amber-800" aria-hidden="true" />

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Coins, BookMarked } from "lucide-react"
-import type { Book } from "@/lib/mercado-types"
+import { isUserMatch, type Book } from "@/lib/mercado-types"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
 import { useStore } from "./store"
 
@@ -22,7 +22,8 @@ const DEAL_BADGES = {
 }
 
 export function BookCard({ book }: { book: Book }) {
-  const { setSelectedBookId } = useStore()
+  const { setSelectedBookId, currentUser } = useStore()
+  const isMine = isUserMatch(currentUser, book.ownerId)
   const [imgFailed, setImgFailed] = useState(false)
   const evaluation = evaluatePriceDeal(
     book.points,
@@ -77,6 +78,13 @@ export function BookCard({ book }: { book: Book }) {
           </span>
         </div>
 
+        {/* Las publicaciones propias también figuran en el catálogo: se distinguen */}
+        {isMine && (
+          <span className="pointer-events-none absolute bottom-2.5 left-2.5 rounded-full bg-stone-900/85 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-xs">
+            Tu publicación
+          </span>
+        )}
+
         {/* Availability Overlay */}
         {!isAvailable && (
           <div className="absolute inset-0 flex items-center justify-center bg-stone-900/55 p-2 text-center backdrop-blur-[2px]">
@@ -108,10 +116,11 @@ export function BookCard({ book }: { book: Book }) {
         </div>
 
         {/* Condition & Points */}
-        <div className="mt-3.5 flex items-center justify-between gap-2 pt-2.5 border-t border-stone-100">
+        {/* En tarjetas angostas (mobile) los puntos bajan de línea en vez de cortar el estado */}
+        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-1.5 pt-2.5 border-t border-stone-100">
           <span
             title={book.condition}
-            className="truncate rounded-md bg-stone-100/90 px-2 py-0.5 text-xs font-semibold text-stone-700"
+            className="whitespace-nowrap rounded-md bg-stone-100/90 px-2 py-0.5 text-xs font-semibold text-stone-700"
           >
             {book.condition}
           </span>

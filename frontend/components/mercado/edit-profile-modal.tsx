@@ -5,16 +5,10 @@ import { X } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
 
-const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 export function EditProfileModal({ onClose }: { onClose: () => void }) {
   const { currentUser, updateProfile } = useStore()
   const [name, setName] = useState(currentUser?.name ?? "")
-  const [email, setEmail] = useState(currentUser?.email ?? "")
-  const [bio, setBio] = useState(currentUser?.bio ?? "")
-  const [city, setCity] = useState(currentUser?.city ?? "")
-  const [avatar, setAvatar] = useState(currentUser?.avatar ?? "")
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({})
+  const [errors, setErrors] = useState<{ name?: string }>({})
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -30,18 +24,12 @@ export function EditProfileModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     const next: typeof errors = {}
     if (!name.trim()) next.name = "El nombre no puede estar vacío"
-    if (!email.trim()) next.email = "El email no puede estar vacío"
-    else if (!emailRe.test(email)) next.email = "El email no tiene un formato válido"
+    else if (name.trim().length < 3) next.name = "El nombre debe tener al menos 3 caracteres"
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    updateProfile({
-      name: name.trim(),
-      email: email.trim(),
-      bio: bio.trim(),
-      city: city.trim(),
-      avatar: avatar.trim(),
-    })
+    // Solo el nombre se guarda en el backend (PUT /api/usuario/me)
+    updateProfile({ name: name.trim() })
     onClose()
   }
 
@@ -91,45 +79,12 @@ export function EditProfileModal({ onClose }: { onClose: () => void }) {
               id="edit-email"
               label="Email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              error={errors.email}
+              value={currentUser?.email ?? ""}
+              readOnly
+              disabled
+              hint="Es tu identificador para ingresar: no se puede cambiar."
             />
           </div>
-
-          <Field
-            id="edit-city"
-            label="Ciudad / Ubicación"
-            placeholder="Ej. Buenos Aires, Argentina"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          />
-
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="edit-bio"
-              className="text-sm font-semibold tracking-tight text-stone-800"
-            >
-              Biografía / Presentación
-            </label>
-            <textarea
-              id="edit-bio"
-              rows={3}
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Contá qué géneros te gusta leer o por qué zonas coordinás trueques..."
-              className="w-full resize-none rounded-xl border border-stone-200/90 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-stone-900 outline-none transition-all placeholder:text-stone-400 hover:border-stone-300 focus:border-amber-700 focus:ring-3 focus:ring-amber-700/15"
-            />
-          </div>
-
-          <Field
-            id="edit-avatar"
-            label="URL de foto de perfil (Avatar)"
-            type="url"
-            placeholder="https://..."
-            value={avatar}
-            onChange={(e) => setAvatar(e.target.value)}
-          />
 
           <div className="mt-2 flex items-center justify-end gap-2.5 border-t border-stone-100 pt-4">
             <button

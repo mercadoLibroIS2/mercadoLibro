@@ -100,7 +100,8 @@ export function BookDetailModal() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
             {/* Cover column */}
             <div className="md:col-span-5 flex flex-col gap-3">
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-100 shadow-sm">
+              {/* En mobile la portada es chica para que título y acciones queden a la vista */}
+              <div className="relative mx-auto aspect-[3/4] w-32 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-100 shadow-sm sm:w-full">
                 {book.coverUrl && !imgFailed ? (
                   <img
                     src={book.coverUrl}

@@ -1009,7 +1009,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           type: "INICIAL",
           amount: authData.puntos ?? 100,
           balanceAfter: authData.puntos ?? 100,
-          description: "Bienvenida a Mercado Libro — Asignación de puntos iniciales",
+          description: "Bienvenida a MercadoLibro — Asignación de puntos iniciales",
           date: new Date().toISOString(),
         }
 
@@ -1058,12 +1058,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   const updateProfile = useCallback(
-    (patch: Partial<User>) => {
+    async (patch: Partial<User>) => {
       if (!state.currentUser) return
-      if (patch.name) {
-        apiUpdateProfile(patch.name).catch((err) =>
-          console.warn("[Backend] Error actualizando perfil:", err)
-        )
+      if (patch.name && hasBackendSession()) {
+        try {
+          await apiUpdateProfile(patch.name)
+        } catch (err) {
+          showToast(`No se pudo actualizar el perfil: ${backendErrorMessage(err)}`)
+          return
+        }
       }
       setState((prev) => {
         const updated = { ...prev.currentUser!, ...patch }

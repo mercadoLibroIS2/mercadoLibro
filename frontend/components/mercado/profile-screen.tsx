@@ -270,19 +270,19 @@ export function ProfileScreen() {
       {/* Tabs */}
       <div
         aria-label="Secciones del perfil"
-        className="mt-6 flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+        className="mt-6 flex w-full gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none scroll-fade-x lg-no-fade"
       >
         <button
           type="button"
           aria-pressed={tab === "publicaciones"}
           onClick={() => setTab("publicaciones")}
-          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "publicaciones"
               ? "bg-amber-800 text-white shadow-xs"
               : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <BookOpen className="h-4 w-4" aria-hidden="true" />
+          <BookOpen className="hidden h-4 w-4 sm:block" aria-hidden="true" />
           <span>Publicaciones ({userBooks.length})</span>
         </button>
 
@@ -290,13 +290,13 @@ export function ProfileScreen() {
           type="button"
           aria-pressed={tab === "resenas"}
           onClick={() => setTab("resenas")}
-          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "resenas"
               ? "bg-amber-800 text-white shadow-xs"
               : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+          <MessageSquareText className="hidden h-4 w-4 sm:block" aria-hidden="true" />
           <span>Reseñas ({userReviews.length})</span>
         </button>
 
@@ -305,13 +305,13 @@ export function ProfileScreen() {
             type="button"
             aria-pressed={tab === "movimientos"}
             onClick={() => setTab("movimientos")}
-            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
               tab === "movimientos"
                 ? "bg-amber-800 text-white shadow-xs"
                 : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
             }`}
           >
-            <History className="h-4 w-4" aria-hidden="true" />
+            <History className="hidden h-4 w-4 sm:block" aria-hidden="true" />
             <span>Movimientos ({userMovements.length})</span>
           </button>
         )}
@@ -335,7 +335,7 @@ export function ProfileScreen() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3.5 sm:gap-4 lg:grid-cols-3">
               {userBooks.map((book) => (
                 <BookCard key={book.id} book={book} />
               ))}

@@ -102,7 +102,7 @@ export function TradesScreen() {
       {/* Tabs */}
       <div
         aria-label="Categorías de intercambios"
-        className="flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+        className="flex w-full gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none scroll-fade-x lg-no-fade"
       >
         <TabPill
           active={activeTab === "recibidas"}
