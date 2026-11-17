@@ -202,18 +202,19 @@ test("login autentica por el backend y un rechazo no crea sesión local", async 
   await expect(page.getByText("Email o contraseña incorrectos")).toBeVisible()
   await expect(page.locator('button[title="Ir a mi perfil y billetera"]')).toHaveCount(0)
 
+  // La contraseña "demo" ya no tiene excepción: no pasa la validación local ni abre sesión
   await page.getByLabel("Email o nombre de usuario").fill("franco@mercadolibro.com")
   await page.getByLabel("Contraseña").fill("demo")
   await page.getByRole("button", { name: "Ingresar a la plataforma" }).click()
-  await expect(page.getByText("Email o contraseña incorrectos")).toBeVisible()
+  await expect(page.getByText("La contraseña debe tener al menos 8 caracteres")).toBeVisible()
   await expect(page.locator('button[title="Ir a mi perfil y billetera"]')).toHaveCount(0)
 
   await page.getByLabel("Email o nombre de usuario").fill(testUser.email)
   await page.getByLabel("Contraseña").fill("valid-test-password")
   await page.getByRole("button", { name: "Ingresar a la plataforma" }).click()
   await expect(page.locator('button[title="Ir a mi perfil y billetera"]')).toBeVisible()
-  expect(authRequests.filter((request) => request.path.includes("/api/auth/login"))).toHaveLength(3)
-  expect(authRequests.some((request) => request.body.contrasenia === "demo")).toBe(true)
+  expect(authRequests.filter((request) => request.path.includes("/api/auth/login"))).toHaveLength(2)
+  expect(authRequests.some((request) => request.body.contrasenia === "demo")).toBe(false)
 })
 
 test("login valida identificador y contraseña localmente sin llamar al backend", async ({ page }) => {

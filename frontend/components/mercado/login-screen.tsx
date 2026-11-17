@@ -6,7 +6,7 @@ import { useStore } from "./store"
 import { Field } from "./field"
 
 export function LoginScreen() {
-  const { login, users, setScreen, signInWithSupabase } = useStore()
+  const { setScreen, signInWithSupabase } = useStore()
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({})
@@ -22,39 +22,22 @@ export function LoginScreen() {
     }
     if (!password) {
       next.password = "Ingresá tu contraseña"
-    } else if (password.length < 8 && password !== "demo") {
+    } else if (password.length < 8) {
       next.password = "La contraseña debe tener al menos 8 caracteres"
     }
 
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    const demoUser = users.find(
-      (u) =>
-        u.email.toLowerCase() === identifier.toLowerCase() ||
-        u.username.toLowerCase() === identifier.toLowerCase()
-    )
-
-    let targetEmail = identifier.trim()
-    if (!targetEmail.includes("@") && demoUser) {
-      targetEmail = demoUser.email
-    }
-
+    // Siempre se autentica contra el backend (acepta email o nombre). Antes, si el backend
+    // rechazaba a un usuario demo local, se lo dejaba entrar igual sin contraseña válida.
     setLoading(true)
     try {
-      const res = await signInWithSupabase(targetEmail, password)
+      const res = await signInWithSupabase(identifier.trim(), password)
       if (!res.success) {
-        if (demoUser) {
-          login(demoUser)
-          return
-        }
         setServerError(res.error || "No se pudo iniciar sesión. Verificá tus credenciales.")
       }
     } catch (err: unknown) {
-      if (demoUser) {
-        login(demoUser)
-        return
-      }
       const message =
         err instanceof Error ? err.message : "Ocurrió un error inesperado al conectar con el servidor."
       setServerError(message)
@@ -95,7 +78,7 @@ export function LoginScreen() {
           <Field
             id="login-identifier"
             label="Email o nombre de usuario"
-            placeholder="lucia@mercadolibro.demo"
+            placeholder="tu@email.com"
             autoComplete="username"
             value={identifier}
             onChange={(e) => {
