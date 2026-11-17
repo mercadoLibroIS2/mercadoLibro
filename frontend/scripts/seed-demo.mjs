@@ -99,7 +99,11 @@ async function main() {
 
   const me = await call("/api/usuario/me", { token: tokens.admin })
   console.log(`\nListo. Contraseña de todas las cuentas: ${PASSWORD}`)
-  console.log(`admin@mercadolibro.demo tiene rol ${me.rol}${me.rol === "ADMINISTRADOR" ? "" : " (falta APP_ADMIN_EMAILS en el backend)"}`)
+  console.log(
+    me?.rol === "ADMINISTRADOR"
+      ? "admin@mercadolibro.demo es ADMINISTRADOR"
+      : "admin@mercadolibro.demo NO es administrador: falta APP_ADMIN_EMAILS en el backend",
+  )
 }
 
 main().catch((err) => {
