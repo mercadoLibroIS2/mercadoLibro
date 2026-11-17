@@ -1323,7 +1323,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Después de una operación real, el saldo, los movimientos y los estados salen del backend
   const refreshFromBackend = useCallback(() => {
     if (state.currentUser && hasBackendSession()) {
-      loadUserData(state.currentUser.id)
+      // Recarga en segundo plano: loadUserData maneja sus propios errores
+      void loadUserData(state.currentUser.id)
     }
   }, [state.currentUser])
 
