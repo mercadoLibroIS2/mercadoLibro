@@ -1,5 +1,8 @@
 package com.ingenieriaSoftware2.Controller;
 
+import com.ingenieriaSoftware2.DTO.Request.ReseniaCompraRequestDTO;
+import com.ingenieriaSoftware2.DTO.Response.ReseniaCompraResponseDTO;
+import com.ingenieriaSoftware2.Service.Interfaces.ReseniaCompraService;
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
 import com.ingenieriaSoftware2.Entity.Usuario;
@@ -27,6 +30,8 @@ public class ReseniaController {
 
     @Autowired
     private ReseniaService reseniaService;
+    @Autowired
+    private ReseniaCompraService reseniaCompraService;
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -42,6 +47,17 @@ public class ReseniaController {
     @GetMapping("/usuario/{email}")
     public ResponseEntity<List<ReseniaResponseDTO>> listarPorUsuario(@PathVariable String email) {
         return ResponseEntity.ok(reseniaService.listarPorUsuario(email));
+    }
+
+    @GetMapping("/compras")
+    public ResponseEntity<List<ReseniaCompraResponseDTO>> listarDeCompras() {
+        return ResponseEntity.ok(reseniaCompraService.listarTodas());
+    }
+
+    @PostMapping("/compra")
+    public ResponseEntity<ReseniaCompraResponseDTO> crearReseniaCompra(@Valid @RequestBody ReseniaCompraRequestDTO dto) {
+        UUID usuarioId = securityUtils.getUsuarioIdLogueado();
+        return ResponseEntity.status(HttpStatus.CREATED).body(reseniaCompraService.crear(dto, usuarioId));
     }
 
     @PostMapping

@@ -493,6 +493,40 @@ export async function apiListUserReviews(email: string): Promise<ReseniaBackendR
   }
 }
 
+export interface ReseniaCompraResponse {
+  compradorEmail: string
+  isbn: string
+  propietarioEmail: string
+  horaPublicacion: string
+  compradorReviewer: boolean
+  emailReviewer: string
+  emailReseniado: string
+  calificacion: number
+  comentario: string | null
+}
+
+export async function apiListReviewsCompras(): Promise<ReseniaCompraResponse[]> {
+  try {
+    return await request<ReseniaCompraResponse[]>("/api/resenia/compras")
+  } catch {
+    return []
+  }
+}
+
+export async function apiCreateReviewCompra(dto: {
+  compradorEmail: string
+  isbn: string
+  propietarioEmail: string
+  horaPublicacion: string
+  calificacion: number
+  comentario?: string
+}): Promise<ReseniaCompraResponse> {
+  return request<ReseniaCompraResponse>("/api/resenia/compra", {
+    method: "POST",
+    body: JSON.stringify(dto),
+  })
+}
+
 export async function apiCreateReview(dto: {
   intercambioId: any
   calificacion: number

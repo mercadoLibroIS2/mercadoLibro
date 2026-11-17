@@ -339,6 +339,20 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
 -- MOVIMIENTOS DE PUNTOS - RESEÑA
 -- =======================================================
 
+-- Reseñas de compras por puntos (las de trueques están atadas a intercambio)
+CREATE TABLE IF NOT EXISTS resenia_compra (
+    comprador_email    VARCHAR(255) NOT NULL,
+    isbn               VARCHAR(255) NOT NULL,
+    propietario_email  VARCHAR(255) NOT NULL,
+    hora_publicacion   TIMESTAMP    NOT NULL,
+    comprador_reviewer BOOLEAN      NOT NULL,
+    calificacion       SMALLINT     NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+    comentario         VARCHAR(255),
+    PRIMARY KEY (comprador_email, isbn, propietario_email, hora_publicacion, comprador_reviewer),
+    FOREIGN KEY (comprador_email, isbn, propietario_email, hora_publicacion)
+        REFERENCES compra (comprador_email, isbn, propietario_email, hora_publicacion) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS movimiento_puntos_resenia (
     isbn_solicitante                VARCHAR(255)    NOT NULL,
     propietario_id_solicitante      VARCHAR(255)    NOT NULL,

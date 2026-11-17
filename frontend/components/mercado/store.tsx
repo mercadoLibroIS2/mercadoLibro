@@ -74,6 +74,8 @@ import {
   apiArchivarNotificacion,
   apiMarcarTodasNotificacionesLeidas,
   apiCreateReview,
+  apiCreateReviewCompra,
+  apiListReviewsCompras,
   apiListReviews,
   apiListUserReviews,
   apiListCadenas,
@@ -688,6 +690,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         followedBooks,
         backendReviews,
         backendCadenas,
+        backendReviewsCompras,
       ] = await Promise.all([
         apiListIntercambiosEnviados().catch(() => []),
         apiListIntercambiosRecibidos().catch(() => []),
@@ -701,6 +704,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apiGetFollowedBooks(userId).catch(() => []),
         apiListReviews().catch(() => []),
         apiListCadenas().catch(() => []),
+        apiListReviewsCompras().catch(() => []),
       ])
 
       const backendTrades: TradeRequest[] = [
@@ -769,8 +773,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : prev.books
 
         let mergedReviews = prev.reviews
-        if (backendReviews && backendReviews.length > 0) {
-          const mappedReviews: Review[] = backendReviews.map((r) => {
+        if ((backendReviews && backendReviews.length > 0) || (backendReviewsCompras && backendReviewsCompras.length > 0)) {
+          const mappedReviews: Review[] = (backendReviews || []).map((r) => {
             const reqIsbn = r.intercambioId?.isbnSolicitante || (r.intercambioId as any)?.isbnSolicitada || ""
             const reqProp = r.intercambioId?.propietarioIdSolicitante || (r.intercambioId as any)?.propietarioSolicitada || ""
             const reqHora = r.intercambioId?.horaDePublicacionSolicitante || (r.intercambioId as any)?.horaSolicitada || ""
@@ -793,6 +797,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               bookTitle: matchedBook?.title || `Libro (${reqIsbn || "Intercambio"})`,
             }
           })
+          // Reseñas de compras: el id del trade sigue el formato de compraResponseToTrade
+          for (const r of backendReviewsCompras || []) {
+            const tradeId = `compra:${r.compradorEmail}|${r.isbn}|${r.propietarioEmail}|${r.horaPublicacion}`
+            const fromUser = prev.users.find((u) => isUserMatch(u, r.emailReviewer))
+            mappedReviews.push({
+              id: `rev-compra-${tradeId}-${r.compradorReviewer ? "comprador" : "vendedor"}`,
+              tradeId,
+              fromUserId: r.emailReviewer,
+              fromUserName: fromUser?.name || r.emailReviewer.split("@")[0],
+              toUserId: r.emailReseniado,
+              rating: r.calificacion,
+              comment: r.comentario || "",
+              date: r.horaPublicacion,
+              bookTitle: backendTrades.find((t) => t.id === tradeId)?.requestedBookTitle || `Libro (${r.isbn})`,
+            })
+          }
           const existingIds = new Set(prev.reviews.map((rev) => rev.id))
           const newReviews = mappedReviews.filter((mr) => !existingIds.has(mr.id))
           if (newReviews.length > 0) {
@@ -1874,7 +1894,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       const trade = state.trades.find((t) => t.id === tradeId)
       const intercambioId = parseIntercambioId(tradeId)
-      const isRealTrade = Boolean(intercambioId) && hasBackendSession()
+      const compraId = parseCompraId(tradeId)
+      const isRealTrade = Boolean(intercambioId || compraId) && hasBackendSession()
+      if (compraId && isRealTrade) {
+        try {
+          await apiCreateReviewCompra({
+            ...compraId,
+            calificacion: Math.min(5, Math.max(1, Math.round(rating))),
+            comentario: comment || "",
+          })
+        } catch (err) {
+          showToast(`No se pudo publicar la reseña: ${backendErrorMessage(err)}`)
+          return
+        }
+      }
       if (intercambioId && isRealTrade) {
         try {
           // Nombres de campo de IntercambioId (backend), no los de IntercambioIdParams

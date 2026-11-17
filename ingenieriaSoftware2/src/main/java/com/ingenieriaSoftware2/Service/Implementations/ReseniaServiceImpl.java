@@ -54,6 +54,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     private Long puntosResenia = 50L;
 
+    @Autowired(required = false)
+    private com.ingenieriaSoftware2.Service.Implementations.Auxiliares.ReputacionCalculadora reputacionCalculadora;
+
     @Override
     @Transactional
     public ReseniaResponseDTO crearResenia(ReseniaRequestDTO dto, UUID usuarioId) {
@@ -148,6 +151,11 @@ public class ReseniaServiceImpl implements ReseniaService {
         Usuario evaluado = usuarioRepository.findByEmail(emailEvaluado)
                 .orElseThrow(UsuarioNoEncontrado::new);
 
+        if (reputacionCalculadora != null) {
+            // Promedio de trueques y compras
+            reputacionCalculadora.recalcular(evaluado);
+            return;
+        }
         Double promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
 
         evaluado.setReputacionPromedio(promedio != null ? promedio.floatValue() : 0f);
