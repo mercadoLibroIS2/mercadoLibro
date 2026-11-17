@@ -814,11 +814,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               bookTitle: backendTrades.find((t) => t.id === tradeId)?.requestedBookTitle || `Libro (${r.isbn})`,
             })
           }
-          const existingIds = new Set(prev.reviews.map((rev) => rev.id))
-          const newReviews = mappedReviews.filter((mr) => !existingIds.has(mr.id))
-          if (newReviews.length > 0) {
-            mergedReviews = [...newReviews, ...prev.reviews]
-          }
+          // La reseña recién publicada se agrega en el momento con un id local (rev-<timestamp>).
+          // Cuando llega la misma desde el backend se reemplaza, para no mostrarla dos veces.
+          const norm = (v?: string) => (v || "").trim().toLowerCase()
+          const backendKeys = new Set(mappedReviews.map((mr) => `${mr.tradeId}#${norm(mr.fromUserId)}`))
+          const backendContent = new Set(
+            mappedReviews.map((mr) => `${norm(mr.fromUserId)}#${norm(mr.toUserId)}#${mr.rating}#${mr.comment.trim()}`),
+          )
+          const mappedIds = new Set(mappedReviews.map((mr) => mr.id))
+          const keptLocal = prev.reviews.filter((rev) => {
+            if (mappedIds.has(rev.id)) return false
+            if (backendKeys.has(`${rev.tradeId}#${norm(rev.fromUserId)}`)) return false
+            const optimistic = /^rev-\d+$/.test(rev.id)
+            return !(
+              optimistic &&
+              backendContent.has(`${norm(rev.fromUserId)}#${norm(rev.toUserId)}#${rev.rating}#${(rev.comment || "").trim()}`)
+            )
+          })
+          mergedReviews = [...mappedReviews, ...keptLocal]
         }
 
         let mergedTrackedBooks = prev.trackedBooks

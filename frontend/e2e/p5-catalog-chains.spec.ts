@@ -447,7 +447,7 @@ test("Google Books valida el ISBN antes de consultar y muestra un ISBN sin resul
 
   await isbn.fill("978-000-000-0000")
   await page.getByRole("button", { name: "Buscar", exact: true }).click()
-  await expect(page.getByRole("alert").filter({ hasText: "No se encontró ningún libro" })).toBeVisible()
+  await expect(page.getByRole("alert").filter({ hasText: "No encontramos ese ISBN" })).toBeVisible()
 })
 
 test("Google Books expone errores del proveedor sin ocultarlos", async ({ page }) => {
