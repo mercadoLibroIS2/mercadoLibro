@@ -76,12 +76,28 @@ public class IntercambioServiceImpl implements IntercambioService {
     private NotificacionService notificacionService;
 
     private void notificarSeguro(String email, TipoNotificacion tipo) {
+        notificarSeguro(email, tipo, null);
+    }
+
+    private void notificarSeguro(String email, TipoNotificacion tipo, String mensaje) {
         if (notificacionService != null) {
             try {
-                notificacionService.crear(email, tipo);
+                notificacionService.crear(email, tipo, mensaje);
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private static String titulo(Publicacion publicacion) {
+        return publicacion != null && publicacion.getLibro() != null && publicacion.getLibro().getTitulo() != null
+                ? "«" + publicacion.getLibro().getTitulo() + "»"
+                : "un libro";
+    }
+
+    private static String nombreDuenio(Publicacion publicacion) {
+        return publicacion != null && publicacion.getPropietario() != null
+                ? publicacion.getPropietario().getNombre()
+                : "Otro lector";
     }
 
     @Override
@@ -141,7 +157,8 @@ public class IntercambioServiceImpl implements IntercambioService {
             reservarPuntos(proponente, guardado);
         }
 
-        notificarSeguro(request.emailPropietarioSolicitada(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
+        notificarSeguro(request.emailPropietarioSolicitada(), TipoNotificacion.INTERCAMBIO_SOLICITADO,
+                nombreDuenio(ofrecida) + " te ofrece " + titulo(ofrecida) + " a cambio de " + titulo(solicitada) + ".");
 
         return intercambioMapper.toDTO(guardado);
     }
@@ -204,7 +221,8 @@ public class IntercambioServiceImpl implements IntercambioService {
         cancelarComprasPendientes(ofrecida);
         cancelarComprasPendientes(solicitada);
 
-        notificarSeguro(intercambio.getId().getPropietarioIdOfrecida(), TipoNotificacion.INTERCAMBIO_ACEPTADO);
+        notificarSeguro(intercambio.getId().getPropietarioIdOfrecida(), TipoNotificacion.INTERCAMBIO_ACEPTADO,
+                nombreDuenio(solicitada) + " aceptó cambiar " + titulo(solicitada) + " por " + titulo(ofrecida) + ".");
 
         return intercambioMapper.toDTO(intercambio);
     }
@@ -286,10 +304,12 @@ public class IntercambioServiceImpl implements IntercambioService {
         bloquearPublicacion(idPublicacionSolicitada(intercambio)).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         intercambio.setEstado(EstadoIntercambio.COMPLETADO);
 
-        notificarSeguro(proponente.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
-        notificarSeguro(proponente.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
-        notificarSeguro(receptor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
-        notificarSeguro(receptor.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
+        String librosDelTrueque = titulo(intercambio.getPublicacionOfrecida()) + " por " + titulo(intercambio.getPublicacionSolicitante());
+        String bono = "Sumaste +" + PUNTOS_BONIFICACION + " pts por completar el trueque de " + librosDelTrueque + ".";
+        notificarSeguro(proponente.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO, "Se completó el trueque de " + librosDelTrueque + ".");
+        notificarSeguro(proponente.getEmail(), TipoNotificacion.PUNTOS_GANADOS, bono);
+        notificarSeguro(receptor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO, "Se completó el trueque de " + librosDelTrueque + ".");
+        notificarSeguro(receptor.getEmail(), TipoNotificacion.PUNTOS_GANADOS, bono);
 
         return intercambioMapper.toDTO(intercambio);
     }

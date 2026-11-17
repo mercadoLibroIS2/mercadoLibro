@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Mapper;
 
+import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Publicacion;
@@ -22,6 +23,9 @@ public class PublicacionMapper {
                 ? "https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg"
                 : "";
 
+        Usuario propietario = publicacion.getPropietario();
+        String nombrePropietario = propietario != null ? propietario.getNombre() : null;
+
         return new PublicacionResponseDTO(
                 publicacionId,
                 titulo,
@@ -31,7 +35,20 @@ public class PublicacionMapper {
                 publicacion.getValorPuntosSolicitado(),
                 publicacion.getValorReferenciaCalculado(),
                 publicacion.getColorSemaforo(),
-                publicacion.getComentario()
+                publicacion.getComentario(),
+                nombrePropietario,
+                publicacion.getEstadoPublicacion(),
+                propietario != null ? propietario.getReputacionPromedio() : null,
+                publicacion.getLibro() != null && publicacion.getLibro().getPuntuacionExterna() != null
+                        ? publicacion.getLibro().getPuntuacionExterna().doubleValue()
+                        : null,
+                publicacion.getLibro() != null
+                        ? publicacion.getLibro().getCategorias().stream()
+                                .map(c -> c.getNombre())
+                                .sorted()
+                                .findFirst()
+                                .orElse(null)
+                        : null
         );
     }
 }

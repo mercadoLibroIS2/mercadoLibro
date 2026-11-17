@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react"
 import { useStore } from "./store"
+import { BookCoverThumb } from "./cover-thumb"
 import { isUserMatch, type TradeType } from "@/lib/mercado-types"
 
 export function TradeRequestModal() {
@@ -54,9 +55,18 @@ export function TradeRequestModal() {
     (b) => isUserMatch(currentUser, b.ownerId) && b.availability === "DISPONIBLE"
   )
   const canAffordPoints = currentUser.availablePoints >= tradeModalBook.points
+
+  // Compensación del trueque directo: igual que el backend, la diferencia entre los valores de
+  // referencia. Positiva: la paga quien propone (se reserva al enviar); negativa: el dueño al aceptar.
+  const offeredBook = myAvailableBooks.find((b) => b.id === selectedMyBookId)
+  const compensation =
+    offeredBook && tradeModalBook.referencePrice != null && offeredBook.referencePrice != null
+      ? tradeModalBook.referencePrice - offeredBook.referencePrice
+      : null
+  const canAffordCompensation = compensation == null || compensation <= currentUser.availablePoints
   const canSubmit =
     !submitting &&
-    (tradeType === "PUNTOS" ? canAffordPoints : Boolean(selectedMyBookId))
+    (tradeType === "PUNTOS" ? canAffordPoints : Boolean(selectedMyBookId) && canAffordCompensation)
 
   async function handleSubmit() {
     if (!canSubmit || !tradeModalBook) return
@@ -127,17 +137,7 @@ export function TradeRequestModal() {
         <div className="flex flex-col gap-4 overflow-y-auto pt-4">
           {/* Target Book Preview */}
           <div className="flex items-center gap-3.5 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3">
-            {tradeModalBook.coverUrl ? (
-              <img
-                src={tradeModalBook.coverUrl}
-                alt={`Portada de ${tradeModalBook.title}`}
-                className="h-14 w-10 shrink-0 rounded-lg border border-stone-200 object-cover"
-              />
-            ) : (
-              <div className="flex h-14 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-100 text-stone-400">
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
-              </div>
-            )}
+            <BookCoverThumb src={tradeModalBook.coverUrl} className="h-14 w-10" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-stone-900">
                 {tradeModalBook.title}
@@ -262,17 +262,7 @@ export function TradeRequestModal() {
                             : "border-stone-200/90 bg-white hover:border-stone-300 hover:bg-stone-50"
                         }`}
                       >
-                        <div className="flex h-11 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-stone-100">
-                          {myBook.coverUrl ? (
-                            <img
-                              src={myBook.coverUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <BookOpen className="h-4 w-4 text-stone-400" aria-hidden="true" />
-                          )}
-                        </div>
+                        <BookCoverThumb src={myBook.coverUrl} className="h-11 w-8 rounded-md border-0" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-stone-900">
                             {myBook.title}
@@ -290,6 +280,27 @@ export function TradeRequestModal() {
                       </button>
                     )
                   })}
+                </div>
+              )}
+
+              {offeredBook && compensation != null && (
+                <div
+                  className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-relaxed ${
+                    compensation > 0 && !canAffordCompensation
+                      ? "border-rose-200/80 bg-rose-50/70 text-rose-900"
+                      : "border-amber-200/80 bg-amber-50/70 text-amber-950"
+                  }`}
+                >
+                  <Coins className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+                  <span>
+                    {compensation > 0
+                      ? canAffordCompensation
+                        ? `El libro que pedís vale ${compensation} pts más que el tuyo: se reservan ${compensation} pts de tu saldo como compensación al enviar la propuesta.`
+                        : `Este trueque requiere ${compensation} pts de compensación y tenés ${currentUser.availablePoints} pts disponibles.`
+                      : compensation < 0
+                        ? `Tu libro vale ${-compensation} pts más: ${tradeModalBook.ownerName} te los paga como compensación si acepta.`
+                        : "Los dos libros tienen el mismo valor de referencia: no hay compensación en puntos."}
+                  </span>
                 </div>
               )}
             </div>

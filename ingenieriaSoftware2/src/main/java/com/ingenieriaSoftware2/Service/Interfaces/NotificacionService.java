@@ -8,7 +8,12 @@ import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 
 public interface NotificacionService {
-    void crear(String emailDestinatario, TipoNotificacion tipo);
+    default void crear(String emailDestinatario, TipoNotificacion tipo) {
+        crear(emailDestinatario, tipo, null);
+    }
+
+    /** {@code mensaje} da el contexto (qué libro, quién) que se muestra en la notificación. */
+    void crear(String emailDestinatario, TipoNotificacion tipo, String mensaje);
 
     Page<NotificacionResponseDTO> listar(UUID usuarioId, boolean soloNoLeidas, Pageable pageable);
 

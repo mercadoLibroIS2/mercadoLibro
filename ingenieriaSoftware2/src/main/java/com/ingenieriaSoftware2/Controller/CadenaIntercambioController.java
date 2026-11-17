@@ -23,8 +23,8 @@ public class CadenaIntercambioController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    public ResponseEntity<List<CadenaIntercambioResponseDTO>> listarCadenas() {
-        return ResponseEntity.ok(cadenaIntercambioService.listarCadenas());
+    public ResponseEntity<List<CadenaIntercambioResponseDTO>> listarCadenas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(cadenaIntercambioService.listarCadenas(resolveUsuarioId(usuario)));
     }
 
     @PostMapping

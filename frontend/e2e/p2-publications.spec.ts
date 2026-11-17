@@ -5,7 +5,10 @@ import { CONDITION_TO_ESTADO, type EstadoFisico } from "../lib/api"
 const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 const testUser = SEED_USERS[0] // Lucía Fernández (lucia@mercadolibro.demo)
 
-async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: boolean } = {}) {
+async function mockBackend(
+  page: Page,
+  options: { skipInitialAvailableFetch?: boolean; reservedIsbn?: string } = {},
+) {
   const database = {
     publications: SEED_BOOKS.map((book) => ({
       isbn: book.isbn,
@@ -18,10 +21,28 @@ async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: bo
       valor_puntos_solicitado: book.points,
       valor_referencia_calculado: book.referencePrice || 50,
       comentario: book.description || "",
-      estado_publicacion: "DISPONIBLE",
+      estado_publicacion: book.isbn === options.reservedIsbn ? "RESERVADA" : "DISPONIBLE",
       color_semaforo: "VERDE",
     })),
   }
+
+  const toDto = (pub: (typeof database.publications)[number]) => ({
+    publicacionId: {
+      isbn: pub.isbn,
+      emailPropietario: pub.email_propietario,
+      horaPublicacion: pub.hora_publicacion,
+    },
+    titulo: pub.titulo,
+    autor: pub.autor,
+    portadaUrl: pub.portadaUrl,
+    estadoFisico: pub.estado_fisico,
+    valorPuntosSolicitado: pub.valor_puntos_solicitado,
+    valorReferenciaCalculado: pub.valor_referencia_calculado,
+    colorSemaforo: pub.color_semaforo,
+    comentario: pub.comentario,
+    nombrePropietario: SEED_USERS.find((user) => user.email === pub.email_propietario)?.name,
+    estadoPublicacion: pub.estado_publicacion,
+  })
 
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
@@ -60,6 +81,15 @@ async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: bo
 
     if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 200, body: "" })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/publicaciones/mis-publicaciones") && method === "GET") {
+      await route.fulfill({
+        json: database.publications
+          .filter((pub) => pub.email_propietario === testUser.email && pub.estado_publicacion !== "ELIMINADA")
+          .map(toDto),
+      })
       return
     }
 
@@ -230,6 +260,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
 
   const newIsbn = "979-1-23456-789-0"
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Puntos solicitados *").fill("0")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("Ingresá un número de puntos válido mayor a 0")).toBeVisible()
@@ -244,6 +275,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   expect(database.publications).toHaveLength(SEED_BOOKS.length)
 
   await page.getByLabel("ISBN del libro *").fill(newIsbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Puntos solicitados *").fill("1")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
@@ -263,6 +295,7 @@ test("publicar registra todos los datos opcionales y presenta el libro en el cat
 
   const targetSeed = SEED_BOOKS[1] // Clean Code
   await page.getByLabel("ISBN del libro *").fill(targetSeed.isbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
   await page.getByLabel("Estado físico *").selectOption("Como nuevo")
   await page.getByLabel("Puntos solicitados *").fill("120")
   await page.getByLabel("Descripción y estado (opcional)").fill("Ejemplar cuidado, sin marcas.")
@@ -359,7 +392,7 @@ test("no permite eliminar una publicación reservada con un intercambio en curso
       ),
     },
   )
-  await mockBackend(page, { skipInitialAvailableFetch: true })
+  await mockBackend(page, { skipInitialAvailableFetch: true, reservedIsbn: SEED_BOOKS[1].isbn })
   await signIn(page)
   await bookCard(page, "Clean Code").click()
 

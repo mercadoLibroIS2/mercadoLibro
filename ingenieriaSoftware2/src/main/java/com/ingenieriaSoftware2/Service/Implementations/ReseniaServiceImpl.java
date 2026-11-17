@@ -54,6 +54,9 @@ public class ReseniaServiceImpl implements ReseniaService {
 
     private Long puntosResenia = 50L;
 
+    @Autowired(required = false)
+    private com.ingenieriaSoftware2.Service.Implementations.Auxiliares.ReputacionCalculadora reputacionCalculadora;
+
     @Override
     @Transactional
     public ReseniaResponseDTO crearResenia(ReseniaRequestDTO dto, UUID usuarioId) {
@@ -116,8 +119,10 @@ public class ReseniaServiceImpl implements ReseniaService {
 
         if (notificacionService != null) {
             try {
-                notificacionService.crear(emailEvaluado, TipoNotificacion.RESENIA_RECIBIDA);
-                notificacionService.crear(email, TipoNotificacion.PUNTOS_GANADOS);
+                notificacionService.crear(emailEvaluado, TipoNotificacion.RESENIA_RECIBIDA,
+                        reviewer.getNombre() + " te calificó con " + dto.calificacion() + " de 5 estrellas.");
+                notificacionService.crear(email, TipoNotificacion.PUNTOS_GANADOS,
+                        "Sumaste +" + puntosResenia + " pts por dejar una reseña.");
             } catch (Exception ignored) {
             }
         }
@@ -146,6 +151,11 @@ public class ReseniaServiceImpl implements ReseniaService {
         Usuario evaluado = usuarioRepository.findByEmail(emailEvaluado)
                 .orElseThrow(UsuarioNoEncontrado::new);
 
+        if (reputacionCalculadora != null) {
+            // Promedio de trueques y compras
+            reputacionCalculadora.recalcular(evaluado);
+            return;
+        }
         Double promedio = reseniaRepository.calcularPromedioRecibido(emailEvaluado);
 
         evaluado.setReputacionPromedio(promedio != null ? promedio.floatValue() : 0f);

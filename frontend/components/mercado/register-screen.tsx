@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { BookOpen, Gift, UserPlus, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { useStore } from "./store"
+import { SlowServerHint } from "./slow-server-hint"
+import { PUNTOS_INICIALES } from "@/lib/puntos"
 import { Field } from "./field"
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -39,8 +41,6 @@ export function RegisterScreen() {
     const next: Partial<FormState> = {}
     if (!form.name.trim()) next.name = "Ingresá tu nombre completo"
     else if (form.name.trim().length < 3) next.name = "El nombre debe tener al menos 3 caracteres"
-    if (!form.username.trim()) next.username = "Elegí un nombre de usuario"
-    else if (form.username.includes(" ")) next.username = "El usuario no puede tener espacios"
     if (!form.email.trim()) next.email = "Ingresá tu email"
     else if (!emailRe.test(form.email)) next.email = "El email no tiene un formato válido"
     if (!form.password) next.password = "Creá una contraseña"
@@ -55,7 +55,8 @@ export function RegisterScreen() {
     try {
       const res = await signUpWithSupabase(
         form.name.trim(),
-        form.username.trim().toLowerCase(),
+        // El backend no guarda un usuario aparte: el @usuario se deriva del nombre
+        form.name.trim().toLowerCase().replace(/\s+/g, ""),
         form.email.trim(),
         form.password
       )
@@ -97,7 +98,7 @@ export function RegisterScreen() {
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3.5">
           <Gift className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
           <p className="text-xs sm:text-sm text-amber-950 leading-relaxed">
-            <strong className="font-semibold">¡100 puntos virtuales de regalo!</strong> Al registrarte recibirás automáticamente 100 puntos en tu billetera (RF14) para tu primer intercambio.
+            <strong className="font-semibold">¡{PUNTOS_INICIALES} puntos de regalo!</strong> Al registrarte se acreditan automáticamente en tu billetera para tus primeros intercambios.
           </p>
         </div>
 
@@ -130,15 +131,6 @@ export function RegisterScreen() {
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
             error={errors.name}
-          />
-          <Field
-            id="reg-username"
-            label="Nombre de usuario"
-            placeholder="anagarcia"
-            autoComplete="username"
-            value={form.username}
-            onChange={(e) => set("username", e.target.value)}
-            error={errors.username}
           />
           <Field
             id="reg-email"
@@ -185,10 +177,11 @@ export function RegisterScreen() {
             ) : (
               <>
                 <UserPlus className="h-4.5 w-4.5" aria-hidden="true" />
-                <span>Crear cuenta y recibir 100 pts</span>
+                <span>Crear cuenta y recibir {PUNTOS_INICIALES} pts</span>
               </>
             )}
           </button>
+          <SlowServerHint active={loading} />
         </form>
 
         <p className="mt-6 border-t border-stone-100 pt-5 text-center text-sm text-stone-600">

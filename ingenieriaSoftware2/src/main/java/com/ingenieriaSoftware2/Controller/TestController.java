@@ -3,8 +3,11 @@ package com.ingenieriaSoftware2.Controller;
 import com.ingenieriaSoftware2.DTO.Request.UsuarioRequestDTO;
 import com.ingenieriaSoftware2.Service.Interfaces.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -22,6 +25,17 @@ public class TestController {
     @Autowired
     private AuthService authService;
 
+    // Los endpoints de diagnóstico (borrar/recrear el esquema, registro con stacktrace, listado
+    // de tablas) solo existen si se habilitan explícitamente. Nunca activarlo en producción.
+    @Value("${app.debug-endpoints.enabled:false}")
+    private boolean debugEndpointsEnabled;
+
+    private void exigirDebugHabilitado() {
+        if (!debugEndpointsEnabled) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+    }
+
     @GetMapping("/ping")
     public Map<String, String> ping() {
         return Map.of("status", "ok", "message", "pong");
@@ -29,6 +43,7 @@ public class TestController {
 
     @GetMapping("/db-tables")
     public List<Map<String, Object>> getTables() {
+        exigirDebugHabilitado();
         return jdbcTemplate.queryForList(
                 "SELECT table_name, column_name, data_type, is_nullable " +
                 "FROM information_schema.columns " +
@@ -39,6 +54,7 @@ public class TestController {
 
     @PostMapping("/debug-register")
     public Map<String, Object> debugRegister(@RequestBody UsuarioRequestDTO dto) {
+        exigirDebugHabilitado();
         Map<String, Object> result = new HashMap<>();
         try {
             result.put("success", true);
@@ -60,6 +76,7 @@ public class TestController {
 
     @PostMapping("/reset-and-init-schema")
     public Map<String, Object> resetAndInitSchema() {
+        exigirDebugHabilitado();
         Map<String, Object> res = new HashMap<>();
         try {
             // Drop old conflicting tables

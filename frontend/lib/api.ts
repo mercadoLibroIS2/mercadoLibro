@@ -45,6 +45,11 @@ export interface PublicacionResponse {
   valorReferenciaCalculado: number
   colorSemaforo: ColorSemaforo
   comentario: string
+  nombrePropietario?: string | null
+  estadoPublicacion?: "DISPONIBLE" | "RESERVADA" | "VENDIDA" | "ELIMINADA"
+  reputacionPropietario?: number | null
+  puntuacionExterna?: number | null
+  categoria?: string | null
 }
 
 export interface AuthResponse {
@@ -99,6 +104,9 @@ export interface IntercambioResponse {
     | "CONFIRMADO_POR_RECEPTOR"
   puntosComprometidos: number
   motivoRechazo?: string
+  nombrePropietarioOfrecida?: string | null
+  nombrePropietarioSolicitada?: string | null
+  emailPagaCompensacion?: string | null
 }
 
 export interface IntercambioIdParams {
@@ -133,6 +141,8 @@ export function getBackendUrl(): string {
   )
 }
 
+const REQUEST_TIMEOUT_MS = 90_000
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -149,7 +159,9 @@ async function request<T>(
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 6000)
+  // Render apaga el backend inactivo y tarda ~60 s en despertar: con 6 s el registro se
+  // cortaba aunque la cuenta se creara. 90 s cubre el arranque en frío.
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
     const response = await fetch(`${baseUrl}${path}`, {
@@ -179,7 +191,9 @@ async function request<T>(
   } catch (err: any) {
     clearTimeout(timeoutId)
     if (err.name === "AbortError") {
-      throw new Error("El servidor tardó demasiado en responder (tiempo de espera agotado)")
+      throw new Error(
+        "El servidor no respondió a tiempo. Si estaba inactivo puede tardar un minuto en despertar: probá de nuevo."
+      )
     }
     throw err
   }
@@ -268,6 +282,7 @@ export async function apiCreatePublication(dto: {
   estadoFisico: EstadoFisico
   valorPuntosSolicitado: number
   comentario?: string
+  categoria?: string
 }): Promise<PublicacionResponse> {
   return request<PublicacionResponse>("/api/publicaciones/publicar", {
     method: "POST",
@@ -290,7 +305,8 @@ export async function apiEditPublication(
   })
   return request<void>(`/api/publicaciones/editar?${params.toString()}`, {
     method: "PUT",
-    body: JSON.stringify(dto),
+    // El backend valida el mismo DTO que al publicar, que exige el ISBN
+    body: JSON.stringify({ isbn: id.isbn, ...dto }),
   })
 }
 
@@ -321,6 +337,21 @@ export async function apiFindGoogleBookByIsbn(
   } catch (err: any) {
     if (err.message?.includes("404")) return null
     throw err
+  }
+}
+
+/**
+ * Referencia que usará el backend para el semáforo y la categoría ya asignada al libro.
+ * null si el libro todavía no está en la base (se importa al publicarlo por primera vez).
+ */
+export async function apiGetReferenciaLibro(
+  isbn: string,
+  estadoFisico: EstadoFisico,
+): Promise<{ valorReferencia: number | null; categoria: string | null } | null> {
+  try {
+    return await request(`/api/libro/${encodeURIComponent(isbn)}/referencia?estadoFisico=${estadoFisico}`)
+  } catch {
+    return null
   }
 }
 
@@ -469,6 +500,40 @@ export async function apiListUserReviews(email: string): Promise<ReseniaBackendR
   }
 }
 
+export interface ReseniaCompraResponse {
+  compradorEmail: string
+  isbn: string
+  propietarioEmail: string
+  horaPublicacion: string
+  compradorReviewer: boolean
+  emailReviewer: string
+  emailReseniado: string
+  calificacion: number
+  comentario: string | null
+}
+
+export async function apiListReviewsCompras(): Promise<ReseniaCompraResponse[]> {
+  try {
+    return await request<ReseniaCompraResponse[]>("/api/resenia/compras")
+  } catch {
+    return []
+  }
+}
+
+export async function apiCreateReviewCompra(dto: {
+  compradorEmail: string
+  isbn: string
+  propietarioEmail: string
+  horaPublicacion: string
+  calificacion: number
+  comentario?: string
+}): Promise<ReseniaCompraResponse> {
+  return request<ReseniaCompraResponse>("/api/resenia/compra", {
+    method: "POST",
+    body: JSON.stringify(dto),
+  })
+}
+
 export async function apiCreateReview(dto: {
   intercambioId: any
   calificacion: number
@@ -510,21 +575,25 @@ export interface CompraIdParams {
   horaPublicacion: string
 }
 
+// Formato: "isbn|email|hora:isbn|email|hora". Las horas ISO también contienen ":",
+// así que no se puede separar por ":" directamente: se separa por "|" y el tramo
+// central ("hora:isbn") se corta en su último ":" (el ISBN nunca contiene ":").
 export function parseIntercambioId(id: string): IntercambioIdParams | null {
-  if (id.startsWith("compra:") || !id.includes(":")) return null
-  const [reqPart, offPart] = id.split(":")
-  if (!reqPart || !offPart) return null
-  const reqSub = reqPart.split("|")
-  const offSub = offPart.split("|")
-  if (reqSub.length < 3 || offSub.length < 3) return null
-  return {
-    isbnSolicitada: reqSub[0],
-    propietarioSolicitada: reqSub[1],
-    horaSolicitada: reqSub[2],
-    isbnOfrecida: offSub[0],
-    propietarioOfrecida: offSub[1],
-    horaOfrecida: offSub[2],
+  if (id.startsWith("compra:")) return null
+  const parts = id.split("|")
+  if (parts.length !== 5) return null
+  const middle = parts[2]
+  const sep = middle.lastIndexOf(":")
+  if (sep <= 0) return null
+  const params = {
+    isbnSolicitada: parts[0],
+    propietarioSolicitada: parts[1],
+    horaSolicitada: middle.slice(0, sep),
+    isbnOfrecida: middle.slice(sep + 1),
+    propietarioOfrecida: parts[3],
+    horaOfrecida: parts[4],
   }
+  return Object.values(params).every(Boolean) ? params : null
 }
 
 export function parseCompraId(id: string): CompraIdParams | null {
@@ -606,6 +675,7 @@ export interface NotificacionBackendResponse {
   leida: boolean
   archivada: boolean
   fechaCreacion: string
+  mensaje?: string | null
 }
 
 export async function apiListNotificaciones(soloNoLeidas = false): Promise<NotificacionBackendResponse[]> {
@@ -633,9 +703,31 @@ export async function apiMarcarTodasNotificacionesLeidas(): Promise<void> {
 // CADENAS
 // -------------------------------------------------------------
 
-export async function apiListCadenas(): Promise<any[]> {
+export interface CadenaPasoResponse {
+  emailEntrega: string
+  nombreEntrega: string
+  emailRecibe: string
+  isbn: string
+  horaPublicacion: string
+  titulo?: string | null
+  autor?: string | null
+  estadoFisico?: EstadoFisico | null
+  valorPuntosSolicitado?: number | null
+  confirmado: boolean
+}
+
+export interface CadenaResponse {
+  id: string
+  puntosBonus: number
+  estado: "PROPUESTA" | "EN_CURSO" | "COMPLETADA" | "CANCELADA"
+  participantesEmails: string[]
+  pasos: CadenaPasoResponse[]
+}
+
+/** El backend detecta cadenas nuevas al listar y devuelve solo las del usuario logueado. */
+export async function apiListCadenas(): Promise<CadenaResponse[]> {
   try {
-    return await request<any[]>("/api/cadenaIntercambio")
+    return await request<CadenaResponse[]>("/api/cadenaIntercambio")
   } catch {
     return []
   }

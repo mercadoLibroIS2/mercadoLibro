@@ -4,6 +4,15 @@ import com.ingenieriaSoftware2.Exception.Usuario.UsuarioYaExiste;
 import com.ingenieriaSoftware2.Exception.Intercambio.AccionNoPermitidaException;
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoDisponibleException;
 import com.ingenieriaSoftware2.Exception.Publicacion.PublicacionNoExisteException;
+import com.ingenieriaSoftware2.Exception.Compra.CompraNoEncontradaException;
+import com.ingenieriaSoftware2.Exception.Compra.EstadoCompraInvalidoException;
+import com.ingenieriaSoftware2.Exception.Intercambio.EstadoIntercambioInvalidoException;
+import com.ingenieriaSoftware2.Exception.Intercambio.IntercambioNoExiste;
+import com.ingenieriaSoftware2.Exception.Intercambio.PuntosInsuficientesException;
+import com.ingenieriaSoftware2.Exception.Libro.LibroNoExisteException;
+import com.ingenieriaSoftware2.Exception.Usuario.ContraseniaIncorrecta;
+import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoAutenticadoException;
+import com.ingenieriaSoftware2.Exception.Usuario.UsuarioNoEncontrado;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -72,6 +81,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PublicacionNoExisteException.class)
     public ResponseEntity<Map<String, Object>> handlePublicacionNoExiste(PublicacionNoExisteException e) {
         return handlePublicacionError(HttpStatus.NOT_FOUND, "PublicacionNoExiste", e.getMessage());
+    }
+
+    // Excepciones de dominio: sin estos handlers caían en el catch-all y respondían 500.
+    @ExceptionHandler({IntercambioNoExiste.class, UsuarioNoEncontrado.class,
+            LibroNoExisteException.class, CompraNoEncontradaException.class})
+    public ResponseEntity<Map<String, Object>> handleNoEncontrado(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.NOT_FOUND, e.getClass().getSimpleName(), e.getMessage());
+    }
+
+    @ExceptionHandler({EstadoIntercambioInvalidoException.class, EstadoCompraInvalidoException.class,
+            PuntosInsuficientesException.class})
+    public ResponseEntity<Map<String, Object>> handleConflicto(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.CONFLICT, e.getClass().getSimpleName(), e.getMessage());
+    }
+
+    @ExceptionHandler({AtributoFueraDeRangoException.class, ContraseniaIncorrecta.class})
+    public ResponseEntity<Map<String, Object>> handleSolicitudInvalida(RuntimeException e) {
+        return handlePublicacionError(HttpStatus.BAD_REQUEST, e.getClass().getSimpleName(), e.getMessage());
+    }
+
+    @ExceptionHandler(UsuarioNoAutenticadoException.class)
+    public ResponseEntity<Map<String, Object>> handleNoAutenticado(UsuarioNoAutenticadoException e) {
+        return handlePublicacionError(HttpStatus.UNAUTHORIZED, "UsuarioNoAutenticado", e.getMessage());
     }
 
     private ResponseEntity<Map<String, Object>> handlePublicacionError(HttpStatus status, String error, String message) {

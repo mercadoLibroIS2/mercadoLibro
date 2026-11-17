@@ -16,6 +16,8 @@ public record CompraResponseDTO(
         EstadoCompra estado,
         Instant fecha,
         String infoEnvio,
-        String motivoCancelacion
+        String motivoCancelacion,
+        String nombreVendedor,
+        String nombreComprador
 ) {
 }

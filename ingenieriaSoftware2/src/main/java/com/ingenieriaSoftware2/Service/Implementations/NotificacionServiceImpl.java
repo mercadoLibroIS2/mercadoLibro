@@ -28,12 +28,13 @@ public class NotificacionServiceImpl implements NotificacionService {
 
     @Override
     @Transactional
-    public void crear(String emailDestinatario, TipoNotificacion tipo) {
+    public void crear(String emailDestinatario, TipoNotificacion tipo, String mensaje) {
         Usuario usuario = usuarioRepository.findByEmail(emailDestinatario).orElseThrow(()-> new UsuarioNoEncontrado());
 
         Notificacion notificacion = new Notificacion();
         notificacion.setUsuario(usuario);
         notificacion.setTipo(tipo);
+        notificacion.setMensaje(mensaje != null && mensaje.length() > 255 ? mensaje.substring(0, 255) : mensaje);
         notificacionRepository.save(notificacion);
     }
 

@@ -40,15 +40,22 @@ export function calculateReferencePrice(
 }
 
 /**
- * Evaluates requested points against reference price (RF30, RF43, RF44)
+ * Evaluates requested points against reference price (RF30, RF43, RF44).
+ * Si la publicación ya tiene el valor de referencia calculado por el backend, se usa ese
+ * (`referenceOverride`) para que el semáforo coincida con el que guarda el servidor; la
+ * fórmula local queda solo como estimación al publicar.
  */
 export function evaluatePriceDeal(
   points: number,
   category: string,
   condition: Condition,
-  externalRating = 4.2
+  externalRating = 4.2,
+  referenceOverride?: number
 ): DealEvaluation {
-  const ref = calculateReferencePrice(category, condition, externalRating)
+  const ref =
+    referenceOverride && referenceOverride > 0
+      ? referenceOverride
+      : calculateReferencePrice(category, condition, externalRating)
   const ratio = points / ref
 
   let deal: "green" | "yellow" | "red"
@@ -59,11 +66,11 @@ export function evaluatePriceDeal(
     deal = "green"
     label = "Valor: Oportunidad"
     hint = `Muy por debajo del valor de referencia sugerido (${ref} pts).`
-  } else if (ratio <= 1.15) {
+  } else if (ratio <= 1.1) {
     deal = "green"
     label = "Valor: Justo"
     hint = `Acorde al estado ${condition.toLowerCase()} y valoración del libro (${ref} pts).`
-  } else if (ratio <= 1.4) {
+  } else if (ratio <= 1.3) {
     deal = "yellow"
     label = "Valor: Levemente elevado"
     hint = `Un poco superior al valor de referencia sugerido (${ref} pts).`

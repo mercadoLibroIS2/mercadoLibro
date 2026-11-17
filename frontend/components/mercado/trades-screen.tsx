@@ -15,8 +15,10 @@ import {
   Star,
 } from "lucide-react"
 import { useStore } from "./store"
+import { BookCoverThumb } from "./cover-thumb"
 import { ChainsView } from "./chains-view"
 import { isUserMatch, type TradeRequest } from "@/lib/mercado-types"
+import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA } from "@/lib/puntos"
 
 type TradeTab = "recibidas" | "enviadas" | "en_curso" | "historial" | "cadenas"
 
@@ -100,7 +102,7 @@ export function TradesScreen() {
       {/* Tabs */}
       <div
         aria-label="Categorías de intercambios"
-        className="flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+        className="flex w-full gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none scroll-fade-x lg-no-fade"
       >
         <TabPill
           active={activeTab === "recibidas"}
@@ -242,6 +244,15 @@ function renderOngoingAction(
   onConfirmReceipt?: (id: string) => void
 ) {
   if (trade.type === "PUNTOS") {
+    if (isRequester && !trade.ownerConfirmed) {
+      // El backend solo acepta la recepción después de que el vendedor registró la entrega
+      return (
+        <span className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs sm:text-sm font-semibold text-amber-900">
+          <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Esperando que el vendedor registre la entrega</span>
+        </span>
+      )
+    }
     if (isRequester) {
       return (
         <button
@@ -250,7 +261,7 @@ function renderOngoingAction(
           className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
         >
           <CheckCheck className="h-4 w-4" aria-hidden="true" />
-          <span>Confirmar Recepción (+10 pts)</span>
+          <span>Confirmar Recepción</span>
         </button>
       )
     }
@@ -293,7 +304,7 @@ function renderOngoingAction(
       className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-800 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
     >
       <CheckCheck className="h-4 w-4" aria-hidden="true" />
-      <span>Confirmar Recepción de Libro (+5 pts)</span>
+      <span>Confirmar Recepción de Libro (+{BONO_INTERCAMBIO_DIRECTO} pts)</span>
     </button>
   )
 }
@@ -404,15 +415,7 @@ function TradeList({
                   }
                   className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                 >
-                  {requestedBook?.coverUrl ? (
-                    <img
-                      src={requestedBook.coverUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <BookOpen className="h-5 w-5" aria-hidden="true" />
-                  )}
+                  <BookCoverThumb src={requestedBook?.coverUrl} className="h-full w-full rounded-none border-0 bg-transparent" iconClassName="h-5 w-5" />
                 </button>
 
                 <div className="min-w-0 flex-1">
@@ -425,7 +428,7 @@ function TradeList({
                     onClick={() => requestedBook && onBookClick(requestedBook.id)}
                     className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
-                    {requestedBook?.title || "Libro"}
+                    {requestedBook?.title || trade.requestedBookTitle || "Libro"}
                   </button>
                   <button
                     type="button"
@@ -473,15 +476,7 @@ function TradeList({
                       }
                       className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-sky-50 text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
-                      {offeredBook?.coverUrl ? (
-                        <img
-                          src={offeredBook.coverUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <BookOpen className="h-5 w-5" aria-hidden="true" />
-                      )}
+                      <BookCoverThumb src={offeredBook?.coverUrl} className="h-full w-full rounded-none border-0 bg-transparent text-sky-700" iconClassName="h-5 w-5" />
                     </button>
 
                     <div className="min-w-0 flex-1">
@@ -494,7 +489,7 @@ function TradeList({
                         onClick={() => offeredBook && onBookClick(offeredBook.id)}
                         className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 transition-colors hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                       >
-                        {offeredBook?.title || "Libro ofrecido"}
+                        {offeredBook?.title || trade.offeredBookTitle || "Libro ofrecido"}
                       </button>
                       <button
                         type="button"
@@ -508,6 +503,25 @@ function TradeList({
                 )}
               </div>
             </div>
+
+            {trade.type === "DIRECTO" && trade.points > 0 && trade.status !== "COMPLETADO" && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-900">
+                <Coins className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+                <span>
+                  {(() => {
+                    if (!trade.compensationPayerId) {
+                      return `Incluye una compensación de ${trade.points} pts por la diferencia de valor entre los libros (la paga quien entrega el libro de menor valor).`
+                    }
+                    const payerIsRequester = isUserMatch({ id: trade.compensationPayerId, email: trade.compensationPayerId }, trade.requesterId)
+                    const payerName = payerIsRequester ? trade.requesterName : trade.ownerName
+                    const otherName = payerIsRequester ? trade.ownerName : trade.requesterName
+                    return isUserMatch(currentUser, trade.compensationPayerId)
+                      ? `Pagás ${trade.points} pts de compensación a ${otherName}: tu libro vale menos que el que recibís.`
+                      : `${payerName} te paga ${trade.points} pts de compensación: tu libro vale más que el suyo.`
+                  })()}
+                </span>
+              </p>
+            )}
 
             {/* Footer Actions */}
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3.5">
@@ -620,7 +634,7 @@ function TradeList({
                             className="h-4 w-4 fill-amber-500 text-amber-600"
                             aria-hidden="true"
                           />
-                          <span>Calificar (+5 pts)</span>
+                          <span>Calificar (+{BONO_RESENIA} pts)</span>
                         </button>
                       )}
                     </div>

@@ -20,7 +20,13 @@ public class CompraMapper {
                 compra.getEstado(),
                 compra.getTimestamp(),
                 compra.getInfoEnvio(),
-                compra.getMotivoCancelacion()
+                compra.getMotivoCancelacion(),
+                nombreDe(compra.getPropietario()),
+                nombreDe(compra.getComprador())
         );
+    }
+
+    private static String nombreDe(com.ingenieriaSoftware2.Entity.Usuario usuario) {
+        return usuario != null ? usuario.getNombre() : null;
     }
 }

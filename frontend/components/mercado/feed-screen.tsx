@@ -25,6 +25,8 @@ export function FeedScreen() {
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredBooks = books.filter((book) => {
+    // Los ya intercambiados o eliminados no se muestran (los reservados sí, marcados como tales)
+    if (book.availability === "INTERCAMBIADO" || book.availability === "ELIMINADO") return false
     if (
       (book.title.startsWith("Libro (") && book.author === "Autor desconocido") ||
       book.author === "Autor desconocido" ||
@@ -120,7 +122,7 @@ export function FeedScreen() {
       </div>
 
       {/* Horizontal Category Scroll */}
-      <div className="w-full flex gap-2 overflow-x-auto pb-2 scrollbar-none" role="group" aria-label="Filtrar por categoría">
+      <div className="w-full flex gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none scroll-fade-x" role="group" aria-label="Filtrar por categoría">
         {allCategories.map((cat) => {
           const active = selectedCategory === cat
           return (

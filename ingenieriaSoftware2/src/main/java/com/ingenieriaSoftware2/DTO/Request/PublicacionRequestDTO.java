@@ -18,6 +18,10 @@ public record PublicacionRequestDTO(
         Integer valorPuntosSolicitado,
 
         @Size(max = 255)
-        String comentario
+        String comentario,
+
+        // Opcional: si el libro todavía no tiene categoría, se le asigna esta
+        @Size(max = 100)
+        String categoria
 ) {
 }

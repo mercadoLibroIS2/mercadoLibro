@@ -15,6 +15,10 @@ public record IntercambioResponseDTO(
         LocalDateTime horaPublicacionSolicitada,
         EstadoIntercambio estado,
         Integer puntosComprometidos,
-        String motivoRechazo
+        String motivoRechazo,
+        String nombrePropietarioOfrecida,
+        String nombrePropietarioSolicitada,
+        // Quién paga puntosComprometidos (el dueño del libro de menor valor); null si no hay diferencia
+        String emailPagaCompensacion
 ) {
 }

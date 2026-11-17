@@ -65,6 +65,8 @@ ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'INTERCAMBIO_COMPLETADO';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'RESENIA_RECIBIDA';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GANADOS';
 ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'PUNTOS_GASTADOS';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'LIBRO_SEGUIDO_PUBLICADO';
+ALTER TYPE tipo_notificacion ADD VALUE IF NOT EXISTS 'CADENA_DETECTADA';
 
 
 -- =======================================================
@@ -177,6 +179,18 @@ CREATE TABLE IF NOT EXISTS cadena_participantes (
     cadena_id  UUID NOT NULL REFERENCES cadena_intercambio (id) ON DELETE CASCADE,
     usuario_id UUID NOT NULL REFERENCES usuario (id) ON DELETE CASCADE,
     PRIMARY KEY (cadena_id, usuario_id)
+);
+
+-- Cada eslabón: email_entrega entrega su publicación (isbn + hora_publicacion) a email_recibe
+CREATE TABLE IF NOT EXISTS cadena_paso (
+    id               UUID PRIMARY KEY,
+    cadena_id        UUID NOT NULL REFERENCES cadena_intercambio (id) ON DELETE CASCADE,
+    orden            INTEGER NOT NULL,
+    email_entrega    VARCHAR(255) NOT NULL,
+    email_recibe     VARCHAR(255) NOT NULL,
+    isbn             VARCHAR(255) NOT NULL,
+    hora_publicacion TIMESTAMP NOT NULL,
+    confirmado       BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 
@@ -325,6 +339,20 @@ CREATE TABLE IF NOT EXISTS movimiento_puntos_intercambio (
 -- MOVIMIENTOS DE PUNTOS - RESEÑA
 -- =======================================================
 
+-- Reseñas de compras por puntos (las de trueques están atadas a intercambio)
+CREATE TABLE IF NOT EXISTS resenia_compra (
+    comprador_email    VARCHAR(255) NOT NULL,
+    isbn               VARCHAR(255) NOT NULL,
+    propietario_email  VARCHAR(255) NOT NULL,
+    hora_publicacion   TIMESTAMP    NOT NULL,
+    comprador_reviewer BOOLEAN      NOT NULL,
+    calificacion       SMALLINT     NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+    comentario         VARCHAR(255),
+    PRIMARY KEY (comprador_email, isbn, propietario_email, hora_publicacion, comprador_reviewer),
+    FOREIGN KEY (comprador_email, isbn, propietario_email, hora_publicacion)
+        REFERENCES compra (comprador_email, isbn, propietario_email, hora_publicacion) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS movimiento_puntos_resenia (
     isbn_solicitante                VARCHAR(255)    NOT NULL,
     propietario_id_solicitante      VARCHAR(255)    NOT NULL,
@@ -367,10 +395,14 @@ CREATE TABLE IF NOT EXISTS notificacion (
     leida                BOOLEAN   NOT NULL DEFAULT FALSE,
     archivada            BOOLEAN   NOT NULL DEFAULT FALSE,
     fecha_creacion       TIMESTAMP NOT NULL DEFAULT now(),
+    mensaje              VARCHAR(255),
     FOREIGN KEY (isbn, email_propietario_id, hora_de_publicacion)
         REFERENCES publicacion (isbn, email_propietario, hora_publicacion)
         ON DELETE CASCADE
 );
+
+-- Bases creadas antes de que existiera la columna
+ALTER TABLE notificacion ADD COLUMN IF NOT EXISTS mensaje VARCHAR(255);
 
 
 -- =======================================================

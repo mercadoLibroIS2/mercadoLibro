@@ -6,6 +6,7 @@ import {
   BookOpen,
   History,
   KeyRound,
+  LogOut,
   MapPin,
   MessageSquareText,
   Pencil,
@@ -74,6 +75,7 @@ export function ProfileScreen() {
     setSelectedProfileUserId,
     screen,
     setScreen,
+    logout,
   } = useStore()
 
   const [tab, setTab] = useState<ProfileTab>("publicaciones")
@@ -97,6 +99,9 @@ export function ProfileScreen() {
 
   const userBooks = books.filter((b) => isUserMatch(targetUser, b.ownerId))
   const userReviews = reviews.filter((r) => isUserMatch(targetUser, r.toUserId))
+  // Encabezado y pestaña usan la misma fuente: las reseñas recibidas
+  const reviewAverage =
+    userReviews.length > 0 ? userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length : 0
   const userMovements = pointMovements.filter((m) => isUserMatch(targetUser, m.userId))
 
   return (
@@ -150,7 +155,9 @@ export function ProfileScreen() {
                 <span className="inline-flex items-center gap-1 font-semibold text-amber-700 tabular-nums">
                   <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" aria-hidden="true" />
                   <span>
-                    {targetUser.rating.toFixed(1)} ({targetUser.totalReviews})
+                    {userReviews.length > 0
+                      ? `${reviewAverage.toFixed(1)} (${userReviews.length})`
+                      : "Sin reseñas"}
                   </span>
                 </span>
                 {targetUser.city && (
@@ -174,10 +181,11 @@ export function ProfileScreen() {
 
           {isOwnProfile && (
             <div className="flex flex-wrap items-center gap-2">
+              {/* En mobile "Publicar" ya está en la barra inferior */}
               <button
                 type="button"
                 onClick={startPublishing}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                className="hidden sm:inline-flex h-10 items-center gap-1.5 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-xs transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
                 <PlusCircle className="h-4 w-4" aria-hidden="true" />
                 <span>Publicar</span>
@@ -198,7 +206,18 @@ export function ProfileScreen() {
                 className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200/90 bg-white px-3.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
               >
                 <KeyRound className="h-4 w-4 text-stone-500" aria-hidden="true" />
-                <span>Cambiar contraseña</span>
+                <span className="sm:hidden">Contraseña</span>
+                <span className="hidden sm:inline">Cambiar contraseña</span>
+              </button>
+
+              {/* Debajo de lg no hay sidebar: el cierre de sesión tiene que estar acá */}
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex lg:hidden h-10 items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3.5 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                <span>Salir</span>
               </button>
             </div>
           )}
@@ -251,19 +270,19 @@ export function ProfileScreen() {
       {/* Tabs */}
       <div
         aria-label="Secciones del perfil"
-        className="mt-6 flex w-full gap-2 overflow-x-auto pb-2 scrollbar-none"
+        className="mt-6 flex w-full gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none scroll-fade-x lg-no-fade"
       >
         <button
           type="button"
           aria-pressed={tab === "publicaciones"}
           onClick={() => setTab("publicaciones")}
-          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "publicaciones"
               ? "bg-amber-800 text-white shadow-xs"
               : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <BookOpen className="h-4 w-4" aria-hidden="true" />
+          <BookOpen className="hidden h-4 w-4 sm:block" aria-hidden="true" />
           <span>Publicaciones ({userBooks.length})</span>
         </button>
 
@@ -271,13 +290,13 @@ export function ProfileScreen() {
           type="button"
           aria-pressed={tab === "resenas"}
           onClick={() => setTab("resenas")}
-          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+          className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
             tab === "resenas"
               ? "bg-amber-800 text-white shadow-xs"
               : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
           }`}
         >
-          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+          <MessageSquareText className="hidden h-4 w-4 sm:block" aria-hidden="true" />
           <span>Reseñas ({userReviews.length})</span>
         </button>
 
@@ -286,13 +305,13 @@ export function ProfileScreen() {
             type="button"
             aria-pressed={tab === "movimientos"}
             onClick={() => setTab("movimientos")}
-            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
+            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] sm:px-4 sm:text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 ${
               tab === "movimientos"
                 ? "bg-amber-800 text-white shadow-xs"
                 : "border border-stone-200/90 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900"
             }`}
           >
-            <History className="h-4 w-4" aria-hidden="true" />
+            <History className="hidden h-4 w-4 sm:block" aria-hidden="true" />
             <span>Movimientos ({userMovements.length})</span>
           </button>
         )}
@@ -316,7 +335,7 @@ export function ProfileScreen() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3.5 sm:gap-4 lg:grid-cols-3">
               {userBooks.map((book) => (
                 <BookCard key={book.id} book={book} />
               ))}
@@ -438,9 +457,11 @@ export function ProfileScreen() {
                         {positive && !String(mov.amount).startsWith("+") ? "+" : ""}
                         {mov.amount} pts
                       </p>
-                      <p className="text-xs tabular-nums text-stone-400">
-                        Saldo: {mov.balanceAfter} pts
-                      </p>
+                      {typeof mov.balanceAfter === "number" && (
+                        <p className="text-xs tabular-nums text-stone-400">
+                          Saldo: {mov.balanceAfter} pts
+                        </p>
+                      )}
                     </div>
                   </div>
                 )

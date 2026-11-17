@@ -10,6 +10,9 @@ public interface MovimientoPuntosService {
 
     void asignarPuntosIniciales(Usuario usuario);
 
+    /** Acredita una bonificación del sistema (p. ej. completar una cadena) y la registra en el historial. */
+    void acreditarBonificacionSistema(Usuario usuario, int monto, String descripcion);
+
     SaldoPuntosResponseDTO obtenerSaldoActual();
 
     List<MovimientoPuntosResponseDTO> obtenerHistorial();

@@ -7,7 +7,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface CadenaIntercambioService {
-    List<CadenaIntercambioResponseDTO> listarCadenas();
+    /** Detecta cadenas nuevas y devuelve aquellas en las que participa el usuario (todas si es null). */
+    List<CadenaIntercambioResponseDTO> listarCadenas(UUID usuarioId);
 
     CadenaIntercambioResponseDTO crearCadena(CadenaIntercambioRequestDTO dto);
 

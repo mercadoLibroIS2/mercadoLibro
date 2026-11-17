@@ -3,7 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { AlertCircle, BookOpen, Sparkles, Star, X } from "lucide-react"
 import { useStore } from "./store"
+import { BookCoverThumb } from "./cover-thumb"
 import { isUserMatch } from "@/lib/mercado-types"
+import { BONO_RESENIA } from "@/lib/puntos"
 
 const RATING_LABELS: Record<number, string> = {
   5: "Excelente experiencia (5/5)",
@@ -47,7 +49,8 @@ export function ReviewModal() {
     : reviewTrade.requesterName
 
   const requestedBook = books.find((b) => b.id === reviewTrade.requestedBookId)
-  const bookTitle = requestedBook?.title || "Libro intercambiado"
+  // Un libro ya intercambiado no está en el catálogo: usar el título que informa el backend
+  const bookTitle = requestedBook?.title || reviewTrade.requestedBookTitle || "Libro intercambiado"
   const activeRating = hoverRating || rating
 
   function handleSubmit(e: FormEvent) {
@@ -105,32 +108,18 @@ export function ReviewModal() {
             Tu opinión ayuda a construir confianza en la comunidad.
           </p>
 
-          {requestedBook && (
-            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3 text-left">
-              {requestedBook.coverUrl ? (
-                <img
-                  src={requestedBook.coverUrl}
-                  alt=""
-                  className="h-12 w-9 shrink-0 rounded-lg border border-stone-200 object-cover"
-                />
-              ) : (
-                <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-200 text-stone-500">
-                  <BookOpen className="h-4 w-4" aria-hidden="true" />
-                </div>
+          <div className="mt-4 flex items-center gap-3 rounded-2xl border border-stone-200/80 bg-[#faf8f5] p-3 text-left">
+            <BookCoverThumb src={requestedBook?.coverUrl} className="h-12 w-9" />
+            <div className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                Ejemplar intercambiado
+              </span>
+              <p className="truncate text-sm font-semibold text-stone-900">{bookTitle}</p>
+              {requestedBook?.author && (
+                <p className="truncate text-xs text-stone-500">{requestedBook.author}</p>
               )}
-              <div className="min-w-0 flex-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">
-                  Ejemplar intercambiado
-                </span>
-                <p className="truncate text-sm font-semibold text-stone-900">
-                  {requestedBook.title}
-                </p>
-                <p className="truncate text-xs text-stone-500">
-                  {requestedBook.author}
-                </p>
-              </div>
             </div>
-          )}
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="mt-5 flex flex-col gap-4 overflow-y-auto">
@@ -201,7 +190,7 @@ export function ReviewModal() {
 
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3.5 py-2.5 text-xs font-medium text-emerald-900">
             <Sparkles className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
-            <span>Recibís +5 puntos de bonificación por compartir tu reseña.</span>
+            <span>Recibís +{BONO_RESENIA} puntos de bonificación por compartir tu reseña.</span>
           </div>
 
           <div className="flex items-center justify-end gap-2.5 border-t border-stone-100 pt-3">

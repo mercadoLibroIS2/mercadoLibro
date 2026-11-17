@@ -73,13 +73,23 @@ public class CompraServiceImpl implements CompraService {
     @Autowired(required = false)
     private NotificacionService notificacionService;
 
-    private void notificarSeguro(String email, TipoNotificacion tipo) {
+    private void notificarSeguro(String email, TipoNotificacion tipo, String mensaje) {
         if (notificacionService != null) {
             try {
-                notificacionService.crear(email, tipo);
+                notificacionService.crear(email, tipo, mensaje);
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private static String titulo(Compra compra) {
+        return compra.getLibro() != null && compra.getLibro().getTitulo() != null
+                ? "«" + compra.getLibro().getTitulo() + "»"
+                : "tu libro";
+    }
+
+    private static String nombre(Usuario usuario) {
+        return usuario != null && usuario.getNombre() != null ? usuario.getNombre() : "Otro lector";
     }
 
     @Override
@@ -178,7 +188,8 @@ public class CompraServiceImpl implements CompraService {
         cancelarOtrasComprasPendientes(publicacion, compra.getId());
 
         compra.setEstado(EstadoCompra.PAGADA);
-        notificarSeguro(compra.getId().getPropietarioEmail(), TipoNotificacion.INTERCAMBIO_SOLICITADO);
+        notificarSeguro(compra.getId().getPropietarioEmail(), TipoNotificacion.INTERCAMBIO_SOLICITADO,
+                nombre(comprador) + " quiere " + titulo(compra) + " por " + compra.getPuntos() + " pts. Registrá la entrega cuando la envíes.");
         return compraMapper.toDTO(compra);
     }
 
@@ -191,7 +202,8 @@ public class CompraServiceImpl implements CompraService {
 
         compra.setEstado(EstadoCompra.ENVIADA);
         compra.setInfoEnvio(infoEnvio);
-        notificarSeguro(compra.getId().getCompradorEmail(), TipoNotificacion.INTERCAMBIO_ACEPTADO);
+        notificarSeguro(compra.getId().getCompradorEmail(), TipoNotificacion.INTERCAMBIO_ACEPTADO,
+                "El vendedor registró la entrega de " + titulo(compra) + ". Confirmá la recepción cuando lo tengas.");
         return compraMapper.toDTO(compra);
     }
 
@@ -208,10 +220,14 @@ public class CompraServiceImpl implements CompraService {
 
         bloquearPublicacion(compra).setEstadoPublicacion(EstadoPublicacion.VENDIDA);
         compra.setEstado(EstadoCompra.ENTREGADA);
-        notificarSeguro(vendedor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
-        notificarSeguro(vendedor.getEmail(), TipoNotificacion.PUNTOS_GANADOS);
-        notificarSeguro(comprador.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO);
-        notificarSeguro(comprador.getEmail(), TipoNotificacion.PUNTOS_GASTADOS);
+        notificarSeguro(vendedor.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO,
+                nombre(comprador) + " confirmó que recibió " + titulo(compra) + ".");
+        notificarSeguro(vendedor.getEmail(), TipoNotificacion.PUNTOS_GANADOS,
+                "Recibiste " + compra.getPuntos() + " pts por la venta de " + titulo(compra) + ".");
+        notificarSeguro(comprador.getEmail(), TipoNotificacion.INTERCAMBIO_COMPLETADO,
+                "Compra completada: " + titulo(compra) + " ya es tuyo.");
+        notificarSeguro(comprador.getEmail(), TipoNotificacion.PUNTOS_GASTADOS,
+                "Se descontaron " + compra.getPuntos() + " pts por la compra de " + titulo(compra) + ".");
         return compraMapper.toDTO(compra);
     }
 

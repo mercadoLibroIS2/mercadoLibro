@@ -108,3 +108,16 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Indica que una fila horizontal sigue (categorías, pestañas): se desvanece el borde derecho */
+.scroll-fade-x {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+@media (min-width: 1024px) {
+  /* En desktop las pestañas entran completas: sin degradé */
+  .scroll-fade-x.lg-no-fade {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
