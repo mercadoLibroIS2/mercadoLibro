@@ -418,7 +418,7 @@ function compraResponseToTrade(dto: any): TradeRequest {
   }
 }
 
-const STORAGE_KEY = "mercadolibro_demo_clean_v5"
+const STORAGE_KEY = "mercadolibro_demo_clean_v6"
 
 interface AppState {
   users: User[]
@@ -550,8 +550,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("mercadolibro_state_v2")
       localStorage.removeItem("mercadolibro_demo_clean_v3")
       localStorage.removeItem("mercadolibro_demo_clean_v4")
+      localStorage.removeItem("mercadolibro_demo_clean_v5")
       const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
+      // Con sesión del backend, el servidor es la fuente de verdad: una copia local vieja
+      // (usuarios, intercambios, puntos de otra versión) hacía fallar los intercambios.
+      if (saved && getAuthToken()) {
+        localStorage.removeItem(STORAGE_KEY)
+      } else if (saved) {
         const parsed = JSON.parse(saved)
         const hasLegacyNoise = parsed.books?.some((b: any) =>
           b.title?.startsWith("Libro (") ||
@@ -648,7 +653,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   reservedPoints: profile.saldoReservado ?? 0,
                   joinedDate: new Date().toISOString(),
                 }
-            appUser = { ...appUser, role: profile.rol }
+            appUser = {
+              ...appUser,
+              id: profile.id,
+              availablePoints: profile.saldoDisponible ?? appUser.availablePoints,
+              reservedPoints: profile.saldoReservado ?? appUser.reservedPoints,
+              role: profile.rol,
+            }
             return {
               ...prev,
               currentUser: appUser,
@@ -762,11 +773,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
 
       setState((prev) => {
-        const isDemoUser = prev.currentUser?.email?.endsWith("@mercadolibro.demo")
+        // Con sesión del backend los datos del usuario salen siempre del servidor (antes las
+        // cuentas @mercadolibro.demo o sin intercambios veían datos de ejemplo locales).
+        const useLocalData = !hasBackendSession()
         let updatedCurrentUser = prev.currentUser
         let updatedUsers = prev.users
 
-        if (saldo && updatedCurrentUser && !isDemoUser) {
+        if (saldo && updatedCurrentUser && !useLocalData) {
           updatedCurrentUser = {
             ...updatedCurrentUser,
             availablePoints: saldo.saldoDisponible,
@@ -898,9 +911,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           currentUser: updatedCurrentUser,
           users: updatedUsers,
           books: mergedBooks,
-          trades: !isDemoUser && backendTrades.length > 0 ? markReviewedTrades(backendTrades, mergedReviews) : prev.trades,
-          pointMovements: !isDemoUser && backendMovements.length > 0 ? backendMovements : prev.pointMovements,
-          notifications: !isDemoUser && backendNotifs.length > 0 ? backendNotifs : prev.notifications,
+          trades: useLocalData ? prev.trades : markReviewedTrades(backendTrades, mergedReviews),
+          pointMovements: useLocalData ? prev.pointMovements : backendMovements,
+          notifications: useLocalData ? prev.notifications : backendNotifs,
           reviews: mergedReviews,
           trackedBooks: mergedTrackedBooks,
           // Con sesión del backend las cadenas son las reales (detectadas por el servidor)
@@ -977,7 +990,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 joinedDate: new Date().toISOString(),
               }
           finalUserName = appUser.name
-          appUser = { ...appUser, role: userProfile?.rol || authData.rol }
+          appUser = {
+            ...appUser,
+            id: authData.id,
+            availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? appUser.availablePoints,
+            reservedPoints: userProfile?.saldoReservado ?? appUser.reservedPoints,
+            role: userProfile?.rol || authData.rol,
+          }
           return {
             ...prev,
             currentUser: appUser,
