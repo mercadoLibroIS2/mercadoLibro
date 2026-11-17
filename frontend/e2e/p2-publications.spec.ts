@@ -5,7 +5,10 @@ import { CONDITION_TO_ESTADO, type EstadoFisico } from "../lib/api"
 const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 const testUser = SEED_USERS[0] // Lucía Fernández (lucia@mercadolibro.demo)
 
-async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: boolean } = {}) {
+async function mockBackend(
+  page: Page,
+  options: { skipInitialAvailableFetch?: boolean; reservedIsbn?: string } = {},
+) {
   const database = {
     publications: SEED_BOOKS.map((book) => ({
       isbn: book.isbn,
@@ -18,10 +21,28 @@ async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: bo
       valor_puntos_solicitado: book.points,
       valor_referencia_calculado: book.referencePrice || 50,
       comentario: book.description || "",
-      estado_publicacion: "DISPONIBLE",
+      estado_publicacion: book.isbn === options.reservedIsbn ? "RESERVADA" : "DISPONIBLE",
       color_semaforo: "VERDE",
     })),
   }
+
+  const toDto = (pub: (typeof database.publications)[number]) => ({
+    publicacionId: {
+      isbn: pub.isbn,
+      emailPropietario: pub.email_propietario,
+      horaPublicacion: pub.hora_publicacion,
+    },
+    titulo: pub.titulo,
+    autor: pub.autor,
+    portadaUrl: pub.portadaUrl,
+    estadoFisico: pub.estado_fisico,
+    valorPuntosSolicitado: pub.valor_puntos_solicitado,
+    valorReferenciaCalculado: pub.valor_referencia_calculado,
+    colorSemaforo: pub.color_semaforo,
+    comentario: pub.comentario,
+    nombrePropietario: SEED_USERS.find((user) => user.email === pub.email_propietario)?.name,
+    estadoPublicacion: pub.estado_publicacion,
+  })
 
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
@@ -60,6 +81,15 @@ async function mockBackend(page: Page, options: { skipInitialAvailableFetch?: bo
 
     if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    if (url.pathname.endsWith("/api/publicaciones/mis-publicaciones") && method === "GET") {
+      await route.fulfill({
+        json: database.publications
+          .filter((pub) => pub.email_propietario === testUser.email && pub.estado_publicacion !== "ELIMINADA")
+          .map(toDto),
+      })
       return
     }
 
@@ -359,7 +389,7 @@ test("no permite eliminar una publicación reservada con un intercambio en curso
       ),
     },
   )
-  await mockBackend(page, { skipInitialAvailableFetch: true })
+  await mockBackend(page, { skipInitialAvailableFetch: true, reservedIsbn: SEED_BOOKS[1].isbn })
   await signIn(page)
   await bookCard(page, "Clean Code").click()
 

@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test"
 import { generateInitialChains } from "../lib/chain-detector"
 import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 import type { Book, TradeChain, User } from "../lib/mercado-types"
+import { CONDITION_TO_ESTADO } from "../lib/api"
 
 const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 
@@ -29,8 +30,36 @@ function chainToBackend(chain: TradeChain) {
   }
 }
 
-async function mockBackend(page: Page, initialChains: TradeChain[] = generateInitialChains(SEED_BOOKS, SEED_USERS)) {
-  const serverChains: TradeChain[] = structuredClone(initialChains)
+const ESTADO_PUBLICACION: Record<string, string> = {
+  DISPONIBLE: "DISPONIBLE",
+  RESERVADO: "RESERVADA",
+  INTERCAMBIADO: "VENDIDA",
+  ELIMINADO: "ELIMINADA",
+}
+
+function bookToBackend(book: Book) {
+  const [isbn, emailPropietario, horaPublicacion] = book.id.split("|")
+  return {
+    publicacionId: { isbn, emailPropietario, horaPublicacion },
+    titulo: book.title,
+    autor: book.author,
+    portadaUrl: book.coverUrl || "",
+    estadoFisico: CONDITION_TO_ESTADO[book.condition] || "BUEN_ESTADO",
+    valorPuntosSolicitado: book.points,
+    valorReferenciaCalculado: book.referencePrice || null,
+    colorSemaforo: "VERDE",
+    comentario: book.description || "",
+    nombrePropietario: book.ownerName,
+    estadoPublicacion: ESTADO_PUBLICACION[book.availability] || "DISPONIBLE",
+  }
+}
+
+async function mockBackend(
+  page: Page,
+  options: { chains?: TradeChain[]; books?: Book[] } = {},
+) {
+  const serverChains: TradeChain[] = structuredClone(options.chains || generateInitialChains(SEED_BOOKS, SEED_USERS))
+  const serverBooks: Book[] = options.books || SEED_BOOKS
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -84,6 +113,22 @@ async function mockBackend(page: Page, initialChains: TradeChain[] = generateIni
 
     if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    // Con sesión, el catálogo sale del backend: disponibles para todos y propias (con estado) para el dueño
+    if (url.pathname.endsWith("/api/publicaciones/disponibles")) {
+      await route.fulfill({
+        json: serverBooks.filter((book) => book.availability === "DISPONIBLE").map(bookToBackend),
+      })
+      return
+    }
+    if (url.pathname.endsWith("/api/publicaciones/mis-publicaciones")) {
+      const accessToken = request.headers().authorization?.replace(/^Bearer\s+/i, "")
+      const userId = accessToken?.replace(/^p5-token-/, "") || ""
+      await route.fulfill({
+        json: serverBooks.filter((book) => book.ownerId === userId).map(bookToBackend),
+      })
       return
     }
 
@@ -267,7 +312,7 @@ test("la ficha del catálogo presenta metadatos y disponibilidad del ejemplar", 
   const books = SEED_BOOKS.map((book) =>
     book.isbn === "9788420633114" ? { ...book, availability: "RESERVADO" as const } : book,
   )
-  await mockBackend(page)
+  await mockBackend(page, { books })
   await loadSeedState(page, { books })
   await signIn(page)
   await openCatalog(page)
@@ -281,10 +326,8 @@ test("la ficha del catálogo presenta metadatos y disponibilidad del ejemplar", 
   await expect(details).toContainText("Edición Cátedra con notas. Tablero de dirección intacto.")
   await page.getByRole("button").filter({ has: page.locator("svg.lucide-x") }).click()
 
-  await bookCard(page, "El Aleph").click()
-  const reservedDetails = page.locator("div.fixed.inset-0")
-  await expect(reservedDetails).toContainText("Publicación reservada o intercambiada.")
-  await expect(reservedDetails.getByRole("button", { name: /Solicitar/ })).toHaveCount(0)
+  // Un libro reservado por otro usuario no figura en /disponibles, así que no se ofrece
+  await expect(bookCard(page, "El Aleph")).toHaveCount(0)
 })
 
 test("el autocompletado comienza con dos caracteres y solo abre coincidencias disponibles", async ({
@@ -293,7 +336,7 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
   const books = SEED_BOOKS.map((book) =>
     book.isbn === "9788437604572" ? { ...book, availability: "RESERVADO" as const } : book,
   )
-  await mockBackend(page)
+  await mockBackend(page, { books })
   await loadSeedState(page, { books })
   await signIn(page)
   await openCatalog(page)
@@ -353,7 +396,7 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
     ...chain,
     steps: chain.steps.map((step) => ({ ...step, confirmed: false })),
   }))
-  await mockBackend(page, chains)
+  await mockBackend(page, { chains })
   await loadSeedState(page, { chains })
 
   // Orden de los pasos en generateInitialChains: Lucía (0), Mateo (2), Tomás (1)
@@ -428,7 +471,7 @@ test("no detecta ni muestra una cadena si falta un libro disponible para cerrar 
   const noCycleChains = generateInitialChains(noCycleBooks, SEED_USERS)
   expect(noCycleChains).toHaveLength(0)
 
-  await mockBackend(page, noCycleChains)
+  await mockBackend(page, { books: noCycleBooks, chains: noCycleChains })
   await loadSeedState(page, { books: noCycleBooks, chains: noCycleChains })
   await signIn(page)
   await openChains(page)

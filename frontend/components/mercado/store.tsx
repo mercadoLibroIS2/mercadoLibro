@@ -299,6 +299,10 @@ function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionRespon
     }
   }
 
+  // Con sesión del backend solo se muestran publicaciones reales: los libros demo no existen
+  // en el servidor y cualquier solicitud sobre ellos fallaría.
+  if (hasBackendSession()) return backendBooks
+
   const result: Book[] = []
   const usedIsbns = new Set<string>()
 
@@ -752,7 +756,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const allBackendPubs = [...(pubs || []), ...(myPubs || [])]
         const mergedBooks =
-          allBackendPubs.length > 0 ? mergeBackendPublications(prev.books, allBackendPubs) : prev.books
+          allBackendPubs.length > 0 || hasBackendSession()
+            ? mergeBackendPublications(prev.books, allBackendPubs)
+            : prev.books
 
         let mergedReviews = prev.reviews
         if (backendReviews && backendReviews.length > 0) {

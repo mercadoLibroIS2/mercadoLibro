@@ -13,6 +13,7 @@ import type {
   TradeRequest,
   User,
 } from "../lib/mercado-types"
+import { CONDITION_TO_ESTADO } from "../lib/api"
 
 const STORAGE_KEY = "mercadolibro_demo_clean_v5"
 const usersByEmail = new Map(SEED_USERS.map((user) => [user.email, user]))
@@ -71,6 +72,29 @@ async function mockBackend(page: Page) {
 
     if (url.pathname.endsWith("/api/auth/logout")) {
       await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    // Con sesión, el catálogo sale del backend: se sirven los libros semilla como publicaciones reales
+    if (url.pathname.endsWith("/api/publicaciones/disponibles")) {
+      await route.fulfill({
+        json: SEED_BOOKS.map((book) => {
+          const [isbn, emailPropietario, horaPublicacion] = book.id.split("|")
+          return {
+            publicacionId: { isbn, emailPropietario, horaPublicacion },
+            titulo: book.title,
+            autor: book.author,
+            portadaUrl: book.coverUrl || "",
+            estadoFisico: CONDITION_TO_ESTADO[book.condition] || "BUEN_ESTADO",
+            valorPuntosSolicitado: book.points,
+            valorReferenciaCalculado: book.referencePrice || null,
+            colorSemaforo: "VERDE",
+            comentario: book.description || "",
+            nombrePropietario: book.ownerName,
+            estadoPublicacion: "DISPONIBLE",
+          }
+        }),
+      })
       return
     }
 
