@@ -141,6 +141,8 @@ export function getBackendUrl(): string {
   )
 }
 
+const REQUEST_TIMEOUT_MS = 90_000
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -157,7 +159,9 @@ async function request<T>(
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 6000)
+  // Render apaga el backend inactivo y tarda ~60 s en despertar: con 6 s el registro se
+  // cortaba aunque la cuenta se creara. 90 s cubre el arranque en frío.
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
     const response = await fetch(`${baseUrl}${path}`, {
@@ -187,7 +191,9 @@ async function request<T>(
   } catch (err: any) {
     clearTimeout(timeoutId)
     if (err.name === "AbortError") {
-      throw new Error("El servidor tardó demasiado en responder (tiempo de espera agotado)")
+      throw new Error(
+        "El servidor no respondió a tiempo. Si estaba inactivo puede tardar un minuto en despertar: probá de nuevo."
+      )
     }
     throw err
   }

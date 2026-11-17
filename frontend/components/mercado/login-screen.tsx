@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { BookOpen, LogIn, Loader2, AlertCircle } from "lucide-react"
 import { useStore } from "./store"
+import { SlowServerHint } from "./slow-server-hint"
 import { Field } from "./field"
 
 export function LoginScreen() {
@@ -119,6 +120,7 @@ export function LoginScreen() {
               </>
             )}
           </button>
+          <SlowServerHint active={loading} />
         </form>
 
         <p className="mt-6 border-t border-stone-100 pt-5 text-center text-sm text-stone-600">
