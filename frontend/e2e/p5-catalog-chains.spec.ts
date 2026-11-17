@@ -67,6 +67,7 @@ async function mockBackend(
 ) {
   const serverChains: TradeChain[] = structuredClone(options.chains || generateInitialChains(SEED_BOOKS, SEED_USERS))
   const serverBooks: Book[] = options.books || SEED_BOOKS
+  const followedIsbns = new Set<string>()
   await page.route("**/api/**", async (route: Route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -149,6 +150,39 @@ async function mockBackend(
 
     if (url.pathname.endsWith("/api/libro/google-books/isbn/9781111111111")) {
       await route.fulfill({ status: 503, json: { message: "Proveedor no disponible" } })
+      return
+    }
+
+    // Tracker: el backend guarda los libros seguidos por ISBN
+    const follow = url.pathname.match(/\/api\/usuario\/[^/]+\/libros-seguidos(?:\/([^/]+))?$/)
+    if (follow) {
+      const method = request.method()
+      if (method === "POST" && follow[1]) followedIsbns.add(decodeURIComponent(follow[1]))
+      if (method === "DELETE" && follow[1]) followedIsbns.delete(decodeURIComponent(follow[1]))
+      if (method === "GET") {
+        await route.fulfill({
+          json: [...followedIsbns].map((isbn) => {
+            const seed = serverBooks.find((book) => book.isbn === isbn)
+            return { isbn, titulo: seed?.title || isbn, autores: seed?.author || "", categorias: [] }
+          }),
+        })
+        return
+      }
+      await route.fulfill({ status: 204, body: "" })
+      return
+    }
+
+    // Búsqueda por título (Google Books / Open Library en el backend)
+    if (url.pathname.endsWith("/api/libro/google-books/buscar")) {
+      const q = (url.searchParams.get("query") || "").toLowerCase()
+      await route.fulfill({
+        json: serverBooks
+          .filter((book) => book.title.toLowerCase().includes(q))
+          .map((book) => ({
+            googleBooksId: "", isbn: book.isbn, titulo: book.title, autor: book.author, descripcion: "",
+            portadaUrl: "", editorial: "", anioPublicacion: "", categorias: [], paginas: null, ratingExterno: null,
+          })),
+      })
       return
     }
 
@@ -458,7 +492,7 @@ test("el autocompletado comienza con dos caracteres y solo abre coincidencias di
   await expect(page.locator("div.fixed.inset-0").getByRole("heading", { name: "El Aleph" })).toBeVisible()
 })
 
-test("el tracker guarda criterios, muestra coincidencias y permite dejar de seguir un libro", async ({
+test("el tracker sigue un libro por ISBN, muestra si está disponible y permite dejar de seguirlo", async ({
   page,
 }) => {
   await mockBackend(page)
@@ -469,19 +503,16 @@ test("el tracker guarda criterios, muestra coincidencias y permite dejar de segu
   await expect(page.getByRole("heading", { name: "Tracker de Libros" })).toBeVisible()
   await page.getByRole("button", { name: "Seguir nuevo libro" }).click()
 
-  await page.getByLabel("Título buscado").fill("Rayuela")
-  await page.getByLabel("Autor (opcional)").fill("Julio Cortázar")
-  await page.getByLabel("Tope máximo de puntos").fill("60")
-  await page.getByRole("button", { name: "Bueno", exact: true }).click()
-  await page.getByLabel("Notas privadas").fill("Edición anotada")
-  await page.getByRole("button", { name: "Guardar en Tracker" }).click()
+  // Buscar por título y elegir la edición (el seguimiento queda por ISBN)
+  await page.getByLabel("ISBN o título").fill("Rayuela")
+  await page.getByRole("button", { name: "Buscar", exact: true }).click()
+  await page.getByRole("button", { name: /Rayuela/ }).filter({ hasText: "ISBN" }).first().click()
+  await page.getByRole("button", { name: "Seguir este libro" }).click()
 
   const tracked = page.locator("article").filter({ hasText: "Rayuela" })
   await expect(tracked).toBeVisible()
-  await expect(tracked).toContainText("Hasta 60 pts")
-  await expect(tracked).toContainText("Bueno")
-  await expect(tracked).toContainText("Coincidencias encontradas (1)")
-  await expect(tracked).toContainText("Edición anotada")
+  await expect(tracked).toContainText("ISBN")
+  await expect(tracked).toContainText("Disponible ahora (1)")
 
   await tracked.getByRole("button", { name: "Dejar de seguir Rayuela" }).click()
   await expect(page.getByText("No tenés libros en seguimiento actualmente")).toBeVisible()

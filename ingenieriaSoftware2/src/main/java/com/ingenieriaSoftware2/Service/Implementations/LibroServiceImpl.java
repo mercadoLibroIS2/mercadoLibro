@@ -20,11 +20,18 @@ public class LibroServiceImpl implements LibroService {
     private LibroRepository libroRepository;
     @Autowired
     private Calculadora calculadora;
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private com.ingenieriaSoftware2.Service.Interfaces.PublicacionService publicacionService;
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional // no readOnly: puede guardar el libro importado
     public Map<String, Object> obtenerReferencia(String isbn, EstadoFisico estadoFisico) {
-        Libro libro = libroRepository.findByIsbn(isbn).orElseThrow(LibroNoExisteException::new);
+        // Si el libro todavía no está en la base se importa, igual que al publicarlo: así la primera
+        // publicación también tiene referencia y semáforo antes de enviarla.
+        Libro libro = publicacionService != null
+                ? publicacionService.obtenerOImportarLibro(isbn)
+                : libroRepository.findByIsbn(isbn).orElseThrow(LibroNoExisteException::new);
         Map<String, Object> body = new HashMap<>();
         body.put("valorReferencia", calculadora.calcular(libro.getIsbn(), estadoFisico));
         body.put("categoria", libro.getCategorias().stream()

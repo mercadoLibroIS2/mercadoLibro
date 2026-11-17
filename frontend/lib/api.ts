@@ -296,6 +296,7 @@ export async function apiEditPublication(
     estadoFisico: EstadoFisico
     valorPuntosSolicitado: number
     comentario?: string
+    categoria?: string
   },
 ): Promise<void> {
   const params = new URLSearchParams({
@@ -353,6 +354,13 @@ export async function apiGetReferenciaLibro(
   } catch {
     return null
   }
+}
+
+/** Búsqueda por título/autor (Google Books con respaldo de Open Library en el backend). */
+export async function apiSearchBooksByText(query: string): Promise<GoogleBookVolume[]> {
+  return request<GoogleBookVolume[]>(
+    `/api/libro/google-books/buscar?query=${encodeURIComponent(query)}&limite=10`,
+  )
 }
 
 // -------------------------------------------------------------

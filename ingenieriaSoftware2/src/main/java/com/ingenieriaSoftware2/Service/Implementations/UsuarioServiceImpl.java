@@ -42,6 +42,11 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Autowired
     private LibroMapper libroMapper;
 
+    // Lazy: PublicacionService depende indirectamente de UsuarioService.
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private com.ingenieriaSoftware2.Service.Interfaces.PublicacionService publicacionService;
+
 
     @Override
     public UserDetails loadUserByUsername(String nombre){
@@ -93,7 +98,12 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Transactional
     public void seguirLibro(UUID usuarioId, String isbn) {
         Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow(()-> new UsuarioNoEncontrado());
-        Libro libro = libroRepository.findByIsbn(isbn).orElseThrow(()-> new LibroNoExisteException());
+        // Se puede seguir un libro que todavía nadie publicó: si no está en la base se importa
+        // desde Google Books / Open Library para que el tracker avise cuando aparezca.
+        Libro libro = libroRepository.findByIsbn(isbn).orElseGet(() -> {
+            if (publicacionService == null) throw new LibroNoExisteException();
+            return publicacionService.obtenerOImportarLibro(isbn);
+        });
         usuario.getLibrosSeguidos().add(libro);
     }
 

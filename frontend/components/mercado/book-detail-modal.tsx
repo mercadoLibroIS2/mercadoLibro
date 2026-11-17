@@ -334,17 +334,9 @@ export function BookDetailModal() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        addToTracker({
-                          isbn: book.isbn,
-                          title: book.title,
-                          author: book.author,
-                          category: book.category,
-                          maxPoints: book.points,
-                          acceptableConditions: [book.condition],
-                          privateNotes: `Seguimiento iniciado desde ${book.title}`,
-                        })
-                        setSelectedBookId(null)
+                      onClick={async () => {
+                        const ok = await addToTracker({ isbn: book.isbn, title: book.title, author: book.author })
+                        if (ok) setSelectedBookId(null)
                       }}
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs sm:text-sm font-medium text-stone-500 transition-colors hover:bg-stone-50 hover:text-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
