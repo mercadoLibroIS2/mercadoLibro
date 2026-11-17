@@ -6,7 +6,9 @@ Proyecto de Ingeniería de Software II; Plataforma de intercambio de libros
 - App: https://mercadolibro-demo.vercel.app
 - Backend de búsqueda por ISBN (Google Books): https://mercadolibro-51uh.onrender.com
   (plan gratis: se duerme a los 15 min sin uso; la primera consulta tarda ~1 min)
-- Guion paso a paso: https://claude.ai/artifact/DUBmyMU3hx4AmZmBbroxon
+- Guion paso a paso: [demo de 12 minutos](docs/demo-12-minutos.md) (dos ventanas, flujo común, errores
+  del usuario y trueque directo) y [versión larga de 25 minutos](docs/demo-version-larga.md) (registro,
+  reportes y panel de administración). Copia editable: https://claude.ai/artifact/DUBmyMU3hx4AmZmBbroxon
 
 Usuarios de demo (contraseña `Demo2026!` para todos):
 
