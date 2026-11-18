@@ -90,7 +90,7 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public PerfilResponseDTO buscarUsuarioPorNombre(String nombre){
-        Usuario usuario = usuarioRepository.findByNombre(nombre).orElseThrow(()-> new UsuarioNoEncontrado());
+        Usuario usuario = usuarioRepository.findByNombreOrEmail(nombre, nombre).orElseThrow(()-> new UsuarioNoEncontrado());
         return usuarioMapper.toPerfilDTO(usuario);
     }
 

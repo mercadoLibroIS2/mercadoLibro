@@ -22,7 +22,7 @@ import { EditProfileModal } from "./edit-profile-modal"
 import { Field } from "./field"
 import { isUserMatch, type PointMovementType } from "@/lib/mercado-types"
 
-type ProfileTab = "publicaciones" | "resenas" | "movimientos"
+type ProfileTab = "publicaciones" | "resenas" | "movimientos" | "historial"
 
 const MOVEMENT_LABELS: Record<
   PointMovementType,
@@ -72,6 +72,7 @@ export function ProfileScreen() {
     books,
     reviews,
     pointMovements,
+    trades,
     startPublishing,
     selectedProfileUserId,
     setSelectedProfileUserId,
@@ -92,15 +93,18 @@ export function ProfileScreen() {
     !selectedProfileUserId
   const targetUser = isOwnProfile
     ? currentUser
-    : users.find((u) => isUserMatch(u, selectedProfileUserId)) || currentUser
+    : users.find((u) => isUserMatch(u, selectedProfileUserId))
 
   useEffect(() => {
     setAvatarFailed(false)
   }, [targetUser?.id, targetUser?.avatar])
 
-  if (!targetUser) return null
+  useEffect(() => { setTab("publicaciones") }, [selectedProfileUserId, screen])
 
-  const userBooks = books.filter((b) => isUserMatch(targetUser, b.ownerId))
+  if (!targetUser) return <p role="status" className="p-6">Cargando perfil…</p>
+
+  const userBooks = books.filter((b) => isUserMatch(targetUser, b.ownerId) && (b.availability === "DISPONIBLE" || b.availability === "RESERVADO"))
+  const userHistory = trades.filter((t) => (isUserMatch(targetUser, t.requesterId) || isUserMatch(targetUser, t.ownerId)) && ["COMPLETADO", "CANCELADO", "RECHAZADO"].includes(t.status))
   const userReviews = reviews.filter((r) => isUserMatch(targetUser, r.toUserId))
   // Encabezado y pestaña usan la misma fuente: las reseñas recibidas
   const reviewAverage =
@@ -330,6 +334,11 @@ export function ProfileScreen() {
           <span>Reseñas ({userReviews.length})</span>
         </button>
 
+        {isOwnProfile && <button type="button" aria-pressed={tab === "historial"}
+          onClick={() => setTab("historial")} className={`rounded-full border px-4 py-2 text-sm font-semibold ${tab === "historial" ? "border-amber-800 bg-amber-800 text-white" : "border-stone-200 bg-white text-stone-600"}`}>
+          Historial ({userHistory.length})
+        </button>}
+
         {isOwnProfile && (
           <button
             type="button"
@@ -430,6 +439,18 @@ export function ProfileScreen() {
               ))}
             </div>
           )
+        )}
+
+        {tab === "historial" && isOwnProfile && (
+          <div className="space-y-3">
+            {userHistory.length === 0 && <p>No tenés intercambios en el historial todavía.</p>}
+            {userHistory.map((trade) => <article key={trade.id} className="rounded-2xl border border-stone-200 bg-white p-4">
+              <p className="font-semibold">{trade.requestedBookTitle || books.find((b) => b.id === trade.requestedBookId)?.title || "Libro intercambiado"}</p>
+              <p>{trade.type === "PUNTOS" ? "Compra por puntos" : "Trueque directo"} · {trade.status}</p>
+              <p>{isUserMatch(targetUser, trade.requesterId) ? trade.ownerName : trade.requesterName}</p>
+              <p>{new Date(trade.updatedAt).toLocaleDateString("es-AR")}</p>
+            </article>)}
+          </div>
         )}
 
         {tab === "movimientos" && isOwnProfile && (

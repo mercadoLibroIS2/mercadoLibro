@@ -862,3 +862,8 @@ export async function apiAdminReactivarUsuario(email: string): Promise<void> {
 export async function apiAdminEstadisticas(): Promise<EstadisticasAdminResponse> {
   return request<EstadisticasAdminResponse>("/api/admin/estadisticas")
 }
+
+/** Publicaciones no eliminadas para consultar la estantería pública de un usuario. */
+export async function apiListPublications(): Promise<PublicacionResponse[]> {
+  return request<PublicacionResponse[]>("/api/publicaciones")
+}

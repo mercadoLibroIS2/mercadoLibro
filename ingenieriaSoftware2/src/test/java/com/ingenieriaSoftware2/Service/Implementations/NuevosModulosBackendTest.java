@@ -331,4 +331,13 @@ class NuevosModulosBackendTest {
         CadenaIntercambioResponseDTO rechazada = cadenaIntercambioService.rechazarCadena(creada.id(), userId);
         assertEquals(EstadoCadena.CANCELADA, rechazada.estado());
     }
+    @Test
+    void perfilPublicoSePuedeConsultarPorEmail() {
+        Usuario usuario = new Usuario();
+        usuario.setEmail("lector@example.test");
+        when(usuarioRepository.findByNombreOrEmail("lector@example.test", "lector@example.test"))
+                .thenReturn(Optional.of(usuario));
+        usuarioService.buscarUsuarioPorNombre("lector@example.test");
+        verify(usuarioMapper).toPerfilDTO(usuario);
+    }
 }

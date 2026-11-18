@@ -77,7 +77,7 @@ import {
   apiCreateReviewCompra,
   apiListReviewsCompras,
   apiListReviews,
-  apiListUserReviews,
+  apiListPublications,
   apiListCadenas,
   apiAceptarCadena,
   apiRechazarCadena,
@@ -1181,28 +1181,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast]
   )
 
-  const viewUserProfile = useCallback((userId: string) => {
+  const viewUserProfile = useCallback(async (userId: string) => {
     setSelectedProfileUserId(userId)
     setScreen("perfil_publico")
-    apiGetPublicProfile(userId)
-      .then((pubProfile) => {
-        if (!pubProfile?.email) return
-        setState((prev) => ({
-          ...prev,
-          users: prev.users.map((u) =>
-            isUserMatch(u, pubProfile.email)
-              ? {
-                  ...u,
-                  name: pubProfile.nombre || u.name,
-                  rating: pubProfile.reputacionPromedio ?? u.rating,
-                }
-              : u
-          ),
-        }))
-      })
-      .catch(() => {})
-    apiListUserReviews(userId).catch(() => [])
-  }, [])
+    try {
+      const profile = await apiGetPublicProfile(userId)
+      const user: User = {
+        id: profile.id, email: profile.email, name: profile.nombre,
+        username: slugUsername(profile.nombre), avatar: "", rating: profile.reputacionPromedio ?? 0,
+        totalReviews: 0, totalTrades: 0, availablePoints: 0, reservedPoints: 0, joinedDate: "",
+      }
+      setState((prev) => ({ ...prev,
+        users: [...prev.users.filter((u) => !isUserMatch(u, user.email)), user],
+      }))
+      // Actualizar las reseñas de compras y trueques, no ignorar la respuesta del servidor.
+      if (state.currentUser) await loadUserData(state.currentUser.id)
+      const publications = (await apiListPublications()).filter((p) => p.publicacionId.emailPropietario === profile.email)
+      setState((prev) => ({ ...prev,
+        books: [...prev.books.filter((b) => !isUserMatch(user, b.ownerId)), ...publications.map((p) => publicacionResponseToBook(p))],
+      }))
+    } catch (err) {
+      showToast(`No se pudo cargar el perfil: ${backendErrorMessage(err)}`)
+    }
+  }, [state.currentUser, showToast])
 
   // --- Books CRUD (Spring Boot Backend + Local Fallback) ---
   const publishBook = useCallback(

@@ -481,3 +481,40 @@ test("una compra pagada espera la aceptación del vendedor en Recibidas", async 
   await page.getByRole("button", { name:/En Curso/ }).click()
   await expect(page.getByText("Entrega registrada (Esperando recepción del comprador)", {exact:false})).toBeVisible()
 })
+
+test("el perfil ajeno carga al propietario real y no muestra el perfil propio ni datos privados", async ({ page }) => {
+  const database = await mockBackend(page)
+  const owner = SEED_USERS.find((u) => u.email !== testUser.email)!
+  const publication = database.publications.find((p) => p.email_propietario === owner.email)!
+  await page.route(`**/api/usuario/${encodeURIComponent(owner.email)}`, route => route.fulfill({json:{
+    id:owner.id,nombre:owner.name,email:owner.email,rol:"USUARIO",reputacionPromedio:0,
+  }}))
+  await page.route("**/api/publicaciones", route => route.fulfill({json:database.publications.map(p => ({
+    publicacionId:{isbn:p.isbn,emailPropietario:p.email_propietario,horaPublicacion:p.hora_publicacion},
+    titulo:p.titulo,autor:p.autor,valorPuntosSolicitado:p.valor_puntos_solicitado,
+    estadoFisico:p.estado_fisico,estadoPublicacion:p.estado_publicacion,
+  }))}))
+  await signIn(page)
+  await bookCard(page, publication.titulo).click()
+  await page.getByRole("button",{name:"Ver Perfil",exact:true}).click()
+  await expect(page.getByRole("heading",{name:owner.name,exact:true})).toBeVisible()
+  await expect(page.getByText("Tu Cuenta",{exact:true})).toHaveCount(0)
+  await expect(page.getByRole("button",{name:/^Movimientos|^Historial/})).toHaveCount(0)
+})
+
+test("el perfil propio separa publicaciones activas y el historial de compras", async ({ page }) => {
+  const database = await mockBackend(page)
+  const owned = database.publications.filter(p=>p.email_propietario === testUser.email)
+  owned[0].estado_publicacion = "VENDIDA"
+  await page.route("**/api/compras/mis-ventas", route=>route.fulfill({json:[{
+    isbn:owned[0].isbn,titulo:owned[0].titulo,emailVendedor:testUser.email,
+    emailComprador:SEED_USERS[1].email,horaPublicacion:owned[0].hora_publicacion,
+    estado:"ENTREGADA",puntos:50,
+  }]}))
+  await signIn(page)
+  await page.locator('button[title="Ir a mi perfil y billetera"]').click()
+  await expect(page.getByRole("button",{name:`Publicaciones (${owned.length-1})`,exact:true})).toBeVisible()
+  await expect(bookCard(page,owned[0].titulo)).toHaveCount(0)
+  await page.getByRole("button",{name:"Historial (1)",exact:true}).click()
+  await expect(page.locator("article").filter({hasText:"COMPLETADO"})).toHaveCount(1)
+})
