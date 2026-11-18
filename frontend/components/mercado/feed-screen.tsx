@@ -52,7 +52,7 @@ export function FeedScreen() {
     return true
   })
 
-  const maximumPrice = Math.max(500, ...books.map((book) => book.points))
+  const maximumPrice = Math.ceil(Math.max(500, ...books.map((book) => book.points)) / 5) * 5
   const allCategories = ["Todas", ...CATEGORIES]
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
@@ -181,15 +181,15 @@ export function FeedScreen() {
               <input
                 id="filter-max-points"
                 type="range"
-                min={20}
+                min={0}
                 max={maximumPrice}
-                step={10}
+                step={5}
                 value={maxPoints ?? maximumPrice}
                 onChange={(e) => setMaxPoints(Number(e.target.value))}
                 className="mt-2 h-2 w-full cursor-pointer accent-amber-800"
               />
               <div className="mt-1.5 flex justify-between text-[11px] font-medium text-stone-400">
-                <span>20 pts</span>
+                <span>0 pts</span>
                 <span>{maximumPrice} pts</span>
               </div>
             </div>
