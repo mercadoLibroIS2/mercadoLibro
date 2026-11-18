@@ -456,3 +456,28 @@ test("una recarga periódica fallida no borra el catálogo ya cargado", async ({
   await expect(page.getByText(/No se pudieron actualizar los datos/)).toBeVisible()
   await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
 })
+
+test("una compra pagada espera la aceptación del vendedor en Recibidas", async ({ page }) => {
+  await mockBackend(page)
+  const book = SEED_BOOKS[0]
+  let sent = false
+  const purchase = () => ({
+    isbn: book.isbn, titulo: book.title, emailVendedor: testUser.email,
+    nombreVendedor: testUser.name, emailComprador: SEED_USERS[1].email,
+    nombreComprador: SEED_USERS[1].name, horaPublicacion: book.createdAt,
+    puntos: 50, estado: sent ? "ENVIADA" : "PAGADA", fecha: book.createdAt,
+  })
+  await page.route("**/api/compras/mis-ventas", route => route.fulfill({json:[purchase()]}))
+  await page.route("**/api/compras/enviar?**", async route => {
+    sent = true
+    await route.fulfill({json:purchase()})
+  })
+  await signIn(page)
+  await page.locator("aside").getByRole("button", { name: /^Mis Intercambios/ }).click()
+  await expect(page.getByRole("button", { name:"Aceptar Solicitud", exact:true })).toBeVisible()
+  await page.getByRole("button", { name:"Aceptar Solicitud", exact:true }).click()
+  await expect(page.getByRole("button", { name:"Aceptar Solicitud", exact:true })).toHaveCount(0)
+  expect(sent).toBe(true)
+  await page.getByRole("button", { name:/En Curso/ }).click()
+  await expect(page.getByText("Entrega registrada (Esperando recepción del comprador)", {exact:false})).toBeVisible()
+})

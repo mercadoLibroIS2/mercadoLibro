@@ -385,12 +385,13 @@ function compraResponseToTrade(dto: any): TradeRequest {
   const reqBookId = `${dto.isbn}|${vendedor}|${horaPub}`
   const id = `compra:${comprador}|${dto.isbn}|${vendedor}|${horaPub}`
 
+  // PAGADA solo reserva puntos: sigue pendiente hasta que el vendedor acepte/envíe.
   let status: any = "PENDIENTE"
   if (dto.estado === "ENTREGADA" || dto.estado === "COMPLETADA") {
     status = "COMPLETADO"
   } else if (dto.estado === "CANCELADA") {
     status = "CANCELADO"
-  } else if (dto.estado === "ENVIADA" || dto.estado === "PAGADA") {
+  } else if (dto.estado === "ENVIADA") {
     status = "ACEPTADO"
   }
 
