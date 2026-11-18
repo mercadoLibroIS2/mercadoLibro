@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.DTO.Request.ReseniaRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.MovimientoPuntosReseniaId;
@@ -52,7 +53,7 @@ public class ReseniaServiceImpl implements ReseniaService {
     @Autowired(required = false)
     private NotificacionService notificacionService;
 
-    private Long puntosResenia = 50L;
+    private static final long puntosResenia = PoliticaPuntos.BONO_RESENIA;
 
     @Autowired(required = false)
     private com.ingenieriaSoftware2.Service.Implementations.Auxiliares.ReputacionCalculadora reputacionCalculadora;

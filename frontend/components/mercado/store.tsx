@@ -33,7 +33,7 @@ import {
   SEED_USERS,
 } from "@/lib/seed-data"
 import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
-import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA, backendErrorMessage } from "@/lib/puntos"
+import { PUNTOS_INICIALES, BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA, backendErrorMessage } from "@/lib/puntos"
 import { generateInitialChains } from "@/lib/chain-detector"
 import {
   apiLogin,
@@ -981,7 +981,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 rating: userProfile?.reputacionPromedio || 0,
                 totalReviews: 0,
                 totalTrades: 0,
-                availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? 100,
+                availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? PUNTOS_INICIALES,
                 reservedPoints: userProfile?.saldoReservado ?? 0,
                 joinedDate: new Date().toISOString(),
               }
@@ -1041,7 +1041,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rating: 0,
         totalReviews: 0,
         totalTrades: 0,
-        availablePoints: 100,
+        availablePoints: PUNTOS_INICIALES,
         reservedPoints: 0,
         joinedDate: new Date().toISOString(),
       }
@@ -1079,7 +1079,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           rating: 0,
           totalReviews: 0,
           totalTrades: 0,
-          availablePoints: authData.puntos ?? 100,
+          availablePoints: authData.puntos ?? PUNTOS_INICIALES,
           reservedPoints: 0,
           joinedDate: new Date().toISOString(),
         }
@@ -1088,8 +1088,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           id: "pm-" + Date.now(),
           userId: authData.id,
           type: "INICIAL",
-          amount: authData.puntos ?? 100,
-          balanceAfter: authData.puntos ?? 100,
+          amount: authData.puntos ?? PUNTOS_INICIALES,
+          balanceAfter: authData.puntos ?? PUNTOS_INICIALES,
           description: "Bienvenida a MercadoLibro — Asignación de puntos iniciales",
           date: new Date().toISOString(),
         }
@@ -1243,7 +1243,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ownerRating: currentUser.rating || 0,
           ownerTrades: currentUser.totalTrades || 0,
           referencePrice:
-            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
+            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, data.googleBook?.ratingExterno ?? undefined),
         }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
@@ -1303,7 +1303,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 description: patch.description,
                 category: backendCategory || patch.category || candidate.category,
                 referencePrice:
-                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, 4.5),
+                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, candidate.externalRating),
               }
             : candidate
         ),

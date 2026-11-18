@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.DTO.Response.MovimientoPuntosResponseDTO;
 import com.ingenieriaSoftware2.DTO.Response.SaldoPuntosResponseDTO;
 
@@ -40,7 +41,7 @@ import java.util.List;
 @Service
 public class MovimientoPuntosServiceImpl implements MovimientoPuntosService {
 
-    private static final int PUNTOS_INICIALES = 500;
+    private static final int PUNTOS_INICIALES = PoliticaPuntos.PUNTOS_INICIALES;
     private static LocalDateTime ultimaFechaEvento = LocalDateTime.MIN;
 
     private static synchronized LocalDateTime obtenerFechaEventoUnica() {

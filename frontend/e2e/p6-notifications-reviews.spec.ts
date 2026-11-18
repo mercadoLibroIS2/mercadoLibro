@@ -382,7 +382,7 @@ test("publicar una reseña actualiza reputación, historial y recompensa una sol
   await signIn(page)
   await openTradeHistory(page)
 
-  await page.getByRole("button", { name: "Calificar (+50 pts)" }).click()
+  await page.getByRole("button", { name: "Calificar (+25 pts)" }).click()
   const modal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Calificar a Tomás Rivero" }) })
   await expect(modal).toBeVisible()
   await modal.locator('form button[type="button"]').nth(2).click()
@@ -404,7 +404,7 @@ test("publicar una reseña actualiza reputación, historial y recompensa una sol
     totalReviews: 13,
   })
   expect(saved.users.find((user: User) => user.email === SEED_USERS[0].email).availablePoints).toBe(
-    SEED_USERS[0].availablePoints + 50,
+    SEED_USERS[0].availablePoints + 25,
   )
   expect(saved.pointMovements.filter((movement: { tradeId?: string; type: string }) =>
     movement.tradeId === "trade-completed-p6" && movement.type === "RECOMPENSA_RESEÑA",
@@ -412,7 +412,7 @@ test("publicar una reseña actualiza reputación, historial y recompensa una sol
   expect(saved.trades.find((trade: TradeRequest) => trade.id === "trade-completed-p6").reviewedByRequester).toBe(true)
 
   await expect(page.getByText("Calificado")).toBeVisible()
-  await expect(page.getByRole("button", { name: "Calificar (+50 pts)" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Calificar (+25 pts)" })).toHaveCount(0)
 })
 
 test("se puede publicar la calificación mínima y los comentarios vacíos o solo espacios no se aceptan", async ({
@@ -422,7 +422,7 @@ test("se puede publicar la calificación mínima y los comentarios vacíos o sol
   await loadState(page, { trades: [completedTrade()] })
   await signIn(page)
   await openTradeHistory(page)
-  await page.getByRole("button", { name: "Calificar (+50 pts)" }).click()
+  await page.getByRole("button", { name: "Calificar (+25 pts)" }).click()
 
   const modal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Calificar a Tomás Rivero" }) })
   await modal.locator('form button[type="button"]').first().click()
@@ -443,7 +443,7 @@ test("omitir la reseña conserva el intercambio sin marcarlo calificado ni otorg
   await loadState(page, { trades: [completedTrade()] })
   await signIn(page)
   await openTradeHistory(page)
-  await page.getByRole("button", { name: "Calificar (+50 pts)" }).click()
+  await page.getByRole("button", { name: "Calificar (+25 pts)" }).click()
   await page.getByRole("button", { name: "Omitir" }).click()
 
   const saved = await savedState(page)
@@ -459,7 +459,7 @@ test("el perfil público muestra reputación y reseñas recibidas de forma consi
   await loadState(page, { trades: [completedTrade()] })
   await signIn(page)
   await openTradeHistory(page)
-  await page.getByRole("button", { name: "Calificar (+50 pts)" }).click()
+  await page.getByRole("button", { name: "Calificar (+25 pts)" }).click()
   const modal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Calificar a Tomás Rivero" }) })
   await modal.getByPlaceholder("¿Cómo estuvo el estado del libro, la puntualidad y el trato?...").fill("Muy buena experiencia.")
   await modal.getByRole("button", { name: "Publicar Calificación" }).click()
@@ -480,7 +480,7 @@ test("un intercambio incompleto o cancelado no permite dejar una reseña", async
   await signIn(page)
   await openTradeHistory(page)
 
-  await expect(page.getByRole("button", { name: "Calificar (+50 pts)" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Calificar (+25 pts)" })).toHaveCount(0)
   await expect(page.getByText("Intercambio cancelado. Puntos y libros liberados.")).toBeVisible()
 })
 

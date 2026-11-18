@@ -77,7 +77,7 @@ class ReseniaCompraServiceImplTest {
         assertEquals("vendedor@test.com", dto.emailReseniado());
         assertEquals("Todo perfecto", dto.comentario());
         verify(reputacionCalculadora).recalcular(vendedor);
-        verify(movimientoPuntosService).acreditarBonificacionSistema(comprador, 50, "Bonificación por reseña");
+        verify(movimientoPuntosService).acreditarBonificacionSistema(comprador, 25, "Bonificación por reseña");
         verify(notificacionService).crear(eq("vendedor@test.com"), eq(TipoNotificacion.RESENIA_RECIBIDA), contains("4 de 5"));
     }
 

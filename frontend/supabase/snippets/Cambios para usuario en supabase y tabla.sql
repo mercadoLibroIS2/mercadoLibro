@@ -26,7 +26,7 @@ create policy "Permitir insercion de usuario propio"
 
 -- 2. Robot automático (Trigger)
 -- Cuando alguien se registra en Supabase Auth, se inserta automáticamente
--- su registro en la tabla usuario con los 100 puntos iniciales (RF14).
+-- su registro en la tabla usuario con los 500 puntos iniciales (RF14).
 create or replace function public.handle_new_user()
 returns trigger as $$
 declare
@@ -44,7 +44,7 @@ begin
     )
     values (
       new.id, new.email, app_username, new.encrypted_password,
-      100, 0, 5.0, 'USUARIO', true
+      500, 0, 5.0, 'USUARIO', true
     )
     on conflict (email) do nothing;
   elsif exists (
@@ -56,7 +56,7 @@ begin
       reputacion_promedio, notificacion_email, notificacion_inapp
     )
     values (
-      new.email, app_username, 100, 0, 5.0, true, true
+      new.email, app_username, 500, 0, 5.0, true, true
     )
     on conflict (email) do nothing;
   end if;
@@ -91,7 +91,7 @@ begin
       users.email,
       lower(coalesce(users.raw_user_meta_data->>'username', split_part(users.email, '@', 1))),
       users.encrypted_password,
-      100,
+      500,
       0,
       5.0,
       'USUARIO',
@@ -110,7 +110,7 @@ begin
     select
       users.email,
       lower(coalesce(users.raw_user_meta_data->>'username', split_part(users.email, '@', 1))),
-      100,
+      500,
       0,
       5.0,
       true,

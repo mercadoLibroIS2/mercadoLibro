@@ -83,7 +83,7 @@ class PublicacionServiceImplTest {
     private PublicacionServiceImpl publicacionService;
 
     @Test
-    void publicarLibroImportadoAsignaValorReferencia100YNotificaSeguidores() {
+    void publicarLibroImportadoUsaLaNuevaEscalaYNotificaSeguidores() {
         String isbn = "978-84-376-0457-2";
         Usuario propietario = new Usuario();
         propietario.setEmail("duena@example.com");
@@ -104,8 +104,8 @@ class PublicacionServiceImplTest {
             l.setSeguidores(Set.of(seguidor, propietario));
             return l;
         });
-        when(calculadora.calcular(isbn, EstadoFisico.NUEVO)).thenReturn(100);
-        when(calculadora.calculadoraColor(100, 100)).thenReturn(ColorSemaforo.VERDE);
+        when(calculadora.calcular(isbn, EstadoFisico.NUEVO)).thenReturn(650);
+        when(calculadora.calculadoraColor(100, 650)).thenReturn(ColorSemaforo.VERDE);
         when(publicacionRepository.save(any(Publicacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PublicacionRequestDTO req = new PublicacionRequestDTO(isbn, EstadoFisico.NUEVO, 100, "Excelente", null);
@@ -113,14 +113,14 @@ class PublicacionServiceImplTest {
 
         ArgumentCaptor<Libro> libroCaptor = ArgumentCaptor.forClass(Libro.class);
         verify(libroRepository).save(libroCaptor.capture());
-        assertEquals(100, libroCaptor.getValue().getValorReferencia());
+        assertEquals(650, libroCaptor.getValue().getValorReferencia());
 
         verify(notificacionService).crear(eq("seguidor@example.com"), eq(TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO), contains("un libro que seguís"));
         verify(notificacionService, never()).crear(eq("duena@example.com"), any(), any());
     }
 
     @Test
-    void publicarLibroSinValorReferenciaAsigna150ParaRayuela() {
+    void publicarLibroSinValorReferenciaUsaLaEscalaComunSinExcepcionesPorIsbn() {
         String isbn = "978-987-566-646-7";
         Usuario propietario = new Usuario();
         propietario.setEmail("duena@example.com");
@@ -131,16 +131,14 @@ class PublicacionServiceImplTest {
 
         when(usuarioRepository.findByEmail("duena@example.com")).thenReturn(Optional.of(propietario));
         when(libroRepository.findByIsbn(isbn)).thenReturn(Optional.of(libroSinValor));
-        when(libroRepository.save(any(Libro.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(calculadora.calcular(isbn, EstadoFisico.COMO_NUEVO)).thenReturn(135);
-        when(calculadora.calculadoraColor(135, 135)).thenReturn(ColorSemaforo.VERDE);
+        when(calculadora.calcular(isbn, EstadoFisico.COMO_NUEVO)).thenReturn(565);
+        when(calculadora.calculadoraColor(135, 565)).thenReturn(ColorSemaforo.VERDE);
         when(publicacionRepository.save(any(Publicacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PublicacionRequestDTO req = new PublicacionRequestDTO(isbn, EstadoFisico.COMO_NUEVO, 135, "Como nuevo", null);
         publicacionService.publicarLibro(req, "duena@example.com");
 
-        assertEquals(150, libroSinValor.getValorReferencia());
-        verify(libroRepository).save(libroSinValor);
+        assertEquals(625, libroSinValor.getValorReferencia());
     }
 
     @Test

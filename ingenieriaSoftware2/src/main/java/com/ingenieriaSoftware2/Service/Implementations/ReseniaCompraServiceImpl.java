@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.DTO.Request.ReseniaCompraRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.ReseniaCompraResponseDTO;
 import com.ingenieriaSoftware2.Entity.Compra;
@@ -31,7 +32,7 @@ import java.util.UUID;
 @Service
 public class ReseniaCompraServiceImpl implements ReseniaCompraService {
 
-    static final int PUNTOS_RESENIA = 50;
+    static final int PUNTOS_RESENIA = PoliticaPuntos.BONO_RESENIA;
 
     @Autowired
     private ReseniaCompraRepository reseniaCompraRepository;

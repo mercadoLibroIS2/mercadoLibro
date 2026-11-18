@@ -1,6 +1,7 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.DTO.Response.CadenaIntercambioResponseDTO;
+import com.ingenieriaSoftware2.DTO.Request.CadenaIntercambioRequestDTO;
 import com.ingenieriaSoftware2.Entity.CadenaIntercambio;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Libro;
@@ -84,6 +85,13 @@ class CadenaIntercambioServiceImplTest {
         when(publicacionRepository.findById(any())).thenAnswer(inv -> Optional.ofNullable(publicaciones.get(inv.getArgument(0))));
         when(publicacionRepository.findByIdParaActualizar(any())).thenAnswer(inv -> Optional.ofNullable(publicaciones.get(inv.getArgument(0))));
         when(usuarioRepository.findByEmail(anyString())).thenAnswer(inv -> Optional.ofNullable(usuarios.get(inv.<String>getArgument(0))));
+    }
+
+    @Test
+    void noPermiteElegirUnBonoArbitrarioDesdeLaSolicitud() {
+        assertThrows(ResponseStatusException.class, () -> service.crearCadena(
+                new CadenaIntercambioRequestDTO(List.of(), 5000)));
+        assertTrue(guardadas.isEmpty());
     }
 
     @Test

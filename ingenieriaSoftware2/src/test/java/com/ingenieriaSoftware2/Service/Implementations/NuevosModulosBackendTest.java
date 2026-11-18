@@ -125,7 +125,7 @@ class NuevosModulosBackendTest {
     }
 
     @Test
-    void calculadoraUsaRespaldo100CuandoValorReferenciaEsNuloYCalculaColoresSemaforo() {
+    void calculadoraUsaEscala500CuandoValorReferenciaEsNuloYCalculaColoresSemaforo() {
         Libro libro = new Libro();
         libro.setIsbn("978-0");
         libro.setValorReferencia(null);
@@ -134,8 +134,8 @@ class NuevosModulosBackendTest {
         Integer calculadoNuevo = calculadora.calcular("978-0", EstadoFisico.NUEVO);
         Integer calculadoBuenEstado = calculadora.calcular("978-0", EstadoFisico.BUEN_ESTADO);
 
-        assertEquals(100, calculadoNuevo);
-        assertEquals(80, calculadoBuenEstado);
+        assertEquals(625, calculadoNuevo);
+        assertEquals(500, calculadoBuenEstado);
 
         assertEquals(ColorSemaforo.VERDE, calculadora.calculadoraColor(100, 100));
         assertEquals(ColorSemaforo.VERDE, calculadora.calculadoraColor(110, 100));
@@ -253,6 +253,7 @@ class NuevosModulosBackendTest {
         ReseniaResponseDTO creada = reseniaService.crearResenia(req, userId);
 
         assertEquals((short) 5, creada.calificacion());
+        assertEquals(525, reviewer.getSaldoTotal());
         verify(notificacionServiceMock).crear(eq("receptor@example.com"), eq(TipoNotificacion.RESENIA_RECIBIDA), contains("te calificó"));
         verify(notificacionServiceMock).crear(eq("solicitante@example.com"), eq(TipoNotificacion.PUNTOS_GANADOS), anyString());
 
@@ -311,16 +312,16 @@ class NuevosModulosBackendTest {
             return c;
         });
 
-        CadenaIntercambioRequestDTO req = new CadenaIntercambioRequestDTO(List.of("p1@example.com"), 75);
+        CadenaIntercambioRequestDTO req = new CadenaIntercambioRequestDTO(List.of("p1@example.com"), 50);
         CadenaIntercambioResponseDTO creada = cadenaIntercambioService.crearCadena(req);
 
         assertEquals(EstadoCadena.PROPUESTA, creada.estado());
-        assertEquals(75, creada.puntosBonus());
+        assertEquals(50, creada.puntosBonus());
         assertEquals(List.of("p1@example.com"), creada.participantesEmails());
 
         CadenaIntercambio entidad = new CadenaIntercambio();
         entidad.setId(creada.id());
-        entidad.setPuntosBonus(75);
+        entidad.setPuntosBonus(50);
         entidad.setEstado(EstadoCadena.PROPUESTA);
         entidad.setParticipantes(Set.of(participante));
         when(cadenaIntercambioRepository.findById(creada.id())).thenReturn(Optional.of(entidad));

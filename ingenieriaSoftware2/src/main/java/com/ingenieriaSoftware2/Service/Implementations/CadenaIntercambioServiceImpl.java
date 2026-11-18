@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.DTO.Request.CadenaIntercambioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.CadenaIntercambioResponseDTO;
 import com.ingenieriaSoftware2.DTO.Response.CadenaPasoResponseDTO;
@@ -40,7 +41,7 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
 
     static final int MIN_PARTICIPANTES = 3;
     static final int MAX_PARTICIPANTES = 5;
-    static final int PUNTOS_BONUS_CADENA = 50;
+    static final int PUNTOS_BONUS_CADENA = PoliticaPuntos.BONO_CADENA;
 
     @Autowired
     private CadenaIntercambioRepository cadenaIntercambioRepository;
@@ -224,7 +225,10 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     @Transactional
     public CadenaIntercambioResponseDTO crearCadena(CadenaIntercambioRequestDTO dto) {
         CadenaIntercambio cadena = new CadenaIntercambio();
-        cadena.setPuntosBonus(dto != null && dto.puntosBonus() != null ? dto.puntosBonus() : PUNTOS_BONUS_CADENA);
+        if (dto != null && dto.puntosBonus() != null && dto.puntosBonus() != PUNTOS_BONUS_CADENA) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El bono de cadena es de " + PUNTOS_BONUS_CADENA + " puntos por participante");
+        }
+        cadena.setPuntosBonus(PUNTOS_BONUS_CADENA);
         cadena.setEstado(EstadoCadena.PROPUESTA);
 
         Set<Usuario> participantes = new LinkedHashSet<>();
@@ -296,7 +300,8 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
         publicaciones.forEach(p -> p.setEstadoPublicacion(EstadoPublicacion.VENDIDA));
         publicacionRepository.saveAll(publicaciones);
 
-        int bonus = cadena.getPuntosBonus() != null ? cadena.getPuntosBonus() : PUNTOS_BONUS_CADENA;
+        int bonus = PUNTOS_BONUS_CADENA;
+        cadena.setPuntosBonus(bonus);
         for (CadenaPaso paso : cadena.getPasos()) {
             Usuario receptor = usuarioRepository != null
                     ? usuarioRepository.findByEmail(paso.getEmailRecibe()).orElse(null)
@@ -414,7 +419,7 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
 
         return new CadenaIntercambioResponseDTO(
                 cadena.getId(),
-                cadena.getPuntosBonus(),
+                cadena.getEstado() == EstadoCadena.COMPLETADA ? cadena.getPuntosBonus() : PUNTOS_BONUS_CADENA,
                 cadena.getEstado(),
                 emails,
                 pasos
