@@ -21,20 +21,12 @@ export function FeedScreen() {
   } = useStore()
 
   const [selectedCondition, setSelectedCondition] = useState<string>("Todas")
-  const [maxPoints, setMaxPoints] = useState<number>(500)
+  const [maxPoints, setMaxPoints] = useState<number | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
   const filteredBooks = books.filter((book) => {
     // Los ya intercambiados o eliminados no se muestran (los reservados sí, marcados como tales)
     if (book.availability === "INTERCAMBIADO" || book.availability === "ELIMINADO") return false
-    if (
-      (book.title.startsWith("Libro (") && book.author === "Autor desconocido") ||
-      book.author === "Autor desconocido" ||
-      book.ownerId.includes("testuser") ||
-      book.ownerId.includes("mail@gmail")
-    ) {
-      return false
-    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -53,25 +45,26 @@ export function FeedScreen() {
       return false
     }
 
-    if (book.points > maxPoints) {
+    if (maxPoints !== null && book.points > maxPoints) {
       return false
     }
 
     return true
   })
 
+  const maximumPrice = Math.ceil(Math.max(500, ...books.map((book) => book.points)) / 5) * 5
   const allCategories = ["Todas", ...CATEGORIES]
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
     selectedCategory !== "Todas" ||
     selectedCondition !== "Todas" ||
-    maxPoints < 500
+    maxPoints !== null
 
   function handleClearAllFilters() {
     setSearchQuery("")
     setSelectedCategory("Todas")
     setSelectedCondition("Todas")
-    setMaxPoints(500)
+    setMaxPoints(null)
   }
 
   return (
@@ -107,14 +100,14 @@ export function FeedScreen() {
             aria-expanded={showFilters}
             onClick={() => setShowFilters(!showFilters)}
             className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/50 active:scale-[0.98] ${
-              showFilters || selectedCondition !== "Todas" || maxPoints < 500
+              showFilters || selectedCondition !== "Todas" || maxPoints !== null
                 ? "border-amber-300 bg-amber-50 text-amber-950 shadow-xs"
                 : "border-stone-200/90 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
             }`}
           >
             <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
             <span>Filtros</span>
-            {(selectedCondition !== "Todas" || maxPoints < 500) && (
+            {(selectedCondition !== "Todas" || maxPoints !== null) && (
               <span className="h-2 w-2 rounded-full bg-amber-800" />
             )}
           </button>
@@ -182,22 +175,22 @@ export function FeedScreen() {
                   Puntos Máximos
                 </label>
                 <span className="rounded-lg border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-xs sm:text-sm font-bold text-amber-900">
-                  Hasta {maxPoints} pts
+                  {maxPoints === null ? "Sin límite" : `Hasta ${maxPoints} pts`}
                 </span>
               </div>
               <input
                 id="filter-max-points"
                 type="range"
-                min={20}
-                max={500}
-                step={10}
-                value={maxPoints}
+                min={0}
+                max={maximumPrice}
+                step={5}
+                value={maxPoints ?? maximumPrice}
                 onChange={(e) => setMaxPoints(Number(e.target.value))}
                 className="mt-2 h-2 w-full cursor-pointer accent-amber-800"
               />
               <div className="mt-1.5 flex justify-between text-[11px] font-medium text-stone-400">
-                <span>20 pts</span>
-                <span>500 pts</span>
+                <span>0 pts</span>
+                <span>{maximumPrice} pts</span>
               </div>
             </div>
           </div>

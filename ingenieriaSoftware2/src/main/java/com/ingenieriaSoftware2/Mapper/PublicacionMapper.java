@@ -4,6 +4,8 @@ import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Publicacion;
+import com.ingenieriaSoftware2.Enums.EstadoPublicacion;
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -26,6 +28,14 @@ public class PublicacionMapper {
         Usuario propietario = publicacion.getPropietario();
         String nombrePropietario = propietario != null ? propietario.getNombre() : null;
 
+        // Las referencias son orientativas: actualizar la escala del catálogo no cambia
+        // el precio elegido ni las reservas/compensaciones ya acordadas.
+        boolean activa = publicacion.getEstadoPublicacion() == EstadoPublicacion.DISPONIBLE
+                || publicacion.getEstadoPublicacion() == EstadoPublicacion.RESERVADA;
+        Integer referencia = activa
+                ? PoliticaPuntos.referencia(publicacion.getLibro(), publicacion.getEstadoFisico())
+                : publicacion.getValorReferenciaCalculado();
+
         return new PublicacionResponseDTO(
                 publicacionId,
                 titulo,
@@ -33,8 +43,8 @@ public class PublicacionMapper {
                 portadaUrl,
                 publicacion.getEstadoFisico(),
                 publicacion.getValorPuntosSolicitado(),
-                publicacion.getValorReferenciaCalculado(),
-                publicacion.getColorSemaforo(),
+                referencia,
+                activa ? PoliticaPuntos.color(publicacion.getValorPuntosSolicitado(), referencia) : publicacion.getColorSemaforo(),
                 publicacion.getComentario(),
                 nombrePropietario,
                 publicacion.getEstadoPublicacion(),

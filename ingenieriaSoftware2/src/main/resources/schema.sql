@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS usuario (
     email               VARCHAR(255) NOT NULL UNIQUE,
     nombre              VARCHAR(255) NOT NULL UNIQUE,
     contrasenia         VARCHAR(255) NOT NULL,
-    saldo_total         INTEGER DEFAULT 100,
+    saldo_total         INTEGER DEFAULT 500,
     saldo_reservado     INTEGER DEFAULT 0,
     reputacion_promedio REAL NOT NULL DEFAULT 5.0,
     rol                 VARCHAR(50) DEFAULT 'USUARIO'

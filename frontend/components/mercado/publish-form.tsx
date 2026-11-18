@@ -21,6 +21,7 @@ import {
   type Condition,
   type GoogleBookVolume,
 } from "@/lib/mercado-types"
+import { REFERENCIA_BUEN_ESTADO } from "@/lib/puntos"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
 import { apiGetReferenciaLibro, CONDITION_TO_ESTADO } from "@/lib/api"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
@@ -88,7 +89,7 @@ export function PublishForm() {
   const [searchingGoogleBooks, setSearchingGoogleBooks] = useState(false)
   const [googleBooksError, setGoogleBooksError] = useState("")
   const [coverFailed, setCoverFailed] = useState(false)
-  // Referencia real del backend (solo si el libro ya existe en la base); sin ella no se sugiere nada
+  // Referencia vigente del backend; también importa el ISBN si todavía no está en la base.
   const [backendReference, setBackendReference] = useState<number | null>(null)
 
   const cleanIsbn = form.isbn.replace(/[^0-9X]/gi, "")
@@ -396,6 +397,11 @@ export function PublishForm() {
           )}
         </section>
 
+        <p className="text-xs text-stone-500">
+          Un libro promedio en buen estado tiene una referencia de {REFERENCIA_BUEN_ESTADO} puntos.
+          La sugerencia se ajusta por conservación y valoración externa; vos elegís el precio.
+        </p>
+
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label
@@ -452,7 +458,7 @@ export function PublishForm() {
                 step={1}
                 value={form.points}
                 onChange={(e) => updateField("points", e.target.value)}
-                placeholder={suggestedReference ? String(suggestedReference) : "Ej: 80"}
+                placeholder={suggestedReference ? String(suggestedReference) : `Ej: ${REFERENCIA_BUEN_ESTADO}`}
                 aria-invalid={errors.points ? true : undefined}
                 aria-describedby={errors.points ? "pub-points-error" : undefined}
                 className={

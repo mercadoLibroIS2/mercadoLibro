@@ -4,8 +4,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test"
 const INITIAL_POINTS = 500
 const LOW_VALUE_ISBN = process.env.P4_ISBN_MENOR || "978-84-376-0457-2"
 const HIGH_VALUE_ISBN = process.env.P4_ISBN_MAYOR || "978-987-566-646-7"
-const INSUFFICIENT_BALANCE_ISBN = process.env.P4_ISBN_SALDO_INSUFICIENTE
-const FIXED_PUBLICATION_VALUE = 100
+const FIXED_PUBLICATION_VALUE = 500
 
 interface AuthResponse {
   id: string
@@ -86,12 +85,13 @@ async function publish(
   request: APIRequestContext,
   owner: UserSession,
   isbn: string,
+  condition = "NUEVO",
 ): Promise<Publication> {
   const response = await request.post("/api/publicaciones/publicar", {
     headers: { Authorization: `Bearer ${owner.token}` },
     data: {
       isbn,
-      estadoFisico: "NUEVO",
+      estadoFisico: condition,
       valorPuntosSolicitado: FIXED_PUBLICATION_VALUE,
       comentario: "Publicación creada por pruebas E2E P4",
     },
@@ -123,8 +123,8 @@ async function createPair(
         : HIGH_VALUE_ISBN
 
   const [offered, requested] = await Promise.all([
-    publish(request, proposer, offeredIsbn),
-    publish(request, recipient, requestedIsbn),
+    publish(request, proposer, offeredIsbn, direction === "proposer-owes" ? "ACEPTABLE" : "NUEVO"),
+    publish(request, recipient, requestedIsbn, direction === "recipient-owes" ? "ACEPTABLE" : "NUEVO"),
   ])
 
   if (direction === "proposer-owes") {
@@ -313,14 +313,14 @@ test("aceptar y confirmar completa el intercambio, paga la diferencia y acredita
     ])
 
   expect(proposerBalance).toEqual({
-    saldoTotal: INITIAL_POINTS - pair.points + 100,
+    saldoTotal: INITIAL_POINTS - pair.points + 50,
     saldoReservado: 0,
-    saldoDisponible: INITIAL_POINTS - pair.points + 100,
+    saldoDisponible: INITIAL_POINTS - pair.points + 50,
   })
   expect(recipientBalance).toEqual({
-    saldoTotal: INITIAL_POINTS + pair.points + 100,
+    saldoTotal: INITIAL_POINTS + pair.points + 50,
     saldoReservado: 0,
-    saldoDisponible: INITIAL_POINTS + pair.points + 100,
+    saldoDisponible: INITIAL_POINTS + pair.points + 50,
   })
   expect(findExchange(sent!, pair)?.estado).toBe("COMPLETADO")
   expect(findExchange(received!, pair)?.estado).toBe("COMPLETADO")
@@ -513,40 +513,24 @@ test("la propuesta sin campos obligatorios falla sin alterar el saldo", async ({
   expect(findExchange(await getExchanges(request, "enviados", pair.proposer), pair)).toBeUndefined()
 })
 
-test("un proponente sin puntos suficientes no puede reservar una compensación mayor al saldo", async ({
-  request,
-}) => {
-  test.skip(
-    !INSUFFICIENT_BALANCE_ISBN,
-    "Configurar P4_ISBN_SALDO_INSUFICIENTE con un libro cuyo valor supere en más de 500 puntos al ISBN menor.",
-  )
-
-  const proposer = await registerUser(request, "p4-shortfall")
-  const recipient = await registerUser(request, "p4-shortfall-owner")
+test("las reservas de un trueque no se pueden volver a gastar en otro", async ({ request }) => {
+  const first = await createPair(request)
+  await propose(request, first)
+  const balanceBefore = await getBalance(request, first.proposer)
+  const secondRecipient = await registerUser(request, "p4-shortfall-owner")
   const [offered, requested] = await Promise.all([
-    publish(request, proposer, LOW_VALUE_ISBN),
-    publish(request, recipient, INSUFFICIENT_BALANCE_ISBN!),
+    publish(request, first.proposer, LOW_VALUE_ISBN, "DETERIORADO"),
+    publish(request, secondRecipient, HIGH_VALUE_ISBN, "NUEVO"),
   ])
-  const difference = requested.valorReferenciaCalculado - offered.valorReferenciaCalculado
-  test.skip(difference <= INITIAL_POINTS, "Los ISBN configurados no superan el saldo inicial.")
-
   const pair: ExchangePair = {
-    proposer,
-    recipient,
-    offered,
-    requested,
-    points: difference,
+    proposer: first.proposer, recipient: secondRecipient, offered, requested,
+    points: requested.valorReferenciaCalculado - offered.valorReferenciaCalculado,
   }
+  expect(pair.points).toBeGreaterThan(balanceBefore.saldoDisponible)
   const response = await request.post("/api/intercambios", {
-    headers: { Authorization: `Bearer ${proposer.token}` },
-    data: exchangeRequest(pair),
+    headers: { Authorization: `Bearer ${pair.proposer.token}` }, data: exchangeRequest(pair),
   })
-
   expect(response.ok()).toBe(false)
-  expect(await getBalance(request, proposer)).toEqual({
-    saldoTotal: INITIAL_POINTS,
-    saldoReservado: 0,
-    saldoDisponible: INITIAL_POINTS,
-  })
-  expect(findExchange(await getExchanges(request, "enviados", proposer), pair)).toBeUndefined()
+  expect(await getBalance(request, first.proposer)).toEqual(balanceBefore)
+  expect(findExchange(await getExchanges(request, "enviados", first.proposer), pair)).toBeUndefined()
 })

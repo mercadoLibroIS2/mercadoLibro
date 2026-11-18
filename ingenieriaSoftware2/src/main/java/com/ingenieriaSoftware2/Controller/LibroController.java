@@ -39,8 +39,8 @@ public class LibroController {
 
     /**
      * Valor de referencia que el backend usará para el semáforo si se publica este ISBN en ese
-     * estado, y la categoría que ya tiene el libro. 404 si el libro todavía no está en la base
-     * (se importa al publicarlo por primera vez).
+     * estado, y la categoría que ya tiene el libro. Si falta en la base se intenta importar
+     * desde los proveedores externos; devuelve 404 si no se encuentra.
      */
     @GetMapping("/{isbn}/referencia")
     public ResponseEntity<Map<String, Object>> obtenerReferencia(@PathVariable String isbn,

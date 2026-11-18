@@ -33,7 +33,7 @@ import {
   SEED_USERS,
 } from "@/lib/seed-data"
 import { calculateReferencePrice, evaluatePriceDeal } from "@/lib/price-evaluator"
-import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA, backendErrorMessage } from "@/lib/puntos"
+import { PUNTOS_INICIALES, BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA, backendErrorMessage } from "@/lib/puntos"
 import { generateInitialChains } from "@/lib/chain-detector"
 import {
   apiLogin,
@@ -77,7 +77,7 @@ import {
   apiCreateReviewCompra,
   apiListReviewsCompras,
   apiListReviews,
-  apiListUserReviews,
+  apiListPublications,
   apiListCadenas,
   apiAceptarCadena,
   apiRechazarCadena,
@@ -301,15 +301,9 @@ function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionRespon
     const fallbackSeed = seedByIsbn.get(cleanIsbn)
     const book = publicacionResponseToBook(pub, fallbackSeed)
 
-    const isJunkNoise =
-      (!pub.titulo && !fallbackSeed) ||
-      book.title.startsWith("Libro (") ||
-      book.author === "Autor desconocido" ||
-      book.ownerId.includes("testuser") ||
-      book.ownerId.includes("mail@gmail")
-
-    // "disponibles" y "mis-publicaciones" se solapan: evitar duplicados por id de publicación
-    if (!isJunkNoise && !seenIds.has(book.id) && book.availability !== "ELIMINADO") {
+    // Los datos del servidor son autoritativos; no descartar usuarios por su email
+    // ni publicaciones válidas por metadatos incompletos.
+    if (!seenIds.has(book.id) && book.availability !== "ELIMINADO") {
       seenIds.add(book.id)
       backendBooks.push(book)
     }
@@ -391,12 +385,13 @@ function compraResponseToTrade(dto: any): TradeRequest {
   const reqBookId = `${dto.isbn}|${vendedor}|${horaPub}`
   const id = `compra:${comprador}|${dto.isbn}|${vendedor}|${horaPub}`
 
+  // PAGADA solo reserva puntos: sigue pendiente hasta que el vendedor acepte/envíe.
   let status: any = "PENDIENTE"
   if (dto.estado === "ENTREGADA" || dto.estado === "COMPLETADA") {
     status = "COMPLETADO"
   } else if (dto.estado === "CANCELADA") {
     status = "CANCELADO"
-  } else if (dto.estado === "ENVIADA" || dto.estado === "PAGADA") {
+  } else if (dto.estado === "ENVIADA") {
     status = "ACEPTADO"
   }
 
@@ -722,8 +717,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apiGetHistorialPuntos().catch(() => []),
         apiListNotificaciones().catch(() => []),
         apiGetSaldoPuntos().catch(() => null),
-        apiListAvailablePublications().catch(() => []),
-        apiListMyPublications().catch(() => []),
+        apiListAvailablePublications(),
+        apiListMyPublications(),
         apiGetFollowedBooks(userId).catch(() => []),
         apiListReviews().catch(() => []),
         apiListCadenas().catch(() => []),
@@ -922,6 +917,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     } catch (err) {
       console.warn("[Backend] Error cargando datos asociados del usuario:", err)
+      showToast("No se pudieron actualizar los datos. Conservamos la última información; intentá recargar.")
     }
   }
 
@@ -985,7 +981,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 rating: userProfile?.reputacionPromedio || 0,
                 totalReviews: 0,
                 totalTrades: 0,
-                availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? 100,
+                availablePoints: userProfile?.saldoDisponible ?? authData.puntos ?? PUNTOS_INICIALES,
                 reservedPoints: userProfile?.saldoReservado ?? 0,
                 joinedDate: new Date().toISOString(),
               }
@@ -1045,7 +1041,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rating: 0,
         totalReviews: 0,
         totalTrades: 0,
-        availablePoints: 100,
+        availablePoints: PUNTOS_INICIALES,
         reservedPoints: 0,
         joinedDate: new Date().toISOString(),
       }
@@ -1083,7 +1079,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           rating: 0,
           totalReviews: 0,
           totalTrades: 0,
-          availablePoints: authData.puntos ?? 100,
+          availablePoints: authData.puntos ?? PUNTOS_INICIALES,
           reservedPoints: 0,
           joinedDate: new Date().toISOString(),
         }
@@ -1092,8 +1088,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           id: "pm-" + Date.now(),
           userId: authData.id,
           type: "INICIAL",
-          amount: authData.puntos ?? 100,
-          balanceAfter: authData.puntos ?? 100,
+          amount: authData.puntos ?? PUNTOS_INICIALES,
+          balanceAfter: authData.puntos ?? PUNTOS_INICIALES,
           description: "Bienvenida a MercadoLibro — Asignación de puntos iniciales",
           date: new Date().toISOString(),
         }
@@ -1185,28 +1181,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast]
   )
 
-  const viewUserProfile = useCallback((userId: string) => {
+  const viewUserProfile = useCallback(async (userId: string) => {
     setSelectedProfileUserId(userId)
     setScreen("perfil_publico")
-    apiGetPublicProfile(userId)
-      .then((pubProfile) => {
-        if (!pubProfile?.email) return
-        setState((prev) => ({
-          ...prev,
-          users: prev.users.map((u) =>
-            isUserMatch(u, pubProfile.email)
-              ? {
-                  ...u,
-                  name: pubProfile.nombre || u.name,
-                  rating: pubProfile.reputacionPromedio ?? u.rating,
-                }
-              : u
-          ),
-        }))
-      })
-      .catch(() => {})
-    apiListUserReviews(userId).catch(() => [])
-  }, [])
+    try {
+      const profile = await apiGetPublicProfile(userId)
+      const user: User = {
+        id: profile.id, email: profile.email, name: profile.nombre,
+        username: slugUsername(profile.nombre), avatar: "", rating: profile.reputacionPromedio ?? 0,
+        totalReviews: 0, totalTrades: 0, availablePoints: 0, reservedPoints: 0, joinedDate: "",
+      }
+      setState((prev) => ({ ...prev,
+        users: [...prev.users.filter((u) => !isUserMatch(u, user.email)), user],
+      }))
+      // Actualizar las reseñas de compras y trueques, no ignorar la respuesta del servidor.
+      if (state.currentUser) await loadUserData(state.currentUser.id)
+      const publications = (await apiListPublications()).filter((p) => p.publicacionId.emailPropietario === profile.email)
+      setState((prev) => ({ ...prev,
+        books: [...prev.books.filter((b) => !isUserMatch(user, b.ownerId)), ...publications.map((p) => publicacionResponseToBook(p))],
+      }))
+    } catch (err) {
+      showToast(`No se pudo cargar el perfil: ${backendErrorMessage(err)}`)
+    }
+  }, [state.currentUser, showToast])
 
   // --- Books CRUD (Spring Boot Backend + Local Fallback) ---
   const publishBook = useCallback(
@@ -1246,38 +1243,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ownerRating: currentUser.rating || 0,
           ownerTrades: currentUser.totalTrades || 0,
           referencePrice:
-            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
+            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, data.googleBook?.ratingExterno ?? undefined),
         }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
         return true
       } catch (error) {
-        if (hasBackendSession()) {
-          showToast(`No se pudo publicar el libro: ${backendErrorMessage(error)}`)
-          return false
-        }
-        const nowIso = new Date().toISOString()
-        const localBook: Book = {
-          id: `${data.isbn.trim()}|${currentUser.email}|${nowIso}`,
-          isbn: data.isbn.trim(),
-          title: fallbackMeta.title,
-          author: fallbackMeta.author,
-          category: fallbackMeta.category,
-          condition: data.condition,
-          points: data.points,
-          referencePrice: calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
-          description: data.description || "",
-          coverUrl: fallbackMeta.coverUrl,
-          ownerId: currentUser.email,
-          ownerName: currentUser.name,
-          ownerRating: currentUser.rating || 0,
-          ownerTrades: currentUser.totalTrades || 0,
-          availability: "DISPONIBLE",
-          createdAt: nowIso,
-        }
-        setState((prev) => ({ ...prev, books: [localBook, ...prev.books] }))
-        showToast(`"${localBook.title}" se publicó correctamente en el catálogo.`)
-        return true
+        showToast(`No se pudo publicar el libro: ${backendErrorMessage(error)}`)
+        return false
       }
     },
     [state.currentUser, showToast]
@@ -1330,7 +1303,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 description: patch.description,
                 category: backendCategory || patch.category || candidate.category,
                 referencePrice:
-                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, 4.5),
+                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, candidate.externalRating),
               }
             : candidate
         ),

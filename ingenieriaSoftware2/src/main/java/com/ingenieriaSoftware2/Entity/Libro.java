@@ -40,6 +40,7 @@ public class Libro {
     @DecimalMax("5.0")
     private BigDecimal puntuacionExterna;
 
+    // Caché orientativa para ejemplar nuevo. La política vigente se recalcula desde los metadatos.
     private Integer valorReferencia;
 
     // Frescura del cache, independiente para cada tipo de dato

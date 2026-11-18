@@ -20,17 +20,17 @@ const USERS = {
 
 // [dueño, isbn, estado físico, puntos, comentario, categoría]
 const PUBLICATIONS = [
-  ["lucia", "9788437604572", "BUEN_ESTADO", 55, "Edición Cátedra con notas. Tablero de dirección intacto.", "Ficción"],
-  ["lucia", "9780156012195", "COMO_NUEVO", 30, "Lo leí una sola vez, sin marcas.", "Infantil"],
-  ["lucia", "9780132350884", "DETERIORADO", 60, "Subrayado en lápiz en los primeros capítulos.", "Técnico"],
-  ["tomas", "9780307474728", "COMO_NUEVO", 70, "Edición Vintage Español, tapa blanda.", "Ficción"],
-  ["tomas", "9788499926223", "BUEN_ESTADO", 45, "Editorial Debate. Lomo un poco gastado.", "Historia"],
-  ["tomas", "9780345539434", "BUEN_ESTADO", 75, "Edición en inglés con prólogo de Neil deGrasse Tyson.", "Ciencia"],
-  ["valentina", "9788478884452", "BUEN_ESTADO", 40, "Primera edición de bolsillo de Salamandra.", "Infantil"],
-  ["valentina", "9788420633114", "NUEVO", 80, "Nuevo, todavía con el film.", "Ficción"],
-  ["valentina", "9788499890944", "ACEPTABLE", 50, "Debolsillo. Hojas amarillentas.", "Ficción"],
-  ["mateo", "9788408163381", "NUEVO", 85, "Regalo repetido, sin abrir.", "Ficción"],
-  ["mateo", "9788433973382", "COMO_NUEVO", 70, "Anagrama, colección Compactos.", "Ciencia"],
+  ["lucia", "9788437604572", "BUEN_ESTADO", 500, "Edición Cátedra con notas. Tablero de dirección intacto.", "Ficción"],
+  ["lucia", "9780156012195", "COMO_NUEVO", 500, "Lo leí una sola vez, sin marcas.", "Infantil"],
+  ["lucia", "9780132350884", "DETERIORADO", 300, "Subrayado en lápiz en los primeros capítulos.", "Técnico"],
+  ["tomas", "9780307474728", "COMO_NUEVO", 550, "Edición Vintage Español, tapa blanda.", "Ficción"],
+  ["tomas", "9788499926223", "BUEN_ESTADO", 450, "Editorial Debate. Lomo un poco gastado.", "Historia"],
+  ["tomas", "9780345539434", "BUEN_ESTADO", 500, "Edición en inglés con prólogo de Neil deGrasse Tyson.", "Ciencia"],
+  ["valentina", "9788478884452", "BUEN_ESTADO", 500, "Primera edición de bolsillo de Salamandra.", "Infantil"],
+  ["valentina", "9788420633114", "NUEVO", 600, "Nuevo, todavía con el film.", "Ficción"],
+  ["valentina", "9788499890944", "ACEPTABLE", 400, "Debolsillo. Hojas amarillentas.", "Ficción"],
+  ["mateo", "9788408163381", "NUEVO", 625, "Regalo repetido, sin abrir.", "Ficción"],
+  ["mateo", "9788433973382", "COMO_NUEVO", 550, "Anagrama, colección Compactos.", "Ciencia"],
 ]
 
 /** Quita saltos de línea y caracteres de control antes de loguear texto que viene del servidor. */

@@ -1,42 +1,28 @@
 import type { Condition, DealEvaluation } from "./mercado-types"
+import { REFERENCIA_BUEN_ESTADO, VALORACION_NEUTRA } from "./puntos"
 
 export const CONDITION_MULTIPLIERS: Record<Condition, number> = {
-  Nuevo: 1.5,
-  "Como nuevo": 1.3,
-  "Muy bueno": 1.0,
+  Nuevo: 1.0,
+  "Como nuevo": 0.9,
+  "Muy bueno": 0.8,
   Bueno: 0.8,
-  Aceptable: 0.6,
+  Aceptable: 0.65,
   "Con marcas": 0.45,
 }
 
-export const CATEGORY_BASE_PRICES: Record<string, number> = {
-  Ficción: 50,
-  "No ficción": 55,
-  Ciencia: 60,
-  Historia: 55,
-  Infantil: 40,
-  Poesía: 45,
-  Técnico: 70,
-  Autoayuda: 45,
-  "Comics y novela gráfica": 65,
-  Filosofía: 50,
-  Biografía: 55,
-}
-
 /**
- * Calculates reference price based on RF40/RF41
+ * Misma escala que PoliticaPuntos en el backend. La categoría no modifica el precio.
  */
 export function calculateReferencePrice(
-  category: string,
+  _category: string,
   condition: Condition,
-  externalRating = 4.2
+  externalRating = VALORACION_NEUTRA
 ): number {
-  const base = CATEGORY_BASE_PRICES[category] || 50
-  const conditionMult = CONDITION_MULTIPLIERS[condition] || 1.0
-  const ratingMult = 0.8 + (externalRating / 5) * 0.4 // 4.0/5 -> 1.12
-
-  const calculated = Math.round(base * conditionMult * ratingMult)
-  return Math.max(10, calculated)
+  const base = REFERENCIA_BUEN_ESTADO / CONDITION_MULTIPLIERS.Bueno
+  const conditionMult = CONDITION_MULTIPLIERS[condition] ?? CONDITION_MULTIPLIERS.Bueno
+  const rating = Number.isFinite(externalRating) ? Math.max(0, Math.min(5, externalRating)) : VALORACION_NEUTRA
+  const ratingMult = 1 + (rating - VALORACION_NEUTRA) * 0.05
+  return Math.max(5, Math.round((base * conditionMult * ratingMult) / 5) * 5)
 }
 
 /**
@@ -49,7 +35,7 @@ export function evaluatePriceDeal(
   points: number,
   category: string,
   condition: Condition,
-  externalRating = 4.2,
+  externalRating = VALORACION_NEUTRA,
   referenceOverride?: number
 ): DealEvaluation {
   const ref =
@@ -86,9 +72,9 @@ export function evaluatePriceDeal(
     hint,
     referencePrice: ref,
     factors: {
-      conditionMultiplier: CONDITION_MULTIPLIERS[condition] || 1.0,
+      conditionMultiplier: CONDITION_MULTIPLIERS[condition] ?? CONDITION_MULTIPLIERS.Bueno,
       externalRating,
-      marketBase: CATEGORY_BASE_PRICES[category] || 50,
+      marketBase: REFERENCIA_BUEN_ESTADO / CONDITION_MULTIPLIERS.Bueno,
     },
   }
 }

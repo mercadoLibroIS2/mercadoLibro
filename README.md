@@ -4,6 +4,8 @@ Plataforma de intercambio de libros entre lectores (Ingeniería de Software II).
 publica ejemplares y los intercambia por **puntos** o en **trueque directo**; el sistema además
 detecta **cadenas circulares** de 3 a 5 lectores a partir de los libros que cada uno sigue.
 
+La escala de puntos y el semáforo se describen en [Escala vigente de puntos](docs/escala-puntos.md): registro 500, trueque +50 por persona, reseña +25 y cadena +50 por persona.
+
 ## Arquitectura
 
 ```

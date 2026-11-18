@@ -29,7 +29,7 @@ export function BookCard({ book }: { book: Book }) {
     book.points,
     book.category,
     book.condition,
-    book.externalRating || 4.5,
+    book.externalRating,
     book.referencePrice
   )
   const isAvailable = book.availability === "DISPONIBLE"

@@ -1,5 +1,6 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.DTO.Request.IntercambioRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.IntercambioResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.IntercambioId;
@@ -42,7 +43,7 @@ import java.util.UUID;
 @Service
 public class IntercambioServiceImpl implements IntercambioService {
 
-    private static final int PUNTOS_BONIFICACION = 100;
+    private static final int PUNTOS_BONIFICACION = PoliticaPuntos.BONO_TRUEQUE;
     private static Instant ultimoInstanteMovimiento = Instant.MIN;
 
     private static synchronized Instant obtenerInstanteUnico() {
@@ -357,8 +358,8 @@ public class IntercambioServiceImpl implements IntercambioService {
      * después, el deudor se deduce de las reservas registradas.
      */
     private int calcularDiferencia(Publicacion ofrecida, Publicacion solicitada) {
-        Integer valorOfrecida = ofrecida.getValorReferenciaCalculado();
-        Integer valorSolicitada = solicitada.getValorReferenciaCalculado();
+        Integer valorOfrecida = PoliticaPuntos.referencia(ofrecida.getLibro(), ofrecida.getEstadoFisico());
+        Integer valorSolicitada = PoliticaPuntos.referencia(solicitada.getLibro(), solicitada.getEstadoFisico());
 
         if (valorOfrecida == null || valorSolicitada == null) {
             throw new EstadoIntercambioInvalidoException(

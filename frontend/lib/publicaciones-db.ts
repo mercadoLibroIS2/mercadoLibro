@@ -1,5 +1,6 @@
 import type { Book, Condition, GoogleBookVolume, User } from "./mercado-types"
 import { CATEGORIES } from "./mercado-types"
+import { VALORACION_NEUTRA } from "./puntos"
 import { calculateReferencePrice } from "./price-evaluator"
 import { supabase } from "./supabase"
 
@@ -29,6 +30,7 @@ function text(row: DatabaseRow, key: string, fallback = ""): string {
 
 function number(row: DatabaseRow, key: string, fallback = 0): number {
   const value = row[key]
+  if (value == null) return fallback
   const parsed = typeof value === "number" ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
 }
@@ -71,9 +73,8 @@ function toBook(
       VENDIDA: "INTERCAMBIADO",
       ELIMINADA: "ELIMINADO",
     }[text(publication, "estado_publicacion")] || "DISPONIBLE") as Book["availability"],
-    referencePrice: number(publication, "valor_referencia_calculado")
-      || calculateReferencePrice(selectedCategory, condition, number(book || {}, "puntuacion_externa", 4.5)),
-    externalRating: number(book || {}, "puntuacion_externa", 4.5),
+    referencePrice: calculateReferencePrice(selectedCategory, condition, number(book || {}, "puntuacion_externa", VALORACION_NEUTRA)),
+    externalRating: number(book || {}, "puntuacion_externa", VALORACION_NEUTRA),
     createdAt: timestamp,
   }
 }

@@ -3,6 +3,8 @@ package com.ingenieriaSoftware2.Mapper;
 import com.ingenieriaSoftware2.DTO.Response.LibroResponseDTO;
 import com.ingenieriaSoftware2.Entity.Categoria;
 import com.ingenieriaSoftware2.Entity.Libro;
+import com.ingenieriaSoftware2.Enums.EstadoFisico;
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,7 +17,7 @@ public class LibroMapper {
                 libro.getCategorias().stream()
                         .map(Categoria::getNombre)
                         .toList(),
-                libro.getValorReferencia(),
+                PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO),
                 libro.getPuntuacionExterna()
         );
         return dto;

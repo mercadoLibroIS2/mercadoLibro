@@ -403,3 +403,118 @@ test("no permite eliminar una publicación reservada con un intercambio en curso
   await expect(page.getByText("No se puede eliminar un libro con intercambio en curso (RF04).")).toBeVisible()
   await expect(bookCard(page, "Clean Code")).toBeVisible()
 })
+
+test("las publicaciones persistidas no desaparecen por el email del propietario al recargar", async ({ page }) => {
+  const database = await mockBackend(page)
+  const publication = database.publications[0]
+  publication.email_propietario = "testuser@mail@gmail.com"
+  await signIn(page)
+  await page.reload()
+  await page.locator("aside").getByRole("button", { name: "Catálogo", exact: true }).click()
+  await expect(bookCard(page, publication.titulo)).toBeVisible()
+})
+
+test("publicar a más de 500 puntos permanece visible después de F5", async ({ page }) => {
+  const database = await mockBackend(page)
+  await signIn(page)
+  await openPublishForm(page)
+  const isbn = "9780141036144"
+  await page.getByLabel("ISBN del libro *").fill(isbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("Puntos solicitados *").fill("800")
+  await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
+  await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
+  const saved = database.publications.find((p) => p.isbn === isbn)!
+  await page.reload()
+  await page.locator("aside").getByRole("button", { name: "Catálogo", exact: true }).click()
+  await expect(bookCard(page, saved.titulo)).toBeVisible()
+})
+
+test("un error al publicar no crea una publicación local ni anuncia éxito", async ({ page }) => {
+  const database = await mockBackend(page)
+  await signIn(page)
+  await page.route("**/api/publicaciones/publicar", route => route.fulfill({status:503,json:{message:"Base de datos no disponible"}}))
+  await openPublishForm(page)
+  await page.getByLabel("ISBN del libro *").fill("9780141036144")
+  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("Puntos solicitados *").fill("80")
+  const count = database.publications.length
+  await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
+  await expect(page.getByText(/No se pudo publicar el libro/)).toBeVisible()
+  expect(database.publications).toHaveLength(count)
+  await expect(page.getByRole("heading", { name: "Publicar un Libro", exact:true })).toBeVisible()
+})
+
+test("una recarga periódica fallida no borra el catálogo ya cargado", async ({ page }) => {
+  await mockBackend(page)
+  await signIn(page)
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
+  const refreshTime = Date.now() + 60_000
+  await page.clock.setFixedTime(refreshTime)
+  await page.route("**/api/publicaciones/disponibles", route => route.fulfill({ status:503,json:{message:"Consulta temporalmente no disponible"}}))
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+  await expect(page.getByText(/No se pudieron actualizar los datos/)).toBeVisible()
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
+})
+
+test("una compra pagada espera la aceptación del vendedor en Recibidas", async ({ page }) => {
+  await mockBackend(page)
+  const book = SEED_BOOKS[0]
+  let sent = false
+  const purchase = () => ({
+    isbn: book.isbn, titulo: book.title, emailVendedor: testUser.email,
+    nombreVendedor: testUser.name, emailComprador: SEED_USERS[1].email,
+    nombreComprador: SEED_USERS[1].name, horaPublicacion: book.createdAt,
+    puntos: 50, estado: sent ? "ENVIADA" : "PAGADA", fecha: book.createdAt,
+  })
+  await page.route("**/api/compras/mis-ventas", route => route.fulfill({json:[purchase()]}))
+  await page.route("**/api/compras/enviar?**", async route => {
+    sent = true
+    await route.fulfill({json:purchase()})
+  })
+  await signIn(page)
+  await page.locator("aside").getByRole("button", { name: /^Mis Intercambios/ }).click()
+  await expect(page.getByRole("button", { name:"Aceptar Solicitud", exact:true })).toBeVisible()
+  await page.getByRole("button", { name:"Aceptar Solicitud", exact:true }).click()
+  await expect(page.getByRole("button", { name:"Aceptar Solicitud", exact:true })).toHaveCount(0)
+  expect(sent).toBe(true)
+  await page.getByRole("button", { name:/En Curso/ }).click()
+  await expect(page.getByText("Entrega registrada (Esperando recepción del comprador)", {exact:false})).toBeVisible()
+})
+
+test("el perfil ajeno carga al propietario real y no muestra el perfil propio ni datos privados", async ({ page }) => {
+  const database = await mockBackend(page)
+  const owner = SEED_USERS.find((u) => u.email !== testUser.email)!
+  const publication = database.publications.find((p) => p.email_propietario === owner.email)!
+  await page.route(`**/api/usuario/${encodeURIComponent(owner.email)}`, route => route.fulfill({json:{
+    id:owner.id,nombre:owner.name,email:owner.email,rol:"USUARIO",reputacionPromedio:0,
+  }}))
+  await page.route("**/api/publicaciones", route => route.fulfill({json:database.publications.map(p => ({
+    publicacionId:{isbn:p.isbn,emailPropietario:p.email_propietario,horaPublicacion:p.hora_publicacion},
+    titulo:p.titulo,autor:p.autor,valorPuntosSolicitado:p.valor_puntos_solicitado,
+    estadoFisico:p.estado_fisico,estadoPublicacion:p.estado_publicacion,
+  }))}))
+  await signIn(page)
+  await bookCard(page, publication.titulo).click()
+  await page.getByRole("button",{name:"Ver Perfil",exact:true}).click()
+  await expect(page.getByRole("heading",{name:owner.name,exact:true})).toBeVisible()
+  await expect(page.getByText("Tu Cuenta",{exact:true})).toHaveCount(0)
+  await expect(page.getByRole("button",{name:/^Movimientos|^Historial/})).toHaveCount(0)
+})
+
+test("el perfil propio separa publicaciones activas y el historial de compras", async ({ page }) => {
+  const database = await mockBackend(page)
+  const owned = database.publications.filter(p=>p.email_propietario === testUser.email)
+  owned[0].estado_publicacion = "VENDIDA"
+  await page.route("**/api/compras/mis-ventas", route=>route.fulfill({json:[{
+    isbn:owned[0].isbn,titulo:owned[0].titulo,emailVendedor:testUser.email,
+    emailComprador:SEED_USERS[1].email,horaPublicacion:owned[0].hora_publicacion,
+    estado:"ENTREGADA",puntos:50,
+  }]}))
+  await signIn(page)
+  await page.locator('button[title="Ir a mi perfil y billetera"]').click()
+  await expect(page.getByRole("button",{name:`Publicaciones (${owned.length-1})`,exact:true})).toBeVisible()
+  await expect(bookCard(page,owned[0].titulo)).toHaveCount(0)
+  await page.getByRole("button",{name:"Historial (1)",exact:true}).click()
+  await expect(page.locator("article").filter({hasText:"COMPLETADO"})).toHaveCount(1)
+})

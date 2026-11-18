@@ -1,5 +1,7 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
+import com.ingenieriaSoftware2.Enums.EstadoFisico;
 import com.ingenieriaSoftware2.DTO.Request.PublicacionRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
@@ -87,16 +89,7 @@ public class PublicacionServiceImpl implements PublicacionService {
         Usuario propietario = usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
         Libro libro = libroRepository.findByIsbn(request.isbn()).orElseGet(() -> importarLibro(request.isbn()));
 
-        if (libro.getValorReferencia() == null || libro.getValorReferencia() <= 0) {
-            String isbnLimpio = request.isbn() != null ? request.isbn().replaceAll("[^0-9X]", "") : "";
-            int valorPorDefecto = switch (isbnLimpio) {
-                case "9788437604572" -> 100;
-                case "9789875666467" -> 150;
-                default -> 100;
-            };
-            libro.setValorReferencia(valorPorDefecto);
-            libro = libroRepository.save(libro);
-        }
+        libro.setValorReferencia(PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO));
 
         asignarCategoriaSiFalta(libro, request.categoria());
 
@@ -163,23 +156,7 @@ public class PublicacionServiceImpl implements PublicacionService {
             libro.setPuntuacionExterna(BigDecimal.valueOf(datos.ratingExterno()));
         }
 
-        String isbnLimpio = isbn != null ? isbn.replaceAll("[^0-9X]", "") : "";
-        int valorRef;
-        if ("9788437604572".equals(isbnLimpio)) {
-            valorRef = 100;
-        } else if ("9789875666467".equals(isbnLimpio)) {
-            valorRef = 150;
-        } else {
-            int calc = 100;
-            if (datos.paginas() != null && datos.paginas() > 0) {
-                calc += Math.min(100, datos.paginas() / 5);
-            }
-            if (datos.ratingExterno() != null) {
-                calc += (int) Math.round(datos.ratingExterno() * 10);
-            }
-            valorRef = Math.max(50, calc);
-        }
-        libro.setValorReferencia(valorRef);
+        libro.setValorReferencia(PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO));
 
         libro.setFechaCacheBibliografico(LocalDateTime.now());
         return libroRepository.save(libro);

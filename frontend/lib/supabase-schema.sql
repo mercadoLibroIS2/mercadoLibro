@@ -9,7 +9,7 @@ create table if not exists public.usuario (
   email text unique not null,
   nombre text unique not null,
   contrasenia text,
-  saldo_total integer default 100,
+  saldo_total integer default 500,
   saldo_reservado integer default 0,
   reputacion_promedio numeric default 5.0,
   rol text default 'USUARIO',
@@ -79,7 +79,7 @@ create policy "Permitir insercion a autenticados y anon"
 
 -- 2. Robot automático (Trigger)
 -- Cuando alguien se registra en Supabase Auth, se inserta automáticamente
--- su registro en la tabla usuario con los 100 puntos iniciales (RF14).
+-- su registro en la tabla usuario con los 500 puntos iniciales (RF14).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -101,7 +101,7 @@ begin
       new.email,
       app_username,
       coalesce(new.encrypted_password, 'auth_managed'),
-      100,
+      500,
       0,
       5.0,
       'USUARIO',
@@ -119,7 +119,7 @@ begin
         new.email,
         app_username || '_' || substring(new.id::text from 1 for 4),
         'auth_managed',
-        100,
+        500,
         0,
         5.0,
         'USUARIO',
@@ -161,7 +161,7 @@ begin
       users.email,
       lower(coalesce(users.raw_user_meta_data->>'username', split_part(users.email, '@', 1))),
       users.encrypted_password,
-      100,
+      500,
       0,
       5.0,
       'USUARIO',
@@ -180,7 +180,7 @@ begin
     select
       users.email,
       lower(coalesce(users.raw_user_meta_data->>'username', split_part(users.email, '@', 1))),
-      100,
+      500,
       0,
       5.0,
       true,
