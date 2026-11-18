@@ -403,3 +403,56 @@ test("no permite eliminar una publicación reservada con un intercambio en curso
   await expect(page.getByText("No se puede eliminar un libro con intercambio en curso (RF04).")).toBeVisible()
   await expect(bookCard(page, "Clean Code")).toBeVisible()
 })
+
+test("las publicaciones persistidas no desaparecen por el email del propietario al recargar", async ({ page }) => {
+  const database = await mockBackend(page)
+  const publication = database.publications[0]
+  publication.email_propietario = "testuser@mail@gmail.com"
+  await signIn(page)
+  await page.reload()
+  await page.locator("aside").getByRole("button", { name: "Catálogo", exact: true }).click()
+  await expect(bookCard(page, publication.titulo)).toBeVisible()
+})
+
+test("publicar a más de 500 puntos permanece visible después de F5", async ({ page }) => {
+  const database = await mockBackend(page)
+  await signIn(page)
+  await openPublishForm(page)
+  const isbn = "9780141036144"
+  await page.getByLabel("ISBN del libro *").fill(isbn)
+  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("Puntos solicitados *").fill("800")
+  await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
+  await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
+  const saved = database.publications.find((p) => p.isbn === isbn)!
+  await page.reload()
+  await page.locator("aside").getByRole("button", { name: "Catálogo", exact: true }).click()
+  await expect(bookCard(page, saved.titulo)).toBeVisible()
+})
+
+test("un error al publicar no crea una publicación local ni anuncia éxito", async ({ page }) => {
+  const database = await mockBackend(page)
+  await signIn(page)
+  await page.route("**/api/publicaciones/publicar", route => route.fulfill({status:503,json:{message:"Base de datos no disponible"}}))
+  await openPublishForm(page)
+  await page.getByLabel("ISBN del libro *").fill("9780141036144")
+  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("Puntos solicitados *").fill("80")
+  const count = database.publications.length
+  await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
+  await expect(page.getByText(/No se pudo publicar el libro/)).toBeVisible()
+  expect(database.publications).toHaveLength(count)
+  await expect(page.getByRole("heading", { name: "Publicar un Libro", exact:true })).toBeVisible()
+})
+
+test("una recarga periódica fallida no borra el catálogo ya cargado", async ({ page }) => {
+  await mockBackend(page)
+  await signIn(page)
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
+  const refreshTime = Date.now() + 60_000
+  await page.clock.setFixedTime(refreshTime)
+  await page.route("**/api/publicaciones/disponibles", route => route.fulfill({ status:503,json:{message:"Consulta temporalmente no disponible"}}))
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+  await expect(page.getByText(/No se pudieron actualizar los datos/)).toBeVisible()
+  await expect(page.locator("article")).toHaveCount(SEED_BOOKS.length)
+})

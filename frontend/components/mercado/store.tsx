@@ -301,15 +301,9 @@ function mergeBackendPublications(existingBooks: Book[], pubs: PublicacionRespon
     const fallbackSeed = seedByIsbn.get(cleanIsbn)
     const book = publicacionResponseToBook(pub, fallbackSeed)
 
-    const isJunkNoise =
-      (!pub.titulo && !fallbackSeed) ||
-      book.title.startsWith("Libro (") ||
-      book.author === "Autor desconocido" ||
-      book.ownerId.includes("testuser") ||
-      book.ownerId.includes("mail@gmail")
-
-    // "disponibles" y "mis-publicaciones" se solapan: evitar duplicados por id de publicación
-    if (!isJunkNoise && !seenIds.has(book.id) && book.availability !== "ELIMINADO") {
+    // Los datos del servidor son autoritativos; no descartar usuarios por su email
+    // ni publicaciones válidas por metadatos incompletos.
+    if (!seenIds.has(book.id) && book.availability !== "ELIMINADO") {
       seenIds.add(book.id)
       backendBooks.push(book)
     }
@@ -722,8 +716,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         apiGetHistorialPuntos().catch(() => []),
         apiListNotificaciones().catch(() => []),
         apiGetSaldoPuntos().catch(() => null),
-        apiListAvailablePublications().catch(() => []),
-        apiListMyPublications().catch(() => []),
+        apiListAvailablePublications(),
+        apiListMyPublications(),
         apiGetFollowedBooks(userId).catch(() => []),
         apiListReviews().catch(() => []),
         apiListCadenas().catch(() => []),
@@ -922,6 +916,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     } catch (err) {
       console.warn("[Backend] Error cargando datos asociados del usuario:", err)
+      showToast("No se pudieron actualizar los datos. Conservamos la última información; intentá recargar.")
     }
   }
 
@@ -1252,32 +1247,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
         return true
       } catch (error) {
-        if (hasBackendSession()) {
-          showToast(`No se pudo publicar el libro: ${backendErrorMessage(error)}`)
-          return false
-        }
-        const nowIso = new Date().toISOString()
-        const localBook: Book = {
-          id: `${data.isbn.trim()}|${currentUser.email}|${nowIso}`,
-          isbn: data.isbn.trim(),
-          title: fallbackMeta.title,
-          author: fallbackMeta.author,
-          category: fallbackMeta.category,
-          condition: data.condition,
-          points: data.points,
-          referencePrice: calculateReferencePrice(fallbackMeta.category, data.condition, 4.5),
-          description: data.description || "",
-          coverUrl: fallbackMeta.coverUrl,
-          ownerId: currentUser.email,
-          ownerName: currentUser.name,
-          ownerRating: currentUser.rating || 0,
-          ownerTrades: currentUser.totalTrades || 0,
-          availability: "DISPONIBLE",
-          createdAt: nowIso,
-        }
-        setState((prev) => ({ ...prev, books: [localBook, ...prev.books] }))
-        showToast(`"${localBook.title}" se publicó correctamente en el catálogo.`)
-        return true
+        showToast(`No se pudo publicar el libro: ${backendErrorMessage(error)}`)
+        return false
       }
     },
     [state.currentUser, showToast]
