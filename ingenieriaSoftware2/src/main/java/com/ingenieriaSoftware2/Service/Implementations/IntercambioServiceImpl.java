@@ -358,12 +358,12 @@ public class IntercambioServiceImpl implements IntercambioService {
      * después, el deudor se deduce de las reservas registradas.
      */
     private int calcularDiferencia(Publicacion ofrecida, Publicacion solicitada) {
-        Integer valorOfrecida = PoliticaPuntos.referencia(ofrecida.getLibro(), ofrecida.getEstadoFisico());
-        Integer valorSolicitada = PoliticaPuntos.referencia(solicitada.getLibro(), solicitada.getEstadoFisico());
+        Integer valorOfrecida = ofrecida.getValorPuntosSolicitado();
+        Integer valorSolicitada = solicitada.getValorPuntosSolicitado();
 
         if (valorOfrecida == null || valorSolicitada == null) {
             throw new EstadoIntercambioInvalidoException(
-                    "No se pudo calcular el valor de referencia de alguna de las publicaciones");
+                    "No se pudo obtener el precio publicado de alguno de los libros");
         }
         return valorSolicitada - valorOfrecida;
     }

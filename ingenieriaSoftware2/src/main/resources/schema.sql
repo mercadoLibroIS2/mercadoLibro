@@ -448,3 +448,7 @@ CREATE TABLE IF NOT EXISTS reporte (
     fecha_resolucion  TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS reporte_estado_idx ON reporte (estado, fecha DESC);
+
+-- Metadatos para el precio sugerido por ISBN.
+ALTER TABLE libro ADD COLUMN IF NOT EXISTS paginas INTEGER;
+ALTER TABLE libro ADD COLUMN IF NOT EXISTS categoria_referencia VARCHAR(255);

@@ -134,8 +134,8 @@ class NuevosModulosBackendTest {
         Integer calculadoNuevo = calculadora.calcular("978-0", EstadoFisico.NUEVO);
         Integer calculadoBuenEstado = calculadora.calcular("978-0", EstadoFisico.BUEN_ESTADO);
 
-        assertEquals(625, calculadoNuevo);
-        assertEquals(500, calculadoBuenEstado);
+        assertEquals(500, calculadoNuevo);
+        assertEquals(400, calculadoBuenEstado);
 
         assertEquals(ColorSemaforo.VERDE, calculadora.calculadoraColor(100, 100));
         assertEquals(ColorSemaforo.VERDE, calculadora.calculadoraColor(110, 100));

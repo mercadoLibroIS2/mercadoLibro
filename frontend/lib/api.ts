@@ -50,6 +50,7 @@ export interface PublicacionResponse {
   reputacionPropietario?: number | null
   puntuacionExterna?: number | null
   categoria?: string | null
+  paginas?: number | null
 }
 
 export interface AuthResponse {
@@ -348,7 +349,7 @@ export async function apiFindGoogleBookByIsbn(
 export async function apiGetReferenciaLibro(
   isbn: string,
   estadoFisico: EstadoFisico,
-): Promise<{ valorReferencia: number | null; categoria: string | null } | null> {
+): Promise<{ valorReferencia: number | null; categoria: string | null; paginas?: number | null } | null> {
   try {
     return await request(`/api/libro/${encodeURIComponent(isbn)}/referencia?estadoFisico=${estadoFisico}`)
   } catch {

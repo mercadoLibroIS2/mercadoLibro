@@ -1,13 +1,12 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
 import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
+import com.ingenieriaSoftware2.DTO.Response.GoogleBookVolumeDTO;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
 import com.ingenieriaSoftware2.DTO.Request.PublicacionRequestDTO;
 import com.ingenieriaSoftware2.DTO.Response.PublicacionResponseDTO;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Libro;
-import com.ingenieriaSoftware2.Entity.Categoria;
-import com.ingenieriaSoftware2.Repository.CategoriaRepository;
 import com.ingenieriaSoftware2.Entity.Publicacion;
 import com.ingenieriaSoftware2.Entity.Usuario;
 import com.ingenieriaSoftware2.Enums.EstadoIntercambio;
@@ -56,9 +55,6 @@ public class PublicacionServiceImpl implements PublicacionService {
         return ahora;
     }
 
-    @Autowired(required = false)
-    private CategoriaRepository categoriaRepository;
-
     @Autowired
     private PublicacionRepository publicacionRepository;
 
@@ -87,11 +83,9 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Transactional
     public PublicacionResponseDTO publicarLibro(PublicacionRequestDTO request, String email) {
         Usuario propietario = usuarioRepository.findByEmail(email).orElseThrow(() -> new UsuarioNoEncontrado());
-        Libro libro = libroRepository.findByIsbn(request.isbn()).orElseGet(() -> importarLibro(request.isbn()));
+        Libro libro = obtenerOImportarLibro(request.isbn());
 
         libro.setValorReferencia(PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO));
-
-        asignarCategoriaSiFalta(libro, request.categoria());
 
         // Postgres guarda microsegundos: si no se trunca, la hora que devuelve la API
         // no coincide con la guardada y la publicación no se encuentra después
@@ -128,20 +122,9 @@ public class PublicacionServiceImpl implements PublicacionService {
     }
 
     // Si el libro todavia no esta en la base (p. ej. H2 recien levantada), se trae de Google Books / Open Library
-    /** El primer publicador elige la categoría del libro; las siguientes publicaciones la reutilizan. */
-    private void asignarCategoriaSiFalta(Libro libro, String nombreCategoria) {
-        if (categoriaRepository == null || nombreCategoria == null || nombreCategoria.isBlank()
-                || !libro.getCategorias().isEmpty()) {
-            return;
-        }
-        String nombre = nombreCategoria.trim();
-        Categoria categoria = categoriaRepository.findById(nombre).orElseGet(() -> {
-            Categoria nueva = new Categoria();
-            nueva.setNombre(nombre);
-            return categoriaRepository.save(nueva);
-        });
-        libro.getCategorias().add(categoria);
-        libroRepository.save(libro);
+    private void asignarMetadatosPrecio(Libro libro, GoogleBookVolumeDTO datos) {
+        libro.setPaginas(datos.paginas() != null && datos.paginas() > 0 ? datos.paginas() : null);
+        libro.setCategoriaReferencia(PoliticaPuntos.normalizarCategorias(datos.categorias()));
     }
 
     private Libro importarLibro(String isbn) {
@@ -156,6 +139,7 @@ public class PublicacionServiceImpl implements PublicacionService {
             libro.setPuntuacionExterna(BigDecimal.valueOf(datos.ratingExterno()));
         }
 
+        asignarMetadatosPrecio(libro, datos);
         libro.setValorReferencia(PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO));
 
         libro.setFechaCacheBibliografico(LocalDateTime.now());
@@ -165,7 +149,17 @@ public class PublicacionServiceImpl implements PublicacionService {
     @Override
     @Transactional
     public Libro obtenerOImportarLibro(String isbn) {
-        return libroRepository.findByIsbn(isbn).orElseGet(() -> importarLibro(isbn));
+        Libro libro = libroRepository.findByIsbn(isbn).orElseGet(() -> importarLibro(isbn));
+        if (libro.getCategoriaReferencia() == null) {
+            var datos = googleBooksService.buscarPorIsbn(isbn);
+            if (datos.isPresent()) {
+                asignarMetadatosPrecio(libro, datos.get());
+            } else {
+                libro.setCategoriaReferencia(PoliticaPuntos.categoria(libro));
+            }
+            libro.setValorReferencia(PoliticaPuntos.referencia(libro, EstadoFisico.NUEVO));
+        }
+        return libro;
     }
 
     @Override
@@ -224,13 +218,10 @@ public class PublicacionServiceImpl implements PublicacionService {
         publicacion.setComentario(dto.comentario());
         publicacion.setValorPuntosSolicitado(dto.valorPuntosSolicitado());
 
+        obtenerOImportarLibro(id.getIsbn());
         Integer valorRef = calculadora.calcular(id.getIsbn(), dto.estadoFisico());
         publicacion.setValorReferenciaCalculado(valorRef);
         publicacion.setColorSemaforo(calculadora.calculadoraColor(dto.valorPuntosSolicitado(), valorRef));
-        // Libros publicados antes de que existiera la categoría: se completa al editar
-        if (publicacion.getLibro() != null) {
-            asignarCategoriaSiFalta(publicacion.getLibro(), dto.categoria());
-        }
     }
 
     @Override

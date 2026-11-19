@@ -255,12 +255,11 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
 
   await expect(page.getByRole("button", { name: "Buscar", exact: true })).toBeVisible()
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
-  await expect(page.getByText("El ISBN es obligatorio")).toBeVisible()
+  await expect(page.getByText("El ISBN o título es obligatorio")).toBeVisible()
   await expect(page.getByText("Ingresá el valor en puntos")).toBeVisible()
 
   const newIsbn = "979-1-23456-789-0"
-  await page.getByLabel("ISBN del libro *").fill(newIsbn)
-  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("ISBN o título *").fill(newIsbn)
   await page.getByLabel("Puntos solicitados *").fill("0")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText("Ingresá un número de puntos válido mayor a 0")).toBeVisible()
@@ -274,8 +273,7 @@ test("publicar valida campos obligatorios y exige puntos enteros positivos, incl
   await expect(page.getByText("Ingresá un número de puntos válido mayor a 0")).toBeVisible()
   expect(database.publications).toHaveLength(SEED_BOOKS.length)
 
-  await page.getByLabel("ISBN del libro *").fill(newIsbn)
-  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("ISBN o título *").fill(newIsbn)
   await page.getByLabel("Puntos solicitados *").fill("1")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
@@ -294,8 +292,7 @@ test("publicar registra todos los datos opcionales y presenta el libro en el cat
   await openPublishForm(page)
 
   const targetSeed = SEED_BOOKS[1] // Clean Code
-  await page.getByLabel("ISBN del libro *").fill(targetSeed.isbn)
-  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("ISBN o título *").fill(targetSeed.isbn)
   await page.getByLabel("Estado físico *").selectOption("Como nuevo")
   await page.getByLabel("Puntos solicitados *").fill("120")
   await page.getByLabel("Descripción y estado (opcional)").fill("Ejemplar cuidado, sin marcas.")
@@ -333,7 +330,7 @@ test("el dueño puede editar una publicación y se conservan los valores existen
   await detail.getByRole("button", { name: "Modificar Publicación" }).click()
   await expect(page.getByRole("heading", { name: "Modificar Publicación" })).toBeVisible()
   await expect(page.getByLabel("ISBN del libro *")).toHaveValue(SEED_BOOKS[1].isbn)
-  await expect(page.getByLabel("Puntos solicitados *")).toHaveValue("60")
+  await expect(page.getByLabel("Puntos solicitados *")).toHaveValue(String(SEED_BOOKS[1].points))
 
   await page.getByLabel("Puntos solicitados *").fill("65")
   await page.getByRole("button", { name: "Guardar cambios" }).click()
@@ -419,8 +416,7 @@ test("publicar a más de 500 puntos permanece visible después de F5", async ({ 
   await signIn(page)
   await openPublishForm(page)
   const isbn = "9780141036144"
-  await page.getByLabel("ISBN del libro *").fill(isbn)
-  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("ISBN o título *").fill(isbn)
   await page.getByLabel("Puntos solicitados *").fill("800")
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
   await expect(page.getByText(/se publicó correctamente en el catálogo/i)).toBeVisible()
@@ -435,8 +431,7 @@ test("un error al publicar no crea una publicación local ni anuncia éxito", as
   await signIn(page)
   await page.route("**/api/publicaciones/publicar", route => route.fulfill({status:503,json:{message:"Base de datos no disponible"}}))
   await openPublishForm(page)
-  await page.getByLabel("ISBN del libro *").fill("9780141036144")
-  await page.getByLabel("Categoría *").selectOption("Ficción")
+  await page.getByLabel("ISBN o título *").fill("9780141036144")
   await page.getByLabel("Puntos solicitados *").fill("80")
   const count = database.publications.length
   await page.getByRole("button", { name: "Publicar Libro", exact: true }).click()
@@ -517,4 +512,50 @@ test("el perfil propio separa publicaciones activas y el historial de compras", 
   await expect(bookCard(page,owned[0].titulo)).toHaveCount(0)
   await page.getByRole("button",{name:"Historial (1)",exact:true}).click()
   await expect(page.locator("article").filter({hasText:"COMPLETADO"})).toHaveCount(1)
+})
+
+
+test("publicar por título exige elegir una edición y envía su ISBN", async ({ page }) => {
+  const database = await mockBackend(page)
+  await page.route("**/api/libro/*/referencia?**", route=>route.fulfill({json:{valorReferencia:715,categoria:"Técnico",paginas:500}}))
+  await page.route("**/api/libro/google-books/buscar?**", route => route.fulfill({json:[
+    {googleBooksId:"edicion-1", isbn:"9780141036144", titulo:"1984", autor:"George Orwell", categorias:["Fiction"], anioPublicacion:"2008"},
+    {googleBooksId:"edicion-2", isbn:"9788499890944", titulo:"1984", autor:"George Orwell", categorias:["Fiction"], anioPublicacion:"2013"},
+  ]}))
+  await signIn(page)
+  await openPublishForm(page)
+  await page.getByLabel("ISBN o título *").fill("1984")
+  await page.getByLabel("ISBN o título *").press("Enter")
+  const edition = page.getByRole("button", {name:/1984.*George Orwell.*2013.*9788499890944/})
+  await expect(edition).toBeVisible()
+  await page.getByLabel("Puntos solicitados *").fill("500")
+  const count = database.publications.length
+  await page.getByRole("button", {name:"Publicar Libro",exact:true}).click()
+  await expect(page.getByText("Buscá el libro y elegí una edición con ISBN")).toBeVisible()
+  expect(database.publications).toHaveLength(count)
+  await edition.click()
+  await expect(page.getByLabel("ISBN o título *")).toHaveValue("9788499890944")
+  await expect(page.getByLabel("Categoría", {exact:true})).toHaveValue("Técnico")
+  await expect(page.getByLabel("Categoría", {exact:true})).toHaveAttribute("readonly", "")
+  await expect(page.getByRole("button", {name:"Sugerido: 715 pts",exact:true})).toBeVisible()
+  const response = page.waitForResponse(r=>r.url().endsWith("/api/publicaciones/publicar")&&r.request().method()==="POST")
+  await page.getByRole("button", {name:"Publicar Libro",exact:true}).click()
+  expect((await response).request().postDataJSON().isbn).toBe("9788499890944")
+})
+
+test("la búsqueda por ISBN completa el libro y cambiar la consulta limpia la selección", async ({ page }) => {
+  await mockBackend(page)
+  await page.route("**/api/libro/google-books/isbn/9788437604572", route=>route.fulfill({json:{
+    isbn:"9788437604572", titulo:"Rayuela", autor:"Julio Cortázar", categorias:["Fiction"], googleBooksId:"rayuela",
+  }}))
+  await page.route("**/api/libro/google-books/buscar?**", route=>route.fulfill({json:[]}))
+  await signIn(page)
+  await openPublishForm(page)
+  await page.getByLabel("ISBN o título *").fill("978-84-376-0457-2")
+  await page.getByRole("button",{name:"Buscar",exact:true}).click()
+  await expect(page.getByText("ISBN 9788437604572",{exact:true})).toBeVisible()
+  await page.getByLabel("ISBN o título *").fill("titulo sin resultados")
+  await expect(page.getByText("ISBN 9788437604572",{exact:true})).toHaveCount(0)
+  await page.getByRole("button",{name:"Buscar",exact:true}).click()
+  await expect(page.getByText("No encontramos libros con ese título. Probá con el ISBN de la contratapa.")).toBeVisible()
 })

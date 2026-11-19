@@ -1,6 +1,6 @@
 # Escala vigente de puntos
 
-La referencia es un libro promedio **en buen estado**, con valoración externa de 4/5: **500 puntos**.
+La referencia es un libro promedio **nuevo**, de categoría general y 300 páginas, con un valor sugerido de **500 puntos**.
 
 | Concepto | Puntos |
 | --- | ---: |
@@ -10,31 +10,36 @@ La referencia es un libro promedio **en buen estado**, con valoración externa d
 | Cadena completada | +50 por participante, sin sumar otro bono de trueque |
 | Compra con puntos completada | Transferencia del precio, sin bono adicional |
 
-En trueques, la diferencia entre las referencias de ambos ejemplares se reserva y transfiere al completar las dos recepciones. Esa transferencia no crea puntos. El bono de +50 se entrega una sola vez al completar el trueque.
+En trueques, la diferencia entre los precios publicados de ambos ejemplares se reserva y transfiere al completar las dos recepciones. Esa transferencia no crea puntos. El bono de +50 se entrega una sola vez al completar el trueque.
 
 ## Referencias y semáforo
 
-Con valoración de 4/5 o sin valoración externa:
+El valor sugerido se calcula por ISBN como **base de categoría × factor por páginas × factor por estado**, redondeado al múltiplo de cinco más cercano.
 
-| Conservación | Referencia |
+| Categoría | Base para nuevo |
 | --- | ---: |
-| Nuevo | 625 |
-| Como nuevo | 565 |
-| Bueno | 500 |
-| Aceptable | 405 |
-| Con marcas | 280 |
+| Infantil | 350 |
+| Poesía | 400 |
+| Ciencia o divulgación | 550 |
+| Técnico o académico | 650 |
+| Ficción, historia, biografía y otras categorías | 500 |
+| Sin clasificar | 500 |
 
-La referencia parte de 625 para un ejemplar nuevo y aplica los factores 1, 0,9, 0,8, 0,65 y 0,45. Cada estrella externa por encima o debajo de 4 ajusta el valor un 5 %. Se redondea al múltiplo de 5 más cercano. Sin valoración se usa 4; una valoración de cero sí cuenta como cero. La categoría sirve para organizar y filtrar, sin modificar el valor. Ya no hay excepciones para ISBN concretos ni otra escala basada en cantidad de páginas.
+El factor de páginas es `1 + (páginas - 300) / 2000`, limitado al intervalo de 0,85 a 1,15. Sin páginas válidas se usa 1. Los factores de estado son 1 para nuevo, 0,9 para como nuevo, 0,8 para bueno, 0,65 para aceptable y 0,45 para con marcas. Una novela de 300 páginas se sugiere a 500 nueva, 450 como nueva, 400 buena, 325 aceptable o 225 con marcas. Un manual técnico nuevo de 500 páginas se sugiere a 715. Un infantil nuevo de 100 páginas se sugiere a 315.
+
+La categoría y páginas se obtienen de Google Books / Open Library y quedan guardadas en el libro. El formulario muestra la categoría de solo lectura y el backend ignora la categoría que envíe un cliente. Las estrellas externas se muestran como información, sin afectar el precio.
+
+Los libros existentes completan sus metadatos al consultar la referencia, publicarse o editarse. Si el proveedor no aporta datos para un libro existente, se conserva una categoría reconocida ya guardada y se usa el factor neutro para las páginas desconocidas. Sin categoría reconocida se usa Sin clasificar. Las publicaciones del mismo ISBN comparten estos metadatos.
 
 El propietario elige el precio solicitado. Verde: hasta el 110 % de la referencia; amarillo: más del 110 % y hasta el 130 %; rojo: más del 130 %. Por ejemplo, con referencia 500: 550 es verde, 555–650 amarillo y 655 rojo. Un precio de hasta el 70 % lleva además la etiqueta de oportunidad.
 
 ## Datos existentes
 
-Las referencias y colores del catálogo disponible o reservado se calculan con la política vigente, incluso si la base conserva valores orientativos de la escala anterior. Las publicaciones nuevas o editadas guardan la nueva referencia. Los trueques nuevos usan la misma fórmula para la compensación.
+Las referencias y colores del catálogo disponible o reservado se calculan con la política vigente, incluso si la base conserva valores orientativos de la escala anterior. Las publicaciones nuevas o editadas guardan la nueva referencia. Los trueques nuevos calculan la compensación con los precios publicados. La referencia sugerida se usa para el semáforo.
 
 No se modifican precios solicitados, saldos, movimientos históricos ni compensaciones ya acordadas. Tampoco se reescriben las referencias históricas de publicaciones vendidas. Los bonos de operaciones que se completen desde esta versión siguen esta política.
 
-No requiere migración de esquema ni un script sobre Supabase. Los libros antiguos publicados a 100 puntos siguen ofrecidos a 100 hasta que su dueño cambie el precio; el semáforo los mostrará como oportunidad frente a la nueva referencia.
+Antes de desplegar esta versión se debe aplicar `ingenieriaSoftware2/src/main/resources/migrations/20261119_libro_precio_metadata.sql` en Supabase, que agrega las columnas `paginas` y `categoria_referencia`. Los libros antiguos publicados a 100 puntos siguen ofrecidos a 100 hasta que su dueño cambie el precio; el semáforo los mostrará como oportunidad frente a la nueva referencia.
 
 ## Implementación
 
@@ -42,15 +47,6 @@ Servidor: `PoliticaPuntos.java`, usada por referencias, catálogo, trueques, res
 
 La política reduce la emisión: un trueque completo crea 100 puntos entre ambos participantes; con dos reseñas crea 150 en total. Una compra no crea puntos por la transferencia, aunque sus reseñas sí reciben bono. Sigue existiendo emisión de puntos; esta escala no garantiza por sí sola estabilidad a largo plazo.
 
-## Validación de este cambio
+## Validación
 
-- 27 pruebas Java aprobadas: política, publicaciones, reseñas de ambas modalidades, cadenas y módulos de usuarios/puntos.
-- 12 escenarios de API de trueques aprobados con backend real en H2 aislada. Incluyen compensación en ambas direcciones, reservas, cancelaciones, doble confirmación y saldo insuficiente por reservas anteriores. Dos pruebas de la fórmula/semáforo de la interfaz también aprobadas.
-- Dos sesiones de navegador contra ese backend: trueque con referencias 500/625, reserva y transferencia de 125, saldos finales 425/675 tras +50 por usuario, reseña +25 y persistencia tras F5.
-- Compra de 500 puntos en dos sesiones: reserva 500, aceptación/envío, recepción, saldos 0/1000 sin bono de compra; reseña +25 y perfiles/historial persistidos.
-- Publicación desde formulario: registro 500, sugerencias 500 en Bueno y 625 en Nuevo, límites verde/amarillo/rojo comprobados, guardado a 500 y visibilidad después de F5.
-- TypeScript y sintaxis del script de datos de demo sin errores.
-
-La suite antigua `p6-notifications-reviews.spec.ts` todavía no está adaptada a la carga autoritativa desde el backend: usa la clave local `mercadolibro_demo_clean_v5` mientras la aplicación usa `v6`, y sus mocks devuelven vacíos para datos que antes se conservaban localmente. En su ejecución hubo 10 fallos, un caso aprobado y dos omitidos. Los bonos esperados se actualizaron a 25, pero esos fallos de fixtures no se consideran aprobados ni se sustituyen por resultados simulados. Los flujos reales de reseñas y perfiles sí se verificaron en ambas modalidades como se describe arriba.
-
-Todos los datos de estas pruebas son locales. No se ejecutaron scripts ni se modificaron saldos en Supabase.
+Las pruebas cubren los valores por categoría, páginas y estado, los límites del ajuste, la independencia de las estrellas, los metadatos guardados al importar y el rechazo de cambios de categoría enviados desde el cliente. La compensación de trueques se verifica por los precios publicados, independiente de las referencias.

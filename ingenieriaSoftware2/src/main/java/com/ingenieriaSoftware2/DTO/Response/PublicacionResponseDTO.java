@@ -21,6 +21,7 @@ public record PublicacionResponseDTO(
         Float reputacionPropietario,
         // Puntuación de Google Books (0-5), null si no se conoce
         Double puntuacionExterna,
-        String categoria
+        String categoria,
+        Integer paginas
 ) {
 }

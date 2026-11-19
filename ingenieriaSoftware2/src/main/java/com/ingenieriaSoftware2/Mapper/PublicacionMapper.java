@@ -52,13 +52,8 @@ public class PublicacionMapper {
                 publicacion.getLibro() != null && publicacion.getLibro().getPuntuacionExterna() != null
                         ? publicacion.getLibro().getPuntuacionExterna().doubleValue()
                         : null,
-                publicacion.getLibro() != null
-                        ? publicacion.getLibro().getCategorias().stream()
-                                .map(c -> c.getNombre())
-                                .sorted()
-                                .findFirst()
-                                .orElse(null)
-                        : null
+                PoliticaPuntos.categoria(publicacion.getLibro()),
+                publicacion.getLibro() != null ? publicacion.getLibro().getPaginas() : null
         );
     }
 }

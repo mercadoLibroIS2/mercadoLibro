@@ -1,11 +1,11 @@
 package com.ingenieriaSoftware2.Service.Implementations;
 
-import com.ingenieriaSoftware2.Entity.Categoria;
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Enums.EstadoFisico;
 import com.ingenieriaSoftware2.Exception.Libro.LibroNoExisteException;
 import com.ingenieriaSoftware2.Repository.LibroRepository;
 import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.Calculadora;
+import com.ingenieriaSoftware2.Service.Implementations.Auxiliares.PoliticaPuntos;
 import com.ingenieriaSoftware2.Service.Interfaces.LibroService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -34,11 +34,8 @@ public class LibroServiceImpl implements LibroService {
                 : libroRepository.findByIsbn(isbn).orElseThrow(LibroNoExisteException::new);
         Map<String, Object> body = new HashMap<>();
         body.put("valorReferencia", calculadora.calcular(libro.getIsbn(), estadoFisico));
-        body.put("categoria", libro.getCategorias().stream()
-                .map(Categoria::getNombre)
-                .sorted()
-                .findFirst()
-                .orElse(null));
+        body.put("categoria", PoliticaPuntos.categoria(libro));
+        body.put("paginas", libro.getPaginas());
         return body;
     }
 }

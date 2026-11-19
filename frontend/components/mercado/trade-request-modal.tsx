@@ -56,12 +56,12 @@ export function TradeRequestModal() {
   )
   const canAffordPoints = currentUser.availablePoints >= tradeModalBook.points
 
-  // Compensación del trueque directo: igual que el backend, la diferencia entre los valores de
-  // referencia. Positiva: la paga quien propone (se reserva al enviar); negativa: el dueño al aceptar.
+  // La compensación usa los precios publicados. Quien recibe el libro de mayor precio
+  // paga la diferencia; el proponente reserva al enviar y el dueño al aceptar.
   const offeredBook = myAvailableBooks.find((b) => b.id === selectedMyBookId)
   const compensation =
-    offeredBook && tradeModalBook.referencePrice != null && offeredBook.referencePrice != null
-      ? tradeModalBook.referencePrice - offeredBook.referencePrice
+    offeredBook
+      ? tradeModalBook.points - offeredBook.points
       : null
   const canAffordCompensation = compensation == null || compensation <= currentUser.availablePoints
   const canSubmit =
@@ -299,7 +299,7 @@ export function TradeRequestModal() {
                         : `Este trueque requiere ${compensation} pts de compensación y tenés ${currentUser.availablePoints} pts disponibles.`
                       : compensation < 0
                         ? `Tu libro vale ${-compensation} pts más: ${tradeModalBook.ownerName} te los paga como compensación si acepta.`
-                        : "Los dos libros tienen el mismo valor de referencia: no hay compensación en puntos."}
+                        : "Los dos libros tienen el mismo precio publicado: no hay compensación en puntos."}
                   </span>
                 </div>
               )}

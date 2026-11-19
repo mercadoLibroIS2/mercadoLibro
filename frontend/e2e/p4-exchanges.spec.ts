@@ -86,13 +86,14 @@ async function publish(
   owner: UserSession,
   isbn: string,
   condition = "NUEVO",
+  price = FIXED_PUBLICATION_VALUE,
 ): Promise<Publication> {
   const response = await request.post("/api/publicaciones/publicar", {
     headers: { Authorization: `Bearer ${owner.token}` },
     data: {
       isbn,
       estadoFisico: condition,
-      valorPuntosSolicitado: FIXED_PUBLICATION_VALUE,
+      valorPuntosSolicitado: price,
       comentario: "Publicación creada por pruebas E2E P4",
     },
   })
@@ -123,20 +124,20 @@ async function createPair(
         : HIGH_VALUE_ISBN
 
   const [offered, requested] = await Promise.all([
-    publish(request, proposer, offeredIsbn, direction === "proposer-owes" ? "ACEPTABLE" : "NUEVO"),
-    publish(request, recipient, requestedIsbn, direction === "recipient-owes" ? "ACEPTABLE" : "NUEVO"),
+    publish(request, proposer, offeredIsbn, direction === "proposer-owes" ? "NUEVO" : "ACEPTABLE", direction === "recipient-owes" ? 150 : 100),
+    publish(request, recipient, requestedIsbn, direction === "recipient-owes" ? "NUEVO" : "ACEPTABLE", direction === "proposer-owes" ? 150 : 100),
   ])
 
   if (direction === "proposer-owes") {
-    expect(offered.valorReferenciaCalculado).toBeLessThan(requested.valorReferenciaCalculado)
+    expect(offered.valorPuntosSolicitado).toBeLessThan(requested.valorPuntosSolicitado)
   } else if (direction === "recipient-owes") {
-    expect(offered.valorReferenciaCalculado).toBeGreaterThan(requested.valorReferenciaCalculado)
+    expect(offered.valorPuntosSolicitado).toBeGreaterThan(requested.valorPuntosSolicitado)
   } else {
-    expect(offered.valorReferenciaCalculado).toBe(requested.valorReferenciaCalculado)
+    expect(offered.valorPuntosSolicitado).toBe(requested.valorPuntosSolicitado)
   }
 
   const points = Math.abs(
-    requested.valorReferenciaCalculado - offered.valorReferenciaCalculado,
+    requested.valorPuntosSolicitado - offered.valorPuntosSolicitado,
   )
   expect(points).toBeLessThanOrEqual(INITIAL_POINTS)
 
@@ -451,7 +452,7 @@ test("solicitudes no autenticadas e intercambios propios son rechazados", async 
     offered,
     requested,
     points: Math.abs(
-      requested.valorReferenciaCalculado - offered.valorReferenciaCalculado,
+      requested.valorPuntosSolicitado - offered.valorPuntosSolicitado,
     ),
   }
 
@@ -519,12 +520,12 @@ test("las reservas de un trueque no se pueden volver a gastar en otro", async ({
   const balanceBefore = await getBalance(request, first.proposer)
   const secondRecipient = await registerUser(request, "p4-shortfall-owner")
   const [offered, requested] = await Promise.all([
-    publish(request, first.proposer, LOW_VALUE_ISBN, "DETERIORADO"),
-    publish(request, secondRecipient, HIGH_VALUE_ISBN, "NUEVO"),
+    publish(request, first.proposer, LOW_VALUE_ISBN, "DETERIORADO", 150),
+    publish(request, secondRecipient, HIGH_VALUE_ISBN, "NUEVO", 650),
   ])
   const pair: ExchangePair = {
     proposer: first.proposer, recipient: secondRecipient, offered, requested,
-    points: requested.valorReferenciaCalculado - offered.valorReferenciaCalculado,
+    points: requested.valorPuntosSolicitado - offered.valorPuntosSolicitado,
   }
   expect(pair.points).toBeGreaterThan(balanceBefore.saldoDisponible)
   const response = await request.post("/api/intercambios", {

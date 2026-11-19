@@ -1,5 +1,5 @@
 import type { Condition, DealEvaluation } from "./mercado-types"
-import { REFERENCIA_BUEN_ESTADO, VALORACION_NEUTRA } from "./puntos"
+import { REFERENCIA_LIBRO_NUEVO, VALORACION_NEUTRA } from "./puntos"
 
 export const CONDITION_MULTIPLIERS: Record<Condition, number> = {
   Nuevo: 1.0,
@@ -10,19 +10,26 @@ export const CONDITION_MULTIPLIERS: Record<Condition, number> = {
   "Con marcas": 0.45,
 }
 
+export const CATEGORY_BASE_PRICES: Record<string, number> = {
+  Infantil: 350,
+  Poesía: 400,
+  Ciencia: 550,
+  Técnico: 650,
+}
+
 /**
- * Misma escala que PoliticaPuntos en el backend. La categoría no modifica el precio.
+ * Misma fórmula que PoliticaPuntos en el backend, con categoría y páginas del ISBN.
  */
 export function calculateReferencePrice(
-  _category: string,
+  category: string,
   condition: Condition,
-  externalRating = VALORACION_NEUTRA
+  _externalRating = VALORACION_NEUTRA,
+  pages?: number | null
 ): number {
-  const base = REFERENCIA_BUEN_ESTADO / CONDITION_MULTIPLIERS.Bueno
+  const base = CATEGORY_BASE_PRICES[category] ?? REFERENCIA_LIBRO_NUEVO
   const conditionMult = CONDITION_MULTIPLIERS[condition] ?? CONDITION_MULTIPLIERS.Bueno
-  const rating = Number.isFinite(externalRating) ? Math.max(0, Math.min(5, externalRating)) : VALORACION_NEUTRA
-  const ratingMult = 1 + (rating - VALORACION_NEUTRA) * 0.05
-  return Math.max(5, Math.round((base * conditionMult * ratingMult) / 5) * 5)
+  const pagesMult = pages && pages > 0 ? Math.max(0.85, Math.min(1.15, 1 + (pages - 300) / 2000)) : 1
+  return Math.max(5, Math.round((base * conditionMult * pagesMult) / 5) * 5)
 }
 
 /**
@@ -36,12 +43,13 @@ export function evaluatePriceDeal(
   category: string,
   condition: Condition,
   externalRating = VALORACION_NEUTRA,
-  referenceOverride?: number
+  referenceOverride?: number,
+  pages?: number | null
 ): DealEvaluation {
   const ref =
     referenceOverride && referenceOverride > 0
       ? referenceOverride
-      : calculateReferencePrice(category, condition, externalRating)
+      : calculateReferencePrice(category, condition, externalRating, pages)
   const ratio = points / ref
 
   let deal: "green" | "yellow" | "red"
@@ -55,7 +63,7 @@ export function evaluatePriceDeal(
   } else if (ratio <= 1.1) {
     deal = "green"
     label = "Valor: Justo"
-    hint = `Acorde al estado ${condition.toLowerCase()} y valoración del libro (${ref} pts).`
+    hint = `Acorde al estado ${condition.toLowerCase()} y las características del libro (${ref} pts).`
   } else if (ratio <= 1.3) {
     deal = "yellow"
     label = "Valor: Levemente elevado"
@@ -74,7 +82,7 @@ export function evaluatePriceDeal(
     factors: {
       conditionMultiplier: CONDITION_MULTIPLIERS[condition] ?? CONDITION_MULTIPLIERS.Bueno,
       externalRating,
-      marketBase: REFERENCIA_BUEN_ESTADO / CONDITION_MULTIPLIERS.Bueno,
+      marketBase: CATEGORY_BASE_PRICES[category] ?? REFERENCIA_LIBRO_NUEVO,
     },
   }
 }

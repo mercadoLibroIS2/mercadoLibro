@@ -59,6 +59,7 @@ export interface Book {
   ownerTrades: number
   availability: BookAvailability
   referencePrice?: number
+  pages?: number | null
   externalRating?: number
   createdAt: string
 }
