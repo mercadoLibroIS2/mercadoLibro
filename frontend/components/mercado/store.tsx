@@ -275,6 +275,7 @@ function publicacionResponseToBook(
     condition: ESTADO_TO_CONDITION[pub.estadoFisico] || "Bueno",
     points: pub.valorPuntosSolicitado ?? 0,
     referencePrice: pub.valorReferenciaCalculado ?? undefined,
+    pages: pub.paginas,
     description: pub.comentario || "",
     coverUrl: pub.portadaUrl || fallbackMeta?.coverUrl || seedMatch?.coverUrl || `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
     ownerId: email,
@@ -1243,7 +1244,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ownerRating: currentUser.rating || 0,
           ownerTrades: currentUser.totalTrades || 0,
           referencePrice:
-            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, data.googleBook?.ratingExterno ?? undefined),
+            pub.valorReferenciaCalculado ?? calculateReferencePrice(fallbackMeta.category, data.condition, undefined, data.googleBook?.paginas),
         }
         setState((prev) => ({ ...prev, books: [newBook, ...prev.books] }))
         showToast(`"${newBook.title}" se publicó correctamente en el catálogo.`)
@@ -1303,7 +1304,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 description: patch.description,
                 category: backendCategory || patch.category || candidate.category,
                 referencePrice:
-                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, candidate.externalRating),
+                  backendReference ?? calculateReferencePrice(candidate.category, patch.condition, undefined, candidate.pages),
               }
             : candidate
         ),

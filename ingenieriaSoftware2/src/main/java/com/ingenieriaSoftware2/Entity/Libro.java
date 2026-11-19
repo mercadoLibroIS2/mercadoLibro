@@ -43,6 +43,12 @@ public class Libro {
     // Caché orientativa para ejemplar nuevo. La política vigente se recalcula desde los metadatos.
     private Integer valorReferencia;
 
+    @Column(name = "paginas")
+    private Integer paginas;
+
+    @Column(name = "categoria_referencia")
+    private String categoriaReferencia;
+
     // Frescura del cache, independiente para cada tipo de dato
     @Column(name = "fecha_cache_bibliografico")
     private LocalDateTime fechaCacheBibliografico;

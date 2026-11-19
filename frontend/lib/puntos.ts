@@ -4,7 +4,7 @@ export const PUNTOS_INICIALES = 500
 export const BONO_INTERCAMBIO_DIRECTO = 50
 export const BONO_RESENIA = 25
 export const BONO_CADENA = 50
-export const REFERENCIA_BUEN_ESTADO = 500
+export const REFERENCIA_LIBRO_NUEVO = 500
 export const VALORACION_NEUTRA = 4
 
 export function backendErrorMessage(err: unknown): string {

@@ -16,13 +16,11 @@ import { useStore } from "./store"
 import { Field } from "./field"
 import { BookCoverThumb } from "./cover-thumb"
 import {
-  CATEGORIES,
   CONDITIONS,
-  mapGoogleCategory,
   type Condition,
   type GoogleBookVolume,
 } from "@/lib/mercado-types"
-import { REFERENCIA_BUEN_ESTADO } from "@/lib/puntos"
+import { REFERENCIA_LIBRO_NUEVO } from "@/lib/puntos"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
 import { apiGetReferenciaLibro, apiSearchBooksByText, CONDITION_TO_ESTADO } from "@/lib/api"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
@@ -40,7 +38,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   isbn: "",
-  category: "",
+  category: "Sin clasificar",
   condition: "Bueno",
   points: "",
   description: "",
@@ -80,7 +78,7 @@ export function PublishForm() {
     editingBook
       ? {
           isbn: editingBook.isbn || "",
-          category: (CATEGORIES as readonly string[]).includes(editingBook.category) ? editingBook.category : "",
+          category: editingBook.category || "Sin clasificar",
           condition: editingBook.condition === "Muy bueno" ? "Bueno" : editingBook.condition,
           points: String(editingBook.points),
           description: editingBook.description || "",
@@ -111,10 +109,7 @@ export function PublishForm() {
       // Si todavía no cargó puntos, se propone el valor de referencia real
       setForm((prev) => (prev.points ? prev : { ...prev, points: String(ref.valorReferencia) }))
       setErrors((prev) => (prev.points ? { ...prev, points: undefined } : prev))
-      if (ref.categoria) {
-        // El libro ya tiene categoría en la base: es la que se va a usar
-        setForm((prev) => (prev.category ? prev : { ...prev, category: ref.categoria! }))
-      }
+      setForm((prev) => ({ ...prev, category: ref.categoria || "Sin clasificar" }))
     }, 350)
     return () => {
       cancelled = true
@@ -141,7 +136,7 @@ export function PublishForm() {
     setForm((prev) => ({
       ...prev,
       isbn: book.isbn,
-      category: mapGoogleCategory(book.categorias?.[0]) || prev.category,
+      category: "Sin clasificar",
     }))
     setErrors((prev) => ({ ...prev, isbn: undefined }))
   }
@@ -154,7 +149,8 @@ export function PublishForm() {
     setSearchResults([])
     setGoogleBooksError("")
     setCoverFailed(false)
-    updateField("isbn", looksLikeIsbn(value) ? value.trim() : "")
+    setForm((prev) => ({ ...prev, isbn: looksLikeIsbn(value) ? value.trim() : "", category: "Sin clasificar" }))
+    setErrors((prev) => ({ ...prev, isbn: undefined }))
   }
 
   async function handleGoogleBooksSearch() {
@@ -208,9 +204,6 @@ export function PublishForm() {
     const next: Partial<Record<keyof FormState, string>> = {}
     if (!form.isbn.trim()) {
       next.isbn = bookQuery.trim() ? "Buscá el libro y elegí una edición con ISBN" : "El ISBN o título es obligatorio"
-    }
-    if (!form.category) {
-      next.category = "Elegí una categoría"
     }
     if (!form.points.trim()) {
       next.points = "Ingresá el valor en puntos"
@@ -415,48 +408,17 @@ export function PublishForm() {
 
         <div className="h-px bg-stone-100" aria-hidden="true" />
 
-        <section className="flex flex-col gap-1.5">
-          <label htmlFor="pub-category" className="text-sm font-semibold tracking-tight text-stone-800">
-            Categoría *
-          </label>
-          <select
-            id="pub-category"
-            value={form.category}
-            onChange={(e) => updateField("category", e.target.value)}
-            // La categoría pertenece al libro (la eligió quien lo publicó primero): no se edita
-            disabled={Boolean(editingBook && form.category)}
-            aria-invalid={errors.category ? true : undefined}
-            aria-describedby={errors.category ? "pub-category-error" : undefined}
-            className={
-              "h-11 w-full rounded-xl border bg-white px-3.5 text-sm sm:text-[15px] text-stone-900 shadow-[0_1px_2px_rgba(28,25,23,0.03)] outline-none transition-all duration-150 " +
-              (form.category ? "" : "text-stone-400 ") +
-              (errors.category
-                ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
-                : "border-stone-200/90 hover:border-stone-300 focus:border-amber-700 focus:ring-3 focus:ring-amber-700/15")
-            }
-          >
-            <option value="" disabled>
-              Elegí la categoría del libro
-            </option>
-            {CATEGORIES.map((category) => (
-              <option key={category} value={category} className="text-stone-900">
-                {category}
-              </option>
-            ))}
-          </select>
-          {errors.category ? (
-            <p id="pub-category-error" className="flex items-center gap-1.5 text-xs sm:text-[13px] font-medium text-rose-600">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>{errors.category}</span>
-            </p>
-          ) : (
-            <p className="text-xs text-stone-500">Se usa para los filtros del catálogo y las alertas del Tracker.</p>
-          )}
-        </section>
+        <Field
+          id="pub-category"
+          label="Categoría"
+          value={form.category}
+          readOnly
+          hint="Se obtiene de los datos del ISBN. Si falta información, se usa Sin clasificar."
+        />
 
         <p className="text-xs text-stone-500">
-          Un libro promedio en buen estado tiene una referencia de {REFERENCIA_BUEN_ESTADO} puntos.
-          La sugerencia se ajusta por conservación y valoración externa; vos elegís el precio.
+          Un libro promedio nuevo tiene una referencia de {REFERENCIA_LIBRO_NUEVO} puntos.
+          La sugerencia se ajusta por categoría, cantidad de páginas y conservación. Vos elegís el precio.
         </p>
 
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -515,7 +477,7 @@ export function PublishForm() {
                 step={1}
                 value={form.points}
                 onChange={(e) => updateField("points", e.target.value)}
-                placeholder={suggestedReference ? String(suggestedReference) : `Ej: ${REFERENCIA_BUEN_ESTADO}`}
+                placeholder={suggestedReference ? String(suggestedReference) : `Ej: ${REFERENCIA_LIBRO_NUEVO}`}
                 aria-invalid={errors.points ? true : undefined}
                 aria-describedby={errors.points ? "pub-points-error" : undefined}
                 className={

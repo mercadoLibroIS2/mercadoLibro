@@ -69,7 +69,8 @@ export function BookDetailModal() {
     book.category,
     book.condition,
     book.externalRating,
-    book.referencePrice
+    book.referencePrice,
+    book.pages
   )
   const canAfford = currentUser.availablePoints >= book.points
 

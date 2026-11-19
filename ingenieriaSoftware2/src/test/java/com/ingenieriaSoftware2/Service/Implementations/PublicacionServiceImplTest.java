@@ -104,16 +104,18 @@ class PublicacionServiceImplTest {
             l.setSeguidores(Set.of(seguidor, propietario));
             return l;
         });
-        when(calculadora.calcular(isbn, EstadoFisico.NUEVO)).thenReturn(650);
-        when(calculadora.calculadoraColor(100, 650)).thenReturn(ColorSemaforo.VERDE);
+        when(calculadora.calcular(isbn, EstadoFisico.NUEVO)).thenReturn(525);
+        when(calculadora.calculadoraColor(100, 525)).thenReturn(ColorSemaforo.VERDE);
         when(publicacionRepository.save(any(Publicacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        PublicacionRequestDTO req = new PublicacionRequestDTO(isbn, EstadoFisico.NUEVO, 100, "Excelente", null);
+        PublicacionRequestDTO req = new PublicacionRequestDTO(isbn, EstadoFisico.NUEVO, 100, "Excelente", "Técnico");
         publicacionService.publicarLibro(req, "duena@example.com");
 
         ArgumentCaptor<Libro> libroCaptor = ArgumentCaptor.forClass(Libro.class);
         verify(libroRepository).save(libroCaptor.capture());
-        assertEquals(650, libroCaptor.getValue().getValorReferencia());
+        assertEquals(525, libroCaptor.getValue().getValorReferencia());
+        assertEquals(400, libroCaptor.getValue().getPaginas());
+        assertEquals("Ficción", libroCaptor.getValue().getCategoriaReferencia());
 
         verify(notificacionService).crear(eq("seguidor@example.com"), eq(TipoNotificacion.LIBRO_SEGUIDO_PUBLICADO), contains("un libro que seguís"));
         verify(notificacionService, never()).crear(eq("duena@example.com"), any(), any());
@@ -131,40 +133,39 @@ class PublicacionServiceImplTest {
 
         when(usuarioRepository.findByEmail("duena@example.com")).thenReturn(Optional.of(propietario));
         when(libroRepository.findByIsbn(isbn)).thenReturn(Optional.of(libroSinValor));
-        when(calculadora.calcular(isbn, EstadoFisico.COMO_NUEVO)).thenReturn(565);
-        when(calculadora.calculadoraColor(135, 565)).thenReturn(ColorSemaforo.VERDE);
+        when(calculadora.calcular(isbn, EstadoFisico.COMO_NUEVO)).thenReturn(450);
+        when(calculadora.calculadoraColor(135, 450)).thenReturn(ColorSemaforo.VERDE);
         when(publicacionRepository.save(any(Publicacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PublicacionRequestDTO req = new PublicacionRequestDTO(isbn, EstadoFisico.COMO_NUEVO, 135, "Como nuevo", null);
         publicacionService.publicarLibro(req, "duena@example.com");
 
-        assertEquals(625, libroSinValor.getValorReferencia());
+        assertEquals(500, libroSinValor.getValorReferencia());
     }
 
     @Test
-    void publicarConCategoriaLaAsignaAlLibroSiNoTeniaYNoLaPisaDespues() {
+    void categoriaDelClienteNoPuedeModificarMetadatosDelIsbn() {
         String isbn = "9788420633114";
         Usuario propietario = new Usuario();
         propietario.setEmail("duena@example.com");
         Libro libro = new Libro();
         libro.setIsbn(isbn);
-        libro.setValorReferencia(90);
-
         when(usuarioRepository.findByEmail("duena@example.com")).thenReturn(Optional.of(propietario));
         when(libroRepository.findByIsbn(isbn)).thenReturn(Optional.of(libro));
-        when(categoriaRepository.findById("Ficción")).thenReturn(Optional.empty());
-        when(categoriaRepository.save(any(Categoria.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(calculadora.calcular(isbn, EstadoFisico.BUEN_ESTADO)).thenReturn(72);
-        when(calculadora.calculadoraColor(70, 72)).thenReturn(ColorSemaforo.VERDE);
+        when(googleBooksService.buscarPorIsbn(isbn)).thenReturn(Optional.of(new GoogleBookVolumeDTO(
+                "manual", isbn, "Manual", "Autor", "", null, "Editorial", "2026",
+                List.of("Computers / Programming"), 500, 1.0)));
+        when(calculadora.calcular(isbn, EstadoFisico.BUEN_ESTADO)).thenReturn(570);
+        when(calculadora.calculadoraColor(70, 570)).thenReturn(ColorSemaforo.VERDE);
         when(publicacionRepository.save(any(Publicacion.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        publicacionService.publicarLibro(new PublicacionRequestDTO(isbn, EstadoFisico.BUEN_ESTADO, 70, "", "Ficción"), "duena@example.com");
-        assertEquals(Set.of("Ficción"), libro.getCategorias().stream().map(Categoria::getNombre).collect(java.util.stream.Collectors.toSet()));
-
-        // Un segundo publicador no puede cambiar la categoría que ya tiene el libro
-        publicacionService.publicarLibro(new PublicacionRequestDTO(isbn, EstadoFisico.BUEN_ESTADO, 70, "", "Historia"), "duena@example.com");
-        assertEquals(1, libro.getCategorias().size());
-        verify(categoriaRepository, never()).findById("Historia");
+        publicacionService.publicarLibro(new PublicacionRequestDTO(isbn, EstadoFisico.BUEN_ESTADO, 70, "", "Infantil"), "duena@example.com");
+        publicacionService.publicarLibro(new PublicacionRequestDTO(isbn, EstadoFisico.BUEN_ESTADO, 70, "", "Poesía"), "duena@example.com");
+        assertEquals("Técnico", libro.getCategoriaReferencia());
+        assertEquals(500, libro.getPaginas());
+        assertEquals(715, libro.getValorReferencia());
+        verify(googleBooksService).buscarPorIsbn(isbn);
+        verifyNoInteractions(categoriaRepository);
     }
 
     @Test

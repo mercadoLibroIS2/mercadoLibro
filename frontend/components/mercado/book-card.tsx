@@ -30,7 +30,8 @@ export function BookCard({ book }: { book: Book }) {
     book.category,
     book.condition,
     book.externalRating,
-    book.referencePrice
+    book.referencePrice,
+    book.pages
   )
   const isAvailable = book.availability === "DISPONIBLE"
 
