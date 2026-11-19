@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import {
   AlertCircle,
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import { Field } from "./field"
+import { BookCoverThumb } from "./cover-thumb"
 import {
   CATEGORIES,
   CONDITIONS,
@@ -23,8 +24,11 @@ import {
 } from "@/lib/mercado-types"
 import { REFERENCIA_BUEN_ESTADO } from "@/lib/puntos"
 import { evaluatePriceDeal } from "@/lib/price-evaluator"
-import { apiGetReferenciaLibro, CONDITION_TO_ESTADO } from "@/lib/api"
+import { apiGetReferenciaLibro, apiSearchBooksByText, CONDITION_TO_ESTADO } from "@/lib/api"
 import { findGoogleBookByIsbn } from "@/lib/google-books"
+
+const cleanBookIsbn = (value: string) => value.replace(/[^0-9X]/gi, "").toUpperCase()
+const looksLikeIsbn = (value: string) => [10, 13].includes(cleanBookIsbn(value).length) && /^[0-9X\-\s]+$/i.test(value.trim())
 
 interface FormState {
   isbn: string
@@ -85,6 +89,9 @@ export function PublishForm() {
   )
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [saving, setSaving] = useState(false)
+  const [bookQuery, setBookQuery] = useState(editingBook?.isbn || "")
+  const [searchResults, setSearchResults] = useState<GoogleBookVolume[]>([])
+  const searchVersion = useRef(0)
   const [googleBook, setGoogleBook] = useState<GoogleBookVolume | null>(null)
   const [searchingGoogleBooks, setSearchingGoogleBooks] = useState(false)
   const [googleBooksError, setGoogleBooksError] = useState("")
@@ -124,43 +131,67 @@ export function PublishForm() {
     setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
   }
 
-  async function handleGoogleBooksSearch() {
+  function selectBook(book: GoogleBookVolume) {
+    searchVersion.current += 1
+    setSearchingGoogleBooks(false)
+    setGoogleBook(book)
+    setSearchResults([])
+    setCoverFailed(false)
+    setBookQuery(book.isbn)
+    setForm((prev) => ({
+      ...prev,
+      isbn: book.isbn,
+      category: mapGoogleCategory(book.categorias?.[0]) || prev.category,
+    }))
+    setErrors((prev) => ({ ...prev, isbn: undefined }))
+  }
+
+  function updateBookQuery(value: string) {
+    searchVersion.current += 1
+    setSearchingGoogleBooks(false)
+    setBookQuery(value)
+    setGoogleBook(null)
+    setSearchResults([])
     setGoogleBooksError("")
+    setCoverFailed(false)
+    updateField("isbn", looksLikeIsbn(value) ? value.trim() : "")
+  }
+
+  async function handleGoogleBooksSearch() {
+    const version = ++searchVersion.current
+    const query = bookQuery.trim()
+    setGoogleBooksError("")
+    setSearchResults([])
     setGoogleBook(null)
     setCoverFailed(false)
-
-    const targetIsbn = form.isbn.trim()
-    if (!targetIsbn) {
-      setGoogleBooksError("Ingresá un código ISBN para consultar Google Books.")
-      return
-    }
-
-    const clean = targetIsbn.replace(/[^0-9X]/gi, "")
-    if (clean.length !== 10 && clean.length !== 13) {
-      setGoogleBooksError(
-        "Google Books requiere un ISBN de 10 o 13 dígitos (ej: 978-84-204-7183-9)."
-      )
+    if (query.length < 2) {
+      setGoogleBooksError("Ingresá un ISBN o al menos dos letras del título.")
       return
     }
 
     setSearchingGoogleBooks(true)
     try {
-      const result = await findGoogleBookByIsbn(clean)
-      if (!result) {
-        setGoogleBooksError("No encontramos ese ISBN en Google Books ni en Open Library. Revisá el número o probá de nuevo en un rato.")
-        return
-      }
-      setGoogleBook(result)
-      const suggestedCategory = mapGoogleCategory(result.categorias?.[0])
-      if (suggestedCategory && !form.category) {
-        updateField("category", suggestedCategory)
+      if (looksLikeIsbn(query)) {
+        const book = await findGoogleBookByIsbn(cleanBookIsbn(query))
+        if (version !== searchVersion.current) return
+        if (book) {
+          selectBook({ ...book, isbn: book.isbn || cleanBookIsbn(query) })
+        } else {
+          setGoogleBooksError("No encontramos ese ISBN en Google Books ni en Open Library. Revisá el número o probá de nuevo en un rato.")
+        }
+      } else {
+        const books = (await apiSearchBooksByText(query)).filter((book) => looksLikeIsbn(book.isbn || ""))
+        if (version !== searchVersion.current) return
+        setSearchResults(books.slice(0, 6))
+        if (books.length === 0) {
+          setGoogleBooksError("No encontramos libros con ese título. Probá con el ISBN de la contratapa.")
+        }
       }
     } catch (error) {
-      setGoogleBooksError(
-        error instanceof Error ? error.message : "No se pudo consultar Google Books."
-      )
+      if (version !== searchVersion.current) return
+      setGoogleBooksError(error instanceof Error ? error.message : "No se pudo buscar el libro.")
     } finally {
-      setSearchingGoogleBooks(false)
+      if (version === searchVersion.current) setSearchingGoogleBooks(false)
     }
   }
 
@@ -176,7 +207,7 @@ export function PublishForm() {
   function validate(): boolean {
     const next: Partial<Record<keyof FormState, string>> = {}
     if (!form.isbn.trim()) {
-      next.isbn = "El ISBN es obligatorio"
+      next.isbn = bookQuery.trim() ? "Buscá el libro y elegí una edición con ISBN" : "El ISBN o título es obligatorio"
     }
     if (!form.category) {
       next.category = "Elegí una categoría"
@@ -262,7 +293,7 @@ export function PublishForm() {
           <p className="mt-1 text-sm leading-relaxed text-stone-500">
             {editingBook
               ? "Actualizá el estado físico, los puntos solicitados o tus notas del ejemplar."
-              : "Ingresá el ISBN para completar los datos automáticamente y definí un valor en puntos justo."}
+              : "Buscá por ISBN o título, elegí la edición y definí un valor en puntos."}
           </p>
         </div>
       </div>
@@ -277,14 +308,17 @@ export function PublishForm() {
             <div className="flex-1">
               <Field
                 id="pub-isbn"
-                label="ISBN del libro *"
-                value={form.isbn}
-                onChange={(e) => {
-                  updateField("isbn", e.target.value)
-                  if (googleBooksError) setGoogleBooksError("")
+                label={editingBook ? "ISBN del libro *" : "ISBN o título *"}
+                value={editingBook ? form.isbn : bookQuery}
+                onChange={(e) => updateBookQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (!editingBook && e.key === "Enter") {
+                    e.preventDefault()
+                    void handleGoogleBooksSearch()
+                  }
                 }}
                 readOnly={Boolean(editingBook)}
-                placeholder="Ej: 978-84-204-7183-9"
+                placeholder="Ej: 978-84-204-7183-9 o Rayuela"
                 error={errors.isbn}
                 autoComplete="off"
               />
@@ -309,7 +343,7 @@ export function PublishForm() {
 
           {!editingBook && !errors.isbn && (
             <p className="text-xs leading-relaxed text-stone-500">
-              Usá el código de 10 o 13 dígitos de la contratapa para traer título, autor y portada desde Google Books.
+              Escribí el ISBN de la contratapa o el título y elegí la edición que querés publicar.
             </p>
           )}
 
@@ -320,6 +354,28 @@ export function PublishForm() {
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{googleBooksError}</span>
+            </div>
+          )}
+
+          {searchResults.length > 0 && !googleBook && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-stone-600">Elegí la edición que buscás:</p>
+              {searchResults.map((book) => (
+                <button
+                  key={book.isbn}
+                  type="button"
+                  onClick={() => selectBook(book)}
+                  className="flex items-center gap-3 rounded-xl border border-stone-200/90 bg-white p-2.5 text-left transition-colors hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                >
+                  <BookCoverThumb src={book.portadaUrl} className="h-12 w-9 rounded-md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-stone-900">{book.titulo}</p>
+                    <p className="truncate text-xs text-stone-500">
+                      {[book.autor, book.anioPublicacion, `ISBN ${book.isbn}`].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
@@ -345,6 +401,7 @@ export function PublishForm() {
                 <p className="mt-0.5 truncate text-sm font-semibold text-stone-900">
                   {previewTitle}
                 </p>
+                {googleBook && <p className="text-xs text-stone-500">ISBN {googleBook.isbn}</p>}
                 {previewAuthor && (
                   <p className="truncate text-xs text-stone-600">{previewAuthor}</p>
                 )}
