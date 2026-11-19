@@ -10,7 +10,7 @@ La referencia es un libro promedio **en buen estado**, con valoración externa d
 | Cadena completada | +50 por participante, sin sumar otro bono de trueque |
 | Compra con puntos completada | Transferencia del precio, sin bono adicional |
 
-En trueques, la diferencia entre las referencias de ambos ejemplares se reserva y transfiere al completar las dos recepciones. Esa transferencia no crea puntos. El bono de +50 se entrega una sola vez al completar el trueque.
+En trueques, la diferencia entre los precios publicados de ambos ejemplares se reserva y transfiere al completar las dos recepciones. Esa transferencia no crea puntos. El bono de +50 se entrega una sola vez al completar el trueque.
 
 ## Referencias y semáforo
 
@@ -30,7 +30,7 @@ El propietario elige el precio solicitado. Verde: hasta el 110 % de la referenci
 
 ## Datos existentes
 
-Las referencias y colores del catálogo disponible o reservado se calculan con la política vigente, incluso si la base conserva valores orientativos de la escala anterior. Las publicaciones nuevas o editadas guardan la nueva referencia. Los trueques nuevos usan la misma fórmula para la compensación.
+Las referencias y colores del catálogo disponible o reservado se calculan con la política vigente, incluso si la base conserva valores orientativos de la escala anterior. Las publicaciones nuevas o editadas guardan la nueva referencia. Los trueques nuevos calculan la compensación con los precios publicados. La referencia sugerida se usa para el semáforo.
 
 No se modifican precios solicitados, saldos, movimientos históricos ni compensaciones ya acordadas. Tampoco se reescriben las referencias históricas de publicaciones vendidas. Los bonos de operaciones que se completen desde esta versión siguen esta política.
 
