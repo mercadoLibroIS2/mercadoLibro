@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   ArrowRight,
   CheckCircle2,
@@ -25,7 +26,13 @@ const STATUS_BADGES = {
 } as const
 
 export function ChainsView() {
-  const { chains, currentUser, confirmChainStep, rejectChain } = useStore()
+  const { chains, currentUser, confirmChainStep, confirmChainReceipt, rejectChain } = useStore()
+  const [pending, setPending] = useState<string | null>(null)
+  const act = async (id: string, action: (id: string) => Promise<void>) => {
+    if (pending) return
+    setPending(id)
+    try { await action(id) } finally { setPending(null) }
+  }
   const userChains = currentUser
     ? chains.filter((chain) =>
         chain.steps.some((step) => isUserMatch(currentUser, step.userId))
@@ -56,7 +63,7 @@ export function ChainsView() {
             No hay cadenas activas en este momento
           </p>
           <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-stone-500">
-            A medida que más lectores agreguen libros a su Tracker y publiquen ejemplares, detectaremos automáticamente nuevas conexiones triangulares.
+            A medida que más lectores agreguen libros a su Tracker y publiquen ejemplares, detectaremos automáticamente nuevos circuitos de intercambio.
           </p>
         </div>
       ) : (
@@ -64,12 +71,14 @@ export function ChainsView() {
           const myStep = chain.steps.find((s) =>
             isUserMatch(currentUser, s.userId)
           )
+          const allAccepted = chain.steps.every((s) => s.confirmed)
+          const inExchange = chain.status === "EN_CURSO" && allAccepted
           const badge =
             chain.status === "COMPLETADA"
               ? STATUS_BADGES.COMPLETADA
               : chain.status === "CANCELADA"
               ? STATUS_BADGES.CANCELADA
-              : STATUS_BADGES.ACTIVA
+              : inExchange ? { ...STATUS_BADGES.ACTIVA, label: "En intercambio · esperando recepción" } : STATUS_BADGES.ACTIVA
 
           return (
             <div
@@ -84,7 +93,7 @@ export function ChainsView() {
                   </span>
                   <div>
                     <h3 className="font-serif text-base sm:text-lg font-bold tracking-tight text-stone-900">
-                      Cadena Triangular de Intercambio #{chain.id.slice(-4)}
+                      Cadena de intercambio #{chain.id.slice(-4)}
                     </h3>
                     <p className="text-xs sm:text-sm text-stone-500">
                       {chain.steps.length} participantes coordinados en ciclo cerrado
@@ -130,7 +139,7 @@ export function ChainsView() {
                         {step.confirmed ? (
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>Aceptó</span>
+                            <span>{step.received ? "Recibió" : inExchange ? "Espera su libro" : "Aceptó"}</span>
                           </span>
                         ) : (
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -183,7 +192,13 @@ export function ChainsView() {
                 myStep && (
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
                     <div className="text-xs sm:text-sm text-stone-600">
-                      {myStep.confirmed ? (
+                      {inExchange ? (
+                        <p>{myStep.received
+                          ? "Ya confirmaste la recepción. Esperando las recepciones restantes."
+                          : "Todos aceptaron y los libros están reservados. Coordiná la entrega y confirmá cuando recibas tu libro."}
+                          {` (${chain.steps.filter((s) => s.received).length}/${chain.steps.length} recepciones)`}
+                        </p>
+                      ) : myStep.confirmed ? (
                         <p className="flex items-center gap-1.5 font-semibold text-emerald-700">
                           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                           <span>
@@ -197,11 +212,25 @@ export function ChainsView() {
                       )}
                     </div>
 
+                    {inExchange && !myStep.received && (
+                      <button type="button" disabled={pending !== null}
+                        onClick={() => act(chain.id, confirmChainReceipt)}
+                        className="h-10 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white disabled:opacity-50">
+                        Confirmar recepción de mi libro
+                      </button>
+                    )}
+                    {(myStep.confirmed && !chain.steps.some((s) => s.received)) && (
+                      <button type="button" disabled={pending !== null} onClick={() => act(chain.id, rejectChain)}
+                        className="h-10 rounded-xl border border-stone-200 px-4 text-sm font-semibold disabled:opacity-50">
+                        Cancelar participación
+                      </button>
+                    )}
                     {!myStep.confirmed && (
                       <div className="flex flex-wrap items-center gap-2.5">
                         <button
                           type="button"
-                          onClick={() => rejectChain(chain.id)}
+                          disabled={pending !== null}
+                          onClick={() => act(chain.id, rejectChain)}
                           className="h-10 rounded-xl border border-stone-200/90 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                         >
                           Rechazar
@@ -209,7 +238,8 @@ export function ChainsView() {
 
                         <button
                           type="button"
-                          onClick={() => confirmChainStep(chain.id)}
+                          disabled={pending !== null}
+                          onClick={() => act(chain.id, confirmChainStep)}
                           className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-amber-800 px-4 text-sm font-semibold text-white shadow-sm transition-all hover:bg-amber-900 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                         >
                           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />

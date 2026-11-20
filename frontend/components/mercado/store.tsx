@@ -80,6 +80,7 @@ import {
   apiListPublications,
   apiListCadenas,
   apiAceptarCadena,
+  apiConfirmarRecepcionCadena,
   apiRechazarCadena,
   getAuthToken,
   setAuthToken,
@@ -130,6 +131,7 @@ function cadenaResponseToChain(cadena: CadenaResponse): TradeChain {
         givesBook: cadenaPasoToBook(paso),
         receivesBook: cadenaPasoToBook(recibido),
         confirmed: paso.confirmado,
+        received: paso.recibido,
       }
     }),
   }
@@ -491,8 +493,9 @@ interface StoreContextValue extends AppState {
   markAllNotificationsRead: () => void
 
   // Chains
-  confirmChainStep: (chainId: string) => void
-  rejectChain: (chainId: string) => void
+  confirmChainStep: (chainId: string) => Promise<void>
+  confirmChainReceipt: (chainId: string) => Promise<void>
+  rejectChain: (chainId: string) => Promise<void>
   resetToInitialData: () => void
 }
 
@@ -758,13 +761,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           id: n.id,
           userId,
           type: meta.type,
-          title: meta.title,
+          title: n.mensaje?.toLowerCase().includes("cadena")
+            ? n.tipo === "INTERCAMBIO_ACEPTADO" ? "Cadena en intercambio"
+              : n.tipo === "INTERCAMBIO_COMPLETADO" ? "Cadena completada"
+              : n.tipo === "CADENA_DETECTADA" && n.mensaje.includes("cancelada") ? "Cadena cancelada" : meta.title
+            : meta.title,
           // El backend manda el contexto (qué libro, quién); el texto genérico queda de respaldo
           message: n.mensaje || meta.message,
           read: n.leida,
           archived: n.archivada,
           date: n.fechaCreacion,
-          linkScreen: meta.linkScreen,
+          linkScreen: n.mensaje?.toLowerCase().includes("cadena") ? "cadenas" : meta.linkScreen,
         }
       })
 
@@ -2194,6 +2201,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             showToast(`¡Cadena completada! Cada participante recibió +${actualizada.puntosBonus} pts.`)
           } else if (actualizada.estado === "CANCELADA") {
             showToast("La cadena se canceló porque uno de los libros ya no está disponible.")
+          } else if (actualizada.pasos.every((p: CadenaResponse["pasos"][number]) => p.confirmado)) {
+            showToast("Todos aceptaron. Coordiná la entrega y confirmá cuando recibas tu libro.")
           } else {
             showToast("Confirmaste tu participación. Falta que confirmen los demás.")
           }
@@ -2210,11 +2219,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const updatedSteps = chain.steps.map((step) =>
             isUserMatch(prev.currentUser, step.userId) ? { ...step, confirmed: true } : step
           )
-          const allConfirmed = updatedSteps.every((s) => s.confirmed)
           return {
             ...chain,
             steps: updatedSteps,
-            status: allConfirmed ? ("COMPLETADA" as const) : ("EN_CURSO" as const),
+            status: "EN_CURSO" as const,
           }
         })
         return { ...prev, chains: updatedChains }
@@ -2223,6 +2231,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast("Confirmaste tu participación en la cadena de intercambio.")
     },
     [state.currentUser, state.chains, showToast, refreshFromBackend]
+  )
+
+  const confirmChainReceipt = useCallback(
+    async (chainId: string) => {
+      const chain = state.chains.find((c) => c.id === chainId)
+      const own = chain?.steps.find((s) => isUserMatch(state.currentUser, s.userId))
+      if (!state.currentUser || !chain || !own || own.received || chain.status !== "EN_CURSO"
+          || !chain.steps.every((s) => s.confirmed)) return
+      if (hasBackendSession()) {
+        try {
+          const updated = await apiConfirmarRecepcionCadena(chainId)
+          setState((prev) => ({ ...prev, chains: prev.chains.map((c) => c.id === chainId ? cadenaResponseToChain(updated) : c) }))
+          showToast(updated.estado === "COMPLETADA"
+            ? `¡Cadena completada! Cada participante recibió +${updated.puntosBonus} pts.`
+            : "Recepción confirmada. Esperando que los demás reciban sus libros.")
+          await refreshFromBackend()
+        } catch (err) {
+          showToast(`No se pudo confirmar la recepción: ${backendErrorMessage(err)}`)
+        }
+        return
+      }
+      setState((prev) => ({ ...prev, chains: prev.chains.map((c) => {
+        if (c.id !== chainId) return c
+        const steps = c.steps.map((s) => isUserMatch(prev.currentUser, s.userId) ? { ...s, received: true } : s)
+        return { ...c, steps, status: steps.every((s) => s.received) ? "COMPLETADA" : "EN_CURSO" }
+      }) }))
+      showToast("Recepción confirmada.")
+    }, [state.chains, state.currentUser, showToast, refreshFromBackend]
   )
 
   const rejectChain = useCallback(
@@ -2250,8 +2286,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         chains: prev.chains.map((c) => (c.id === chainId ? { ...c, status: "CANCELADA" } : c)),
       }))
       showToast("Cadena de intercambio rechazada.")
+      if (hasBackendSession()) await refreshFromBackend()
     },
-    [state.currentUser, state.chains, showToast]
+    [state.currentUser, state.chains, showToast, refreshFromBackend]
   )
 
   return (
@@ -2307,6 +2344,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         archiveNotification,
         markAllNotificationsRead,
         confirmChainStep,
+        confirmChainReceipt,
         rejectChain,
         resetToInitialData,
       }}

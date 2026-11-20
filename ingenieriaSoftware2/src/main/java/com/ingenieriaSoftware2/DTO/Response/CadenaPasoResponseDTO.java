@@ -14,6 +14,7 @@ public record CadenaPasoResponseDTO(
         String autor,
         EstadoFisico estadoFisico,
         Integer valorPuntosSolicitado,
-        boolean confirmado
+        boolean confirmado,
+        boolean recibido
 ) {
 }

@@ -3,6 +3,7 @@ package com.ingenieriaSoftware2.Service.Implementations;
 import com.ingenieriaSoftware2.DTO.Response.CadenaIntercambioResponseDTO;
 import com.ingenieriaSoftware2.DTO.Request.CadenaIntercambioRequestDTO;
 import com.ingenieriaSoftware2.Entity.CadenaIntercambio;
+import com.ingenieriaSoftware2.Entity.CadenaPaso;
 import com.ingenieriaSoftware2.Entity.Ids.PublicacionId;
 import com.ingenieriaSoftware2.Entity.Libro;
 import com.ingenieriaSoftware2.Entity.Publicacion;
@@ -124,18 +125,30 @@ class CadenaIntercambioServiceImplTest {
     }
 
     @Test
-    void cuandoConfirmanTodosSeTransfierenLosLibrosYSeAcreditaElBono() {
+    void aceptarReservaYRecibirFinalizaConUnSoloBonoPorPersona() {
         UUID id = service.listarCadenas(ana.getId()).get(0).id();
 
         assertEquals(EstadoCadena.EN_CURSO, service.aceptarCadena(id, ana.getId()).estado());
         assertThrows(ResponseStatusException.class, () -> service.aceptarCadena(id, ana.getId()));
         assertEquals(EstadoCadena.EN_CURSO, service.aceptarCadena(id, bruno.getId()).estado());
-        CadenaIntercambioResponseDTO completada = service.aceptarCadena(id, carla.getId());
+        assertEquals(EstadoCadena.EN_CURSO, service.aceptarCadena(id, carla.getId()).estado());
+        assertTrue(publicaciones.values().stream().allMatch(p -> p.getEstadoPublicacion() == EstadoPublicacion.RESERVADA));
+        verifyNoInteractions(movimientoPuntosService);
+        assertFalse(bruno.getLibrosSeguidos().isEmpty());
+        assertEquals(EstadoCadena.EN_CURSO, service.confirmarRecepcion(id, ana.getId()).estado());
+        assertThrows(ResponseStatusException.class, () -> service.confirmarRecepcion(id, ana.getId()));
+        assertThrows(ResponseStatusException.class, () -> service.rechazarCadena(id, bruno.getId()));
+        assertEquals(EstadoCadena.EN_CURSO, service.confirmarRecepcion(id, bruno.getId()).estado());
+        verifyNoInteractions(movimientoPuntosService);
+        CadenaIntercambioResponseDTO completada = service.confirmarRecepcion(id, carla.getId());
 
         assertEquals(EstadoCadena.COMPLETADA, completada.estado());
         assertTrue(publicaciones.values().stream().allMatch(p -> p.getEstadoPublicacion() == EstadoPublicacion.VENDIDA));
         verify(movimientoPuntosService, times(3)).acreditarBonificacionSistema(any(Usuario.class), eq(50), anyString());
         assertTrue(bruno.getLibrosSeguidos().isEmpty(), "bruno ya recibió X y deja de seguirlo");
+        assertThrows(ResponseStatusException.class, () -> service.confirmarRecepcion(id, carla.getId()));
+        assertThrows(ResponseStatusException.class, () -> service.aceptarCadena(id, ana.getId()));
+        verify(movimientoPuntosService, times(3)).acreditarBonificacionSistema(any(), eq(50), anyString());
     }
 
     @Test
@@ -151,6 +164,16 @@ class CadenaIntercambioServiceImplTest {
     }
 
     @Test
+    void noTomaComoPropiaUnaReservaHechaPorOtroIntercambio() {
+        UUID id = service.listarCadenas(ana.getId()).get(0).id();
+        service.aceptarCadena(id, ana.getId());
+        service.aceptarCadena(id, bruno.getId());
+        publicaciones.values().iterator().next().setEstadoPublicacion(EstadoPublicacion.RESERVADA);
+        assertEquals(EstadoCadena.CANCELADA, service.aceptarCadena(id, carla.getId()).estado());
+        verifyNoInteractions(movimientoPuntosService);
+    }
+
+    @Test
     void unaCadenaRechazadaNoSeVuelveAProponer() {
         UUID id = service.listarCadenas(ana.getId()).get(0).id();
         assertEquals(EstadoCadena.CANCELADA, service.rechazarCadena(id, bruno.getId()).estado());
@@ -158,6 +181,105 @@ class CadenaIntercambioServiceImplTest {
         List<CadenaIntercambioResponseDTO> despues = service.listarCadenas(ana.getId());
         assertEquals(1, despues.size());
         assertEquals(EstadoCadena.CANCELADA, despues.get(0).estado());
+    }
+
+    @Test
+    void noSePuedeRecibirAntesDeQueAceptenTodosNiPorUnUsuarioAjeno() {
+        UUID id = service.listarCadenas(ana.getId()).get(0).id();
+        service.aceptarCadena(id, ana.getId());
+        assertThrows(ResponseStatusException.class, () -> service.confirmarRecepcion(id, ana.getId()));
+        assertThrows(RuntimeException.class, () -> service.aceptarCadena(id, usuario("ajeno@test.com").getId()));
+        verifyNoInteractions(movimientoPuntosService);
+    }
+
+    @Test
+    void cancelarAntesDeRecibirLiberaLosLibrosYNoDaBonos() {
+        UUID id = service.listarCadenas(ana.getId()).get(0).id();
+        for (Usuario u : List.of(ana, bruno, carla)) service.aceptarCadena(id, u.getId());
+        assertEquals(EstadoCadena.CANCELADA, service.rechazarCadena(id, ana.getId()).estado());
+        assertTrue(publicaciones.values().stream().allMatch(p -> p.getEstadoPublicacion() == EstadoPublicacion.DISPONIBLE));
+        verifyNoInteractions(movimientoPuntosService);
+        assertEquals(1, service.listarCadenas(ana.getId()).size());
+    }
+
+    @Test
+    void consolidaDuplicadasRotadasConservandoAceptacionesYAdmiteElIdAnterior() {
+        service.listarCadenas(ana.getId());
+        CadenaIntercambio original = guardadas.get(0);
+        original.setId(new UUID(0, 1));
+        original.getPasos().get(0).setConfirmado(true);
+        CadenaIntercambio duplicada = duplicar(original);
+        duplicada.getPasos().get(1).setConfirmado(true);
+        Collections.rotate(duplicada.getPasos(), 1);
+        var lista = service.listarCadenas(ana.getId());
+        assertEquals(1, lista.size());
+        assertEquals(2, lista.get(0).pasos().stream().filter(p -> p.confirmado()).count());
+        assertEquals(EstadoCadena.CANCELADA, duplicada.getEstado());
+        assertEquals(EstadoCadena.EN_CURSO, service.aceptarCadena(duplicada.getId(), carla.getId()).estado());
+        assertTrue(publicaciones.values().stream().allMatch(p -> p.getEstadoPublicacion() == EstadoPublicacion.RESERVADA));
+        assertEquals(1, service.listarCadenas(ana.getId()).size());
+        service.rechazarCadena(original.getId(), ana.getId());
+        assertEquals(1, service.listarCadenas(ana.getId()).size(), "no reaparece el duplicado al cancelar");
+    }
+
+    @Test
+    void unaCadenaHistoricaCompletadaNoSeReabreNiPagaOtraVez() {
+        UUID id = service.listarCadenas(ana.getId()).get(0).id();
+        guardadas.get(0).setEstado(EstadoCadena.COMPLETADA);
+        CadenaIntercambio duplicada = duplicar(guardadas.get(0));
+        assertEquals(1, service.listarCadenas(ana.getId()).size());
+        assertEquals(EstadoCadena.CANCELADA, duplicada.getEstado());
+        assertThrows(ResponseStatusException.class, () -> service.confirmarRecepcion(id, ana.getId()));
+        verifyNoInteractions(movimientoPuntosService);
+    }
+
+    @Test
+    void noConfundeDistintosEjemplaresDelMismoLibroConDuplicados() {
+        service.listarCadenas(ana.getId());
+        CadenaIntercambio distinta = duplicar(guardadas.get(0));
+        distinta.getPasos().get(0).setHoraPublicacion(LocalDateTime.of(2026, 2, 1, 12, 0));
+        assertEquals(2, service.listarCadenas(ana.getId()).size());
+        assertEquals(EstadoCadena.PROPUESTA, distinta.getEstado());
+    }
+
+    @Test
+    void unaCadenaDeCuatroTambienRequiereLasCuatroRecepciones() {
+        publicaciones.clear();
+        Usuario diego = usuario("diego@test.com");
+        publicar(ana, "A", bruno);
+        publicar(bruno, "B", carla);
+        publicar(carla, "C", diego);
+        publicar(diego, "D", ana);
+        UUID id = service.listarCadenas(ana.getId()).get(0).id();
+        for (Usuario u : List.of(ana, bruno, carla, diego)) {
+            assertEquals(EstadoCadena.EN_CURSO, service.aceptarCadena(id, u.getId()).estado());
+        }
+        for (Usuario u : List.of(ana, bruno, carla)) {
+            assertEquals(EstadoCadena.EN_CURSO, service.confirmarRecepcion(id, u.getId()).estado());
+        }
+        verifyNoInteractions(movimientoPuntosService);
+        assertEquals(EstadoCadena.COMPLETADA, service.confirmarRecepcion(id, diego.getId()).estado());
+        verify(movimientoPuntosService, times(4)).acreditarBonificacionSistema(any(), eq(50), anyString());
+    }
+
+    private CadenaIntercambio duplicar(CadenaIntercambio original) {
+        CadenaIntercambio copia = new CadenaIntercambio();
+        copia.setId(new UUID(0, 2));
+        copia.setEstado(EstadoCadena.PROPUESTA);
+        copia.setPuntosBonus(50);
+        copia.setParticipantes(original.getParticipantes());
+        for (CadenaPaso p : original.getPasos()) {
+            CadenaPaso q = new CadenaPaso();
+            q.setCadena(copia);
+            q.setOrden(p.getOrden());
+            q.setEmailEntrega(p.getEmailEntrega());
+            q.setEmailRecibe(p.getEmailRecibe());
+            q.setIsbn(p.getIsbn());
+            q.setHoraPublicacion(p.getHoraPublicacion());
+            copia.getPasos().add(q);
+        }
+        guardadas.add(copia);
+        return copia;
     }
 
     private Usuario usuario(String email) {

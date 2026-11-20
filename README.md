@@ -67,6 +67,25 @@ volver a correr completo después de cada cambio de modelo. Tablas nuevas que no
 (por ejemplo `cadena_paso`, `resenia_compra`) conviene dejarlas con RLS activado y sin políticas: el
 backend entra como dueño de las tablas y no se ve afectado.
 
+Para actualizar una instalación existente con las confirmaciones de recepción de cadenas, ejecutar
+[el SQL de cadenas](docs/sql/2026-11-20-cadenas-recepcion.sql) **antes de desplegar el backend**.
+Agrega `cadena_intercambio.intercambio_iniciado` y `cadena_paso.recibido` con valor inicial `false`.
+No reabre cadenas completadas ni modifica saldos.
+
+## Cadenas de intercambio
+
+En **Cadenas Circulares**, cada participante acepta su parte. Cuando todos aceptan, los libros
+pasan a `RESERVADA` y la pantalla muestra **En intercambio · esperando recepción**. Cada lector
+confirma que recibió su libro; únicamente la última recepción completa la cadena, marca los libros
+`VENDIDA`, retira los seguimientos recibidos y acredita +50 por participante. Antes de la primera
+recepción se puede cancelar, liberando los libros; después se bloquea la cancelación.
+
+PostgreSQL serializa la detección y las acciones mediante un bloqueo transaccional que se mantiene
+hasta el commit, incluso entre instancias del backend. Los duplicados activos de las mismas
+publicaciones y destinatarios se consolidan al listar: conservan las aceptaciones, los registros
+repetidos quedan cancelados y se muestra una sola tarjeta. Los identificadores anteriores resuelven
+al registro conservado. Las cadenas históricas completadas mantienen su estado y sus puntos.
+
 ## Datos de demo
 
 Con el backend levantado: `cd frontend && BACKEND_URL=http://localhost:8086 node scripts/seed-demo.mjs`.

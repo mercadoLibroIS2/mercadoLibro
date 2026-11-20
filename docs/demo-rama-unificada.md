@@ -31,7 +31,9 @@ Antes de presentar con esta rama, hay que ensayarlo y ajustarlo.
 1. **Catálogo y publicación** (Lucía): filtrar por categoría, publicar por ISBN con semáforo de precio.
 2. **Trueque** (Lucía ↔ Tomás): proponer, aceptar, confirmar recepción de ambos lados, reseñar.
 3. **Cadenas circulares**: con tres usuarios que se quieren libros en ronda, la cadena aparece
-   en "Cadenas Circulares" y cada participante confirma su parte.
+   en "Cadenas Circulares" y cada participante acepta su parte. Al aceptar todos, queda en intercambio
+   y los libros se reservan. Cada lector confirma la recepción de su libro desde esa misma pantalla;
+   la última recepción completa la cadena y acredita +50 puntos por persona.
 4. **Reportes** (cualquier usuario):
    - Detalle de un libro ajeno → "Reportar publicación".
    - Perfil de otro usuario → "Reportar usuario".

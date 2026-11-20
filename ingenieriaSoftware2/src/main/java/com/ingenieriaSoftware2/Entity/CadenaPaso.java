@@ -44,4 +44,8 @@ public class CadenaPaso {
 
     @Column(name = "confirmado", nullable = false)
     private boolean confirmado;
+
+    /** El usuario emailEntrega confirmó que recibió su libro entrante. */
+    @Column(name = "recibido", nullable = false)
+    private boolean recibido;
 }

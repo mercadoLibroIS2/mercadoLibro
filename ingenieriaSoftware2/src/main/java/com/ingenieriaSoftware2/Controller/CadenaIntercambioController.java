@@ -41,6 +41,12 @@ public class CadenaIntercambioController {
         return ResponseEntity.ok(cadenaIntercambioService.aceptarCadena(id, usuarioId));
     }
 
+    @PatchMapping("/{id}/confirmar-recepcion")
+    public ResponseEntity<CadenaIntercambioResponseDTO> confirmarRecepcion(
+            @PathVariable UUID id, @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(cadenaIntercambioService.confirmarRecepcion(id, resolveUsuarioId(usuario)));
+    }
+
     @PatchMapping("/{id}/rechazar")
     public ResponseEntity<CadenaIntercambioResponseDTO> rechazarCadena(
             @PathVariable UUID id,

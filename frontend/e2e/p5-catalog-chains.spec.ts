@@ -11,7 +11,7 @@ import { SEED_BOOKS, SEED_USERS } from "../lib/seed-data"
 import type { Book, TradeChain, User } from "../lib/mercado-types"
 import { CONDITION_TO_ESTADO } from "../lib/api"
 
-const STORAGE_KEY = "mercadolibro_demo_clean_v5"
+const STORAGE_KEY = "mercadolibro_demo_clean_v6"
 
 const usersByEmail = new Map(SEED_USERS.map((user) => [user.email, user]))
 
@@ -33,6 +33,7 @@ function chainToBackend(chain: TradeChain) {
       estadoFisico: null,
       valorPuntosSolicitado: step.givesBook.points,
       confirmado: step.confirmed,
+      recibido: step.received ?? false,
     })),
   }
 }
@@ -211,14 +212,17 @@ async function mockBackend(
     if (url.pathname.includes("/api/cadenaIntercambio")) {
       const accessToken = request.headers().authorization?.replace(/^Bearer\s+/i, "")
       const userId = accessToken?.replace(/^p5-token-/, "") || ""
-      const action = url.pathname.match(/cadenaIntercambio\/([^/]+)\/(aceptar|rechazar)$/)
+      const action = url.pathname.match(/cadenaIntercambio\/([^/]+)\/(aceptar|rechazar|confirmar-recepcion)$/)
       if (action) {
         const chain = serverChains.find((candidate) => candidate.id === decodeURIComponent(action[1]))!
         if (action[2] === "rechazar") {
           chain.status = "CANCELADA"
+        } else if (action[2] === "confirmar-recepcion") {
+          chain.steps = chain.steps.map((step) => step.userId === userId ? { ...step, received: true } : step)
+          chain.status = chain.steps.every((step) => step.received) ? "COMPLETADA" : "EN_CURSO"
         } else {
           chain.steps = chain.steps.map((step) => (step.userId === userId ? { ...step, confirmed: true } : step))
-          chain.status = chain.steps.every((step) => step.confirmed) ? "COMPLETADA" : "EN_CURSO"
+          chain.status = "EN_CURSO"
         }
         await route.fulfill({ json: chainToBackend(chain) })
         return
@@ -278,7 +282,7 @@ async function openChains(page: Page) {
     .locator("aside")
     .getByRole("button", { name: "Cadenas Circulares", exact: true })
     .click()
-  await expect(page.getByRole("heading", { name: "Cadenas Multiusuario de Intercambio" })).toBeVisible()
+  await expect(page.getByText("Cadenas circulares de intercambio", { exact: true })).toBeVisible()
 }
 
 async function openPublishForm(page: Page) {
@@ -297,7 +301,7 @@ function bookCard(page: Page, title: string) {
 
 function chainCard(page: Page) {
   return page.locator("div.rounded-3xl.border").filter({
-    has: page.getByRole("heading", { name: /Cadena Triangular de Intercambio/ }),
+    has: page.getByRole("heading", { name: /Cadena de intercambio/ }),
   })
 }
 
@@ -546,7 +550,7 @@ test("la cadena propuesta forma un ciclo cerrado con participantes distintos y m
   }
 })
 
-test("la aceptación de cada participante mueve la cadena de propuesta a en curso y a completada", async ({
+test("la cadena queda en intercambio tras aceptar y finaliza después de todas las recepciones", async ({
   page,
 }) => {
   const chains = generateInitialChains(SEED_BOOKS, SEED_USERS).map((chain) => ({
@@ -574,16 +578,35 @@ test("la aceptación de cada participante mueve la cadena de propuesta a en curs
     if (index === 2) {
       expect(updatedChain.steps.map((step) => step.confirmed)).toEqual([true, true, true])
     }
-    expect(updatedChain.status).toBe(index === 2 ? "COMPLETADA" : "EN_CURSO")
+    expect(updatedChain.status).toBe("EN_CURSO")
     if (index < 2) {
       await expect(card.getByText("Ya confirmaste tu participación. Esperando al resto de los integrantes.")).toBeVisible()
       await expect(card.getByRole("button", { name: "Aceptar mi parte del circuito" })).toHaveCount(0)
     } else {
-      await expect(card.getByText("Cadena Completada")).toBeVisible()
+      await expect(card.getByText("En intercambio · esperando recepción")).toBeVisible()
+      await expect(card.getByRole("button", { name: "Confirmar recepción de mi libro" })).toBeVisible()
       await expect(card.getByRole("button", { name: "Aceptar mi parte del circuito" })).toHaveCount(0)
     }
 
     if (index < 2) await logout(page)
+  }
+
+  await logout(page)
+  for (let index = 0; index < orderedParticipants.length; index++) {
+    await signIn(page, orderedParticipants[index])
+    await openChains(page)
+    const card = chainCard(page)
+    await card.getByRole("button", { name: "Confirmar recepción de mi libro" }).click()
+    await expect.poll(async () => (await persistedChains(page))[0].steps[index].received).toBe(true)
+    expect((await persistedChains(page))[0].status).toBe(index === 2 ? "COMPLETADA" : "EN_CURSO")
+    if (index < 2) {
+      await expect(card).toContainText("Ya confirmaste la recepción")
+      await expect(card.getByRole("button", { name: "Confirmar recepción de mi libro" })).toHaveCount(0)
+      await expect(card.getByRole("button", { name: "Cancelar participación" })).toHaveCount(0)
+      await logout(page)
+    } else {
+      await expect(card.getByText("Cadena Completada")).toBeVisible()
+    }
   }
 })
 
@@ -616,7 +639,7 @@ test("las cadenas se muestran solo a sus participantes y se maneja la ausencia d
   await signIn(page, SEED_USERS[3]) // Valentina Sosa (no participa en la cadena de 3)
   await openChains(page)
   await expect(page.getByText("No hay cadenas activas en este momento")).toBeVisible()
-  await expect(page.getByRole("heading", { name: /Cadena Triangular de Intercambio/ })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: /Cadena de intercambio/ })).toHaveCount(0)
 })
 
 test("no detecta ni muestra una cadena si falta un libro disponible para cerrar el ciclo", async ({
@@ -633,7 +656,7 @@ test("no detecta ni muestra una cadena si falta un libro disponible para cerrar 
   await signIn(page)
   await openChains(page)
   await expect(page.getByText("No hay cadenas activas en este momento")).toBeVisible()
-  await expect(page.getByRole("heading", { name: /Cadena Triangular de Intercambio/ })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: /Cadena de intercambio/ })).toHaveCount(0)
 })
 
 async function createBackendContext(): Promise<APIRequestContext> {
@@ -658,7 +681,7 @@ async function registerBackendUser(api: APIRequestContext, suffix: string) {
 }
 
 test.describe("contratos REST de cadenas", () => {
-  test("crea una cadena y la completa con la aceptación de sus participantes", async () => {
+  test("una cadena manual sin libros no se completa al aceptar", async () => {
     test.skip(!process.env.P5_API_URL, "Definí P5_API_URL para ejecutar la capa REST.")
     const api = await createBackendContext()
     try {
@@ -666,7 +689,7 @@ test.describe("contratos REST de cadenas", () => {
       const second = await registerBackendUser(api, "Dos")
       const create = await api.post("/api/cadenaIntercambio", {
         headers: { Authorization: `Bearer ${first.token}` },
-        data: { participantesEmails: [first.email, second.email], puntosBonus: 75 },
+        data: { participantesEmails: [first.email, second.email], puntosBonus: 50 },
       })
       expect(create.status()).toBe(201)
       const chain = (await create.json()) as {
@@ -676,7 +699,7 @@ test.describe("contratos REST de cadenas", () => {
         participantesEmails: string[]
       }
       expect(chain).toMatchObject({
-        puntosBonus: 75,
+        puntosBonus: 50,
         estado: "PROPUESTA",
         participantesEmails: expect.arrayContaining([first.email, second.email]),
       })
@@ -693,7 +716,7 @@ test.describe("contratos REST de cadenas", () => {
         { headers: { Authorization: `Bearer ${second.token}` } },
       )
       expect(secondAcceptance.status()).toBe(200)
-      await expect(secondAcceptance.json()).resolves.toMatchObject({ estado: "COMPLETADA" })
+      await expect(secondAcceptance.json()).resolves.toMatchObject({ estado: "EN_CURSO" })
     } finally {
       await api.dispose()
     }

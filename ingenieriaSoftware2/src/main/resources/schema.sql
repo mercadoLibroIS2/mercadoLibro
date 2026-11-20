@@ -183,6 +183,8 @@ CREATE TABLE IF NOT EXISTS cadena_participantes (
 );
 
 -- Cada eslabón: email_entrega entrega su publicación (isbn + hora_publicacion) a email_recibe
+ALTER TABLE cadena_intercambio ADD COLUMN IF NOT EXISTS intercambio_iniciado BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS cadena_paso (
     id               UUID PRIMARY KEY,
     cadena_id        UUID NOT NULL REFERENCES cadena_intercambio (id) ON DELETE CASCADE,
@@ -191,8 +193,11 @@ CREATE TABLE IF NOT EXISTS cadena_paso (
     email_recibe     VARCHAR(255) NOT NULL,
     isbn             VARCHAR(255) NOT NULL,
     hora_publicacion TIMESTAMP NOT NULL,
-    confirmado       BOOLEAN NOT NULL DEFAULT FALSE
+    confirmado       BOOLEAN NOT NULL DEFAULT FALSE,
+    recibido         BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE cadena_paso ADD COLUMN IF NOT EXISTS recibido BOOLEAN NOT NULL DEFAULT FALSE;
 
 
 -- =======================================================

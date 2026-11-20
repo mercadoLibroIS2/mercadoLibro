@@ -723,6 +723,7 @@ export interface CadenaPasoResponse {
   estadoFisico?: EstadoFisico | null
   valorPuntosSolicitado?: number | null
   confirmado: boolean
+  recibido: boolean
 }
 
 export interface CadenaResponse {
@@ -744,6 +745,12 @@ export async function apiListCadenas(): Promise<CadenaResponse[]> {
 
 export async function apiAceptarCadena(cadenaId: string): Promise<any> {
   return request<any>(`/api/cadenaIntercambio/${encodeURIComponent(cadenaId)}/aceptar`, {
+    method: "PATCH",
+  })
+}
+
+export async function apiConfirmarRecepcionCadena(cadenaId: string): Promise<CadenaResponse> {
+  return request<CadenaResponse>(`/api/cadenaIntercambio/${encodeURIComponent(cadenaId)}/confirmar-recepcion`, {
     method: "PATCH",
   })
 }

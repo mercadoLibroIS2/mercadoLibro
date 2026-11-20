@@ -14,6 +14,8 @@ public interface CadenaIntercambioService {
 
     CadenaIntercambioResponseDTO aceptarCadena(UUID cadenaId, UUID usuarioId);
 
+    CadenaIntercambioResponseDTO confirmarRecepcion(UUID cadenaId, UUID usuarioId);
+
     CadenaIntercambioResponseDTO rechazarCadena(UUID cadenaId, UUID usuarioId);
 }
 
