@@ -251,6 +251,7 @@ export interface ChainStep {
   givesBook: Book
   receivesBook: Book
   confirmed: boolean
+  received?: boolean
 }
 
 export interface TradeChain {

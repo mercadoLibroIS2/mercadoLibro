@@ -21,6 +21,8 @@ import com.ingenieriaSoftware2.Service.Interfaces.MovimientoPuntosService;
 import com.ingenieriaSoftware2.Service.Interfaces.NotificacionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,8 +35,8 @@ import java.util.*;
  * Se detectan a partir de las publicaciones DISPONIBLES y del Tracker: hay una arista
  * A → B cuando A tiene publicado un libro que B sigue. Un ciclo de 3 a {@value #MAX_PARTICIPANTES}
  * usuarios distintos es una cadena: cada uno entrega su libro al siguiente y recibe el del anterior.
- * Cada participante confirma su parte; cuando confirman todos, las publicaciones pasan a VENDIDA,
- * los receptores dejan de seguir el libro recibido y cada participante recibe la bonificación.
+ * Todos aceptan antes de reservar los libros. La finalización y el bono requieren
+ * que cada participante confirme la recepción de su libro entrante.
  */
 @Service
 public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
@@ -58,6 +60,76 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     @Autowired(required = false)
     private NotificacionService notificacionService;
 
+    @Autowired(required = false)
+    private JdbcTemplate jdbcTemplate;
+
+    /** El bloqueo vive hasta COMMIT, también entre distintas instancias del backend. */
+    private void bloquearCadenas() {
+        if (jdbcTemplate != null) {
+            jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
+                if ("PostgreSQL".equals(connection.getMetaData().getDatabaseProductName())) {
+                    try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(724610392015)")) {
+                        statement.execute();
+                    }
+                }
+                return null;
+            });
+        }
+    }
+
+    private boolean activa(CadenaIntercambio cadena) {
+        return cadena.getEstado() == EstadoCadena.PROPUESTA || cadena.getEstado() == EstadoCadena.EN_CURSO;
+    }
+
+    private String firma(CadenaIntercambio cadena) {
+        return cadena.getPasos().stream()
+                .map(p -> clave(p.getIsbn(), p.getEmailEntrega(), p.getHoraPublicacion().toString()) + "|" + p.getEmailRecibe())
+                .sorted().collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    /** Conserva un único registro y reúne las aceptaciones de duplicados activos. */
+    private Map<UUID, CadenaIntercambio> consolidarDuplicadas(List<CadenaIntercambio> cadenas) {
+        Map<String, List<CadenaIntercambio>> grupos = new LinkedHashMap<>();
+        cadenas.stream().filter(c -> !c.getPasos().isEmpty())
+                .forEach(c -> grupos.computeIfAbsent(firma(c), k -> new ArrayList<>()).add(c));
+        Map<UUID, CadenaIntercambio> reemplazos = new HashMap<>();
+        for (var grupo : grupos.values()) {
+            if (grupo.size() < 2) continue;
+            CadenaIntercambio principal = grupo.stream()
+                    .min(Comparator.comparing((CadenaIntercambio c) -> c.getEstado() != EstadoCadena.COMPLETADA)
+                            .thenComparing(c -> !activa(c))
+                            .thenComparing(CadenaIntercambio::getId)).orElse(null);
+            if (principal == null) continue;
+            for (CadenaIntercambio otra : grupo) {
+                if (otra == principal || otra.getEstado() == EstadoCadena.COMPLETADA) continue;
+                if (activa(otra)) {
+                    if (activa(principal)) {
+                        principal.setIntercambioIniciado(principal.isIntercambioIniciado() || otra.isIntercambioIniciado());
+                        for (CadenaPaso paso : principal.getPasos()) {
+                            otra.getPasos().stream().filter(p -> p.getEmailEntrega().equals(paso.getEmailEntrega()))
+                                    .forEach(p -> {
+                                        paso.setConfirmado(paso.isConfirmado() || p.isConfirmado());
+                                        paso.setRecibido(paso.isRecibido() || p.isRecibido());
+                                    });
+                        }
+                    }
+                    otra.setEstado(EstadoCadena.CANCELADA);
+                    cadenaIntercambioRepository.save(otra);
+                }
+                reemplazos.put(otra.getId(), principal);
+            }
+            if (activa(principal)) {
+                if (principal.getPasos().stream().allMatch(CadenaPaso::isConfirmado)) {
+                    iniciarIntercambio(principal);
+                } else if (principal.getPasos().stream().anyMatch(CadenaPaso::isConfirmado)) {
+                    principal.setEstado(EstadoCadena.EN_CURSO);
+                }
+                cadenaIntercambioRepository.save(principal);
+            }
+        }
+        return reemplazos;
+    }
+
     private record Arista(String destino, Publicacion publicacion) {
     }
 
@@ -65,7 +137,9 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     @Transactional
     public synchronized List<CadenaIntercambioResponseDTO> listarCadenas(UUID usuarioId) {
         detectarCadenas();
-        return cadenaIntercambioRepository.findAll().stream()
+        List<CadenaIntercambio> cadenas = cadenaIntercambioRepository.findAll();
+        Map<UUID, CadenaIntercambio> duplicadas = consolidarDuplicadas(cadenas);
+        return cadenas.stream().filter(c -> !duplicadas.containsKey(c.getId()))
                 .filter(c -> usuarioId == null || esParticipante(c, usuarioId))
                 .map(this::toDTO)
                 .toList();
@@ -74,11 +148,13 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
     /** Busca ciclos nuevos y los guarda como cadenas PROPUESTA. Devuelve cuántas creó. */
     @Transactional
     public synchronized int detectarCadenas() {
+        bloquearCadenas();
         if (publicacionRepository == null) {
             return 0;
         }
 
         List<CadenaIntercambio> existentes = cadenaIntercambioRepository.findAll();
+        consolidarDuplicadas(existentes);
         Set<String> publicacionesOcupadas = new HashSet<>();
         Set<Set<String>> combinacionesDescartadas = new HashSet<>();
         for (CadenaIntercambio c : existentes) {
@@ -261,7 +337,7 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
 
         if (cadena.getPasos().isEmpty()) {
             // Cadena creada manualmente, sin libros asociados
-            cadena.setEstado(cadena.getEstado() == EstadoCadena.PROPUESTA ? EstadoCadena.EN_CURSO : EstadoCadena.COMPLETADA);
+            cadena.setEstado(EstadoCadena.EN_CURSO);
             return toDTO(cadenaIntercambioRepository.save(cadena));
         }
 
@@ -277,26 +353,67 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
 
         boolean todosConfirmaron = cadena.getPasos().stream().allMatch(CadenaPaso::isConfirmado);
         if (todosConfirmaron) {
-            completar(cadena);
+            iniciarIntercambio(cadena);
         } else {
             cadena.setEstado(EstadoCadena.EN_CURSO);
         }
         return toDTO(cadenaIntercambioRepository.save(cadena));
     }
 
-    /** Transfiere los libros y acredita el bono. Si algún libro dejó de estar disponible, se cancela. */
-    private void completar(CadenaIntercambio cadena) {
+    private List<Publicacion> publicacionesBloqueadas(CadenaIntercambio cadena) {
         List<Publicacion> publicaciones = new ArrayList<>();
-        for (CadenaPaso paso : cadena.getPasos()) {
-            Optional<Publicacion> pub = publicacionRepository.findByIdParaActualizar(
-                    new PublicacionId(paso.getIsbn(), paso.getEmailEntrega(), paso.getHoraPublicacion()));
-            if (pub.isEmpty() || pub.get().getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE) {
-                cadena.setEstado(EstadoCadena.CANCELADA);
-                return;
-            }
-            publicaciones.add(pub.get());
+        // Mismo orden de bloqueo en todas las cadenas para evitar interbloqueos.
+        for (CadenaPaso paso : cadena.getPasos().stream()
+                .sorted(Comparator.comparing(p -> clave(p.getIsbn(), p.getEmailEntrega(), p.getHoraPublicacion().toString()))).toList()) {
+            publicaciones.add(publicacionRepository.findByIdParaActualizar(
+                    new PublicacionId(paso.getIsbn(), paso.getEmailEntrega(), paso.getHoraPublicacion())).orElse(null));
         }
+        return publicaciones;
+    }
 
+    private void iniciarIntercambio(CadenaIntercambio cadena) {
+        if (cadena.isIntercambioIniciado()) return;
+        List<Publicacion> publicaciones = publicacionesBloqueadas(cadena);
+        if (publicaciones.stream().anyMatch(p -> p == null || p.getEstadoPublicacion() != EstadoPublicacion.DISPONIBLE)) {
+            cadena.setEstado(EstadoCadena.CANCELADA);
+            return;
+        }
+        publicaciones.forEach(p -> p.setEstadoPublicacion(EstadoPublicacion.RESERVADA));
+        publicacionRepository.saveAll(publicaciones);
+        cadena.setEstado(EstadoCadena.EN_CURSO);
+        cadena.setIntercambioIniciado(true);
+        for (CadenaPaso paso : cadena.getPasos()) {
+            notificar(paso.getEmailEntrega(), TipoNotificacion.INTERCAMBIO_ACEPTADO,
+                    "Todos aceptaron la cadena. Los libros están reservados: coordiná la entrega y confirmá la recepción cuando recibas tu libro.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public synchronized CadenaIntercambioResponseDTO confirmarRecepcion(UUID cadenaId, UUID usuarioId) {
+        CadenaIntercambio cadena = buscarCadena(cadenaId);
+        validarParticipante(cadena, usuarioId);
+        if (cadena.getEstado() != EstadoCadena.EN_CURSO || !cadena.isIntercambioIniciado() || cadena.getPasos().isEmpty()
+                || !cadena.getPasos().stream().allMatch(CadenaPaso::isConfirmado)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Todos deben aceptar la cadena antes de confirmar la recepción");
+        }
+        String email = emailDe(cadena, usuarioId);
+        CadenaPaso propio = cadena.getPasos().stream().filter(p -> p.getEmailEntrega().equalsIgnoreCase(email))
+                .findFirst().orElseThrow(() -> new AccionNoPermitidaException("El usuario no forma parte de esta cadena"));
+        if (propio.isRecibido()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya confirmaste la recepción de tu libro");
+        }
+        propio.setRecibido(true);
+        if (cadena.getPasos().stream().allMatch(CadenaPaso::isRecibido)) completar(cadena);
+        return toDTO(cadenaIntercambioRepository.save(cadena));
+    }
+
+    /** Finaliza únicamente después de que todos reciben; el bono se acredita una sola vez. */
+    private void completar(CadenaIntercambio cadena) {
+        List<Publicacion> publicaciones = publicacionesBloqueadas(cadena);
+        if (publicaciones.stream().anyMatch(p -> p == null || p.getEstadoPublicacion() != EstadoPublicacion.RESERVADA)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Una publicación de la cadena dejó de estar reservada");
+        }
         publicaciones.forEach(p -> p.setEstadoPublicacion(EstadoPublicacion.VENDIDA));
         publicacionRepository.saveAll(publicaciones);
 
@@ -335,13 +452,29 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
 
         validarParticipante(cadena, usuarioId);
 
+        if (cadena.getPasos().stream().anyMatch(CadenaPaso::isRecibido)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No se puede cancelar una cadena con recepciones confirmadas");
+        }
+        if (cadena.isIntercambioIniciado()) {
+            List<Publicacion> publicaciones = publicacionesBloqueadas(cadena);
+            publicaciones.stream().filter(Objects::nonNull)
+                    .filter(p -> p.getEstadoPublicacion() == EstadoPublicacion.RESERVADA)
+                    .forEach(p -> p.setEstadoPublicacion(EstadoPublicacion.DISPONIBLE));
+            publicacionRepository.saveAll(publicaciones.stream().filter(Objects::nonNull).toList());
+        }
         cadena.setEstado(EstadoCadena.CANCELADA);
+        for (CadenaPaso paso : cadena.getPasos()) {
+            notificar(paso.getEmailEntrega(), TipoNotificacion.CADENA_DETECTADA, "La cadena fue cancelada; sus libros vuelven a estar disponibles.");
+        }
         return toDTO(cadenaIntercambioRepository.save(cadena));
     }
 
     private CadenaIntercambio buscarCadena(UUID cadenaId) {
-        return cadenaIntercambioRepository.findById(cadenaId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cadena no encontrada"));
+        bloquearCadenas();
+        Map<UUID, CadenaIntercambio> duplicadas = consolidarDuplicadas(cadenaIntercambioRepository.findAll());
+        return duplicadas.containsKey(cadenaId) ? duplicadas.get(cadenaId)
+                : cadenaIntercambioRepository.findById(cadenaId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cadena no encontrada"));
     }
 
     private boolean esParticipante(CadenaIntercambio cadena, UUID usuarioId) {
@@ -413,7 +546,8 @@ public class CadenaIntercambioServiceImpl implements CadenaIntercambioService {
                     pub != null && pub.getLibro() != null ? pub.getLibro().getAutores() : null,
                     pub != null ? pub.getEstadoFisico() : null,
                     pub != null ? pub.getValorPuntosSolicitado() : null,
-                    paso.isConfirmado()
+                    paso.isConfirmado(),
+                    paso.isRecibido()
             ));
         }
 

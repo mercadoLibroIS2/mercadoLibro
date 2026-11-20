@@ -25,6 +25,9 @@ public class CadenaIntercambio {
     @Column(columnDefinition = "varchar(50)")
     private EstadoCadena estado;
 
+    @Column(nullable = false)
+    private boolean intercambioIniciado;
+
     @OneToMany(mappedBy = "cadena")
     private List<Intercambio> intercambios = new ArrayList<>();
 
