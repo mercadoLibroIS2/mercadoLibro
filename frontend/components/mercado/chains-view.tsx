@@ -7,6 +7,7 @@ import {
   Clock,
   Share2,
 } from "lucide-react"
+import { EmailContact } from "./email-contact"
 import { useStore } from "./store"
 import { isUserMatch } from "@/lib/mercado-types"
 
@@ -26,7 +27,7 @@ const STATUS_BADGES = {
 } as const
 
 export function ChainsView() {
-  const { chains, currentUser, confirmChainStep, confirmChainReceipt, rejectChain } = useStore()
+  const { chains, currentUser, confirmChainStep, confirmChainReceipt, rejectChain, viewUserProfile, users } = useStore()
   const [pending, setPending] = useState<string | null>(null)
   const act = async (id: string, action: (id: string) => Promise<void>) => {
     if (pending) return
@@ -127,9 +128,11 @@ export function ChainsView() {
                             {step.userName.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-stone-900">
+                            <button type="button" onClick={() => viewUserProfile(step.userId)}
+                              className="block max-w-full truncate text-left text-sm font-semibold text-stone-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                              aria-label={`Ver perfil de ${step.userName}`}>
                               {step.userName} {isMe ? "(Vos)" : ""}
-                            </p>
+                            </button>
                             <span className="text-xs text-stone-500">
                               Paso {idx + 1} del circuito
                             </span>
@@ -149,6 +152,10 @@ export function ChainsView() {
                         )}
                       </div>
 
+                      <div className="mt-3">
+                        <EmailContact email={users.find((u) => isUserMatch(u, step.userId))?.email || step.userId}
+                          name={step.userName} contact={!isMe} />
+                      </div>
                       <div className="mt-4 flex flex-col gap-2.5">
                         <div className="rounded-xl border border-stone-200/80 bg-white p-3">
                           <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800">

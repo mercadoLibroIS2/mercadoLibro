@@ -86,6 +86,13 @@ publicaciones y destinatarios se consolidan al listar: conservan las aceptacione
 repetidos quedan cancelados y se muestra una sola tarjeta. Los identificadores anteriores resuelven
 al registro conservado. Las cadenas históricas completadas mantienen su estado y sus puntos.
 
+## Contacto entre lectores
+
+Los perfiles públicos muestran el correo y un enlace **Contactar por email**. En trueques y canjes
+por puntos, cada participante ve el contacto de la otra persona. Las cadenas muestran los correos
+de sus integrantes y permiten abrir sus perfiles desde el nombre. Los enlaces abren el cliente de
+correo del dispositivo con el destinatario y el asunto de coordinación completos.
+
 ## Datos de demo
 
 Con el backend levantado: `cd frontend && BACKEND_URL=http://localhost:8086 node scripts/seed-demo.mjs`.

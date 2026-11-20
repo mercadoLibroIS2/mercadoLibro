@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { useStore } from "./store"
 import { BookCoverThumb } from "./cover-thumb"
+import { EmailContact } from "./email-contact"
 import { ChainsView } from "./chains-view"
 import { isUserMatch, type TradeRequest } from "@/lib/mercado-types"
 import { BONO_INTERCAMBIO_DIRECTO, BONO_RESENIA } from "@/lib/puntos"
@@ -334,7 +335,7 @@ function TradeList({
   onBookClick: (id: string) => void
   onUserClick: (id: string) => void
 }) {
-  const { books, currentUser, setReportTarget } = useStore()
+  const { books, users, currentUser, setReportTarget } = useStore()
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null)
 
   if (trades.length === 0) {
@@ -363,6 +364,9 @@ function TradeList({
 
         const isRequester = isUserMatch(currentUser, trade.requesterId)
         const isOwner = isUserMatch(currentUser, trade.ownerId)
+        const otherId = isRequester ? trade.ownerId : trade.requesterId
+        const otherName = isRequester ? trade.ownerName : trade.requesterName
+        const otherEmail = users.find((u) => isUserMatch(u, otherId))?.email || otherId
         const hasReviewed = isRequester
           ? Boolean(trade.reviewedByRequester)
           : Boolean(trade.reviewedByOwner)
@@ -521,6 +525,13 @@ function TradeList({
                 )}
               </div>
             </div>
+
+            {(isRequester || isOwner) && (
+              <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
+                <p className="mb-1 text-xs font-semibold text-stone-700">Contacto de {otherName}</p>
+                <EmailContact email={otherEmail} name={otherName} />
+              </div>
+            )}
 
             {trade.type === "DIRECTO" && trade.points > 0 && trade.status !== "COMPLETADO" && (
               <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-900">

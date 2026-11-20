@@ -17,6 +17,7 @@ import {
   ShieldCheck,
 } from "lucide-react"
 import { useStore } from "./store"
+import { EmailContact } from "./email-contact"
 import { BookCard } from "./book-card"
 import { EditProfileModal } from "./edit-profile-modal"
 import { Field } from "./field"
@@ -176,6 +177,10 @@ export function ProfileScreen() {
                     </span>
                   </>
                 )}
+              </div>
+
+              <div className="mt-2">
+                <EmailContact email={targetUser.email} name={targetUser.name} contact={!isOwnProfile} />
               </div>
 
               {targetUser.bio && (
